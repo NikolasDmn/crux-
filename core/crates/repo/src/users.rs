@@ -118,20 +118,12 @@ pub async fn set_email_verified(conn: &mut MySqlConnection, id: i64, at: DateTim
 }
 
 pub async fn set_password_hash(conn: &mut MySqlConnection, id: i64, hash: &str) -> RepoResult<()> {
-    sqlx::query("UPDATE Users SET PasswordHash = ?, RowVersion = RowVersion + 1 WHERE Id = ?")
-        .bind(hash)
-        .bind(id)
-        .execute(conn)
-        .await?;
+    sqlx::query("UPDATE Users SET PasswordHash = ?, RowVersion = RowVersion + 1 WHERE Id = ?").bind(hash).bind(id).execute(conn).await?;
     Ok(())
 }
 
 pub async fn set_tier(conn: &mut MySqlConnection, id: i64, tier_id: i64) -> RepoResult<()> {
-    sqlx::query("UPDATE Users SET TierId = ?, RowVersion = RowVersion + 1 WHERE Id = ?")
-        .bind(tier_id)
-        .bind(id)
-        .execute(conn)
-        .await?;
+    sqlx::query("UPDATE Users SET TierId = ?, RowVersion = RowVersion + 1 WHERE Id = ?").bind(tier_id).bind(id).execute(conn).await?;
     Ok(())
 }
 

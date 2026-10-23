@@ -46,9 +46,9 @@ impl<S: Send + Sync> FromRequestParts<S> for IfMatch {
 
     async fn from_request_parts(parts: &mut Parts, _: &S) -> Result<Self, Self::Rejection> {
         let raw = parts.headers.get("if-match").and_then(|v| v.to_str().ok()).map(|s| s.trim().trim_matches('"').to_string());
-        raw.and_then(|s| s.parse().ok()).map(IfMatch).ok_or_else(|| {
-            ApiError(ValidationErrors::single("If-Match", "required", "Send the resource's version in If-Match.").into())
-        })
+        raw.and_then(|s| s.parse().ok())
+            .map(IfMatch)
+            .ok_or_else(|| ApiError(ValidationErrors::single("If-Match", "required", "Send the resource's version in If-Match.").into()))
     }
 }
 
@@ -85,7 +85,8 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let state = AppState::from_ref(state);
         let token = bearer(parts).ok_or(AppError::Unauthenticated)?;
-        let claims = state.ctx.keys.verify_service(token, "core", state.ctx.clock.now().timestamp()).map_err(|_| AppError::Unauthenticated)?;
+        let claims =
+            state.ctx.keys.verify_service(token, "core", state.ctx.clock.now().timestamp()).map_err(|_| AppError::Unauthenticated)?;
         Ok(Service(claims.sub))
     }
 }

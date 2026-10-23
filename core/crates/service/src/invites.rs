@@ -87,11 +87,7 @@ pub async fn create(ctx: &Ctx, actor: &Actor, input: CreateInviteInput, as_admin
     .await?;
     let row = invites::by_public_id(&mut tx, &public_id, None).await?.ok_or_else(|| anyhow::anyhow!("invite {id} vanished"))?;
     tx.commit().await?;
-    Ok(CreatedInvite {
-        invite: InviteView::from(&row),
-        signup_url: format!("{}/signup?invite={code}", ctx.config.app_base_url),
-        code,
-    })
+    Ok(CreatedInvite { invite: InviteView::from(&row), signup_url: format!("{}/signup?invite={code}", ctx.config.app_base_url), code })
 }
 
 /// `as_admin` lists everyone's invites; otherwise only the actor's own.

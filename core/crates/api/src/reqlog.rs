@@ -36,12 +36,7 @@ fn sanitize(id: &str) -> Option<String> {
 
 pub async fn layer(mut req: Request, next: Next) -> Response {
     let started = Instant::now();
-    let id = req
-        .headers()
-        .get(REQUEST_ID)
-        .and_then(|v| v.to_str().ok())
-        .and_then(sanitize)
-        .unwrap_or_else(new_request_id);
+    let id = req.headers().get(REQUEST_ID).and_then(|v| v.to_str().ok()).and_then(sanitize).unwrap_or_else(new_request_id);
     let route = req.extensions().get::<MatchedPath>().map(|p| p.as_str().to_string()).unwrap_or_else(|| "unmatched".into());
     let method = req.method().clone();
     let user = LogUser::default();

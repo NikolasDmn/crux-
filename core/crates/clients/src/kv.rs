@@ -47,7 +47,11 @@ impl KeyValue for RedisKv {
         let (count,): (u64,) = redis::pipe()
             .atomic()
             .incr(key, 1u64)
-            .cmd("EXPIRE").arg(key).arg(window.as_secs().max(1)).arg("NX").ignore()
+            .cmd("EXPIRE")
+            .arg(key)
+            .arg(window.as_secs().max(1))
+            .arg("NX")
+            .ignore()
             .query_async(&mut c)
             .await?;
         Ok(count)
@@ -55,14 +59,8 @@ impl KeyValue for RedisKv {
 
     async fn set_nx(&self, key: &str, value: &str, ttl: Duration) -> Result<bool, ClientError> {
         let mut c = self.conn.clone();
-        let res: Option<String> = redis::cmd("SET")
-            .arg(key)
-            .arg(value)
-            .arg("NX")
-            .arg("PX")
-            .arg(ttl.as_millis() as u64)
-            .query_async(&mut c)
-            .await?;
+        let res: Option<String> =
+            redis::cmd("SET").arg(key).arg(value).arg("NX").arg("PX").arg(ttl.as_millis() as u64).query_async(&mut c).await?;
         Ok(res.is_some())
     }
 

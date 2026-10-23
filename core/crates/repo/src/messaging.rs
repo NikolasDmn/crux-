@@ -54,11 +54,7 @@ pub async fn lock_unpublished(conn: &mut MySqlConnection, limit: u32) -> RepoRes
 }
 
 pub async fn mark_published(conn: &mut MySqlConnection, id: i64, at: DateTime<Utc>) -> RepoResult<()> {
-    sqlx::query("UPDATE Outbox SET PublishedAt = ?, Attempts = Attempts + 1 WHERE Id = ?")
-        .bind(at)
-        .bind(id)
-        .execute(conn)
-        .await?;
+    sqlx::query("UPDATE Outbox SET PublishedAt = ?, Attempts = Attempts + 1 WHERE Id = ?").bind(at).bind(id).execute(conn).await?;
     Ok(())
 }
 
@@ -73,10 +69,7 @@ pub async fn pending_count(conn: &mut MySqlConnection) -> RepoResult<i64> {
 
 /// Records the event as handled. `false` = already handled (duplicate key): ack and skip.
 pub async fn mark_consumed(conn: &mut MySqlConnection, event_id: &str, topic: &str) -> RepoResult<bool> {
-    let res = sqlx::query("INSERT IGNORE INTO ConsumedEvent (EventId, Topic) VALUES (?, ?)")
-        .bind(event_id)
-        .bind(topic)
-        .execute(conn)
-        .await?;
+    let res =
+        sqlx::query("INSERT IGNORE INTO ConsumedEvent (EventId, Topic) VALUES (?, ?)").bind(event_id).bind(topic).execute(conn).await?;
     Ok(res.rows_affected() == 1)
 }

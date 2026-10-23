@@ -1,0 +1,58 @@
+[project]
+name = "crux-services"
+version = "0.1.0"
+description = "Crux Python services workspace (files, ai, notify) + shared library"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["common", "files", "notify", "ai"]
+
+[tool.uv.sources]
+crux-common = { workspace = true }
+crux-files = { workspace = true }
+crux-notify = { workspace = true }
+crux-ai = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "crux-common",
+    "crux-files",
+    "crux-notify",
+    "crux-ai",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-pymysql",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC", "RUF"]
+ignore = ["S101"]  # assert is fine in tests and invariants
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "crux_common"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/tests/*" = ["S105", "S106"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+mypy_path = "common/src"
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["aiomysql.*", "jsonschema.*", "ulid.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

@@ -37,7 +37,12 @@ fn refresh_cookie(state: &AppState, s: &Session) -> Cookie<'static> {
 }
 
 fn cleared_cookie(state: &AppState) -> Cookie<'static> {
-    Cookie::build((REFRESH_COOKIE, "")).path(REFRESH_COOKIE_PATH).http_only(true).secure(state.cookie_secure).same_site(SameSite::Strict).build()
+    Cookie::build((REFRESH_COOKIE, ""))
+        .path(REFRESH_COOKIE_PATH)
+        .http_only(true)
+        .secure(state.cookie_secure)
+        .same_site(SameSite::Strict)
+        .build()
 }
 
 fn respond(state: &AppState, jar: CookieJar, s: Session) -> (CookieJar, Json<SessionResponse>) {
@@ -48,7 +53,12 @@ fn respond(state: &AppState, jar: CookieJar, s: Session) -> (CookieJar, Json<Ses
 /// Sign up with an invite code.
 #[utoipa::path(post, path = "/auth/signup", tag = "auth", request_body = SignupInput,
     responses((status = 200, body = SessionResponse), (status = 403, body = ErrorBody, description = "invite_invalid"), (status = 422, body = ErrorBody)))]
-pub async fn signup(State(state): State<AppState>, jar: CookieJar, Client(client): Client, JsonBody(input): JsonBody<SignupInput>) -> ApiResult<(CookieJar, Json<SessionResponse>)> {
+pub async fn signup(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Client(client): Client,
+    JsonBody(input): JsonBody<SignupInput>,
+) -> ApiResult<(CookieJar, Json<SessionResponse>)> {
     let s = auth::signup(&state.ctx, input, &client).await?;
     Ok(respond(&state, jar, s))
 }
@@ -56,7 +66,12 @@ pub async fn signup(State(state): State<AppState>, jar: CookieJar, Client(client
 /// Log in with email or username + password.
 #[utoipa::path(post, path = "/auth/login", tag = "auth", request_body = LoginInput,
     responses((status = 200, body = SessionResponse), (status = 401, body = ErrorBody), (status = 429, body = ErrorBody)))]
-pub async fn login(State(state): State<AppState>, jar: CookieJar, Client(client): Client, JsonBody(input): JsonBody<LoginInput>) -> ApiResult<(CookieJar, Json<SessionResponse>)> {
+pub async fn login(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Client(client): Client,
+    JsonBody(input): JsonBody<LoginInput>,
+) -> ApiResult<(CookieJar, Json<SessionResponse>)> {
     let s = auth::login(&state.ctx, input, &client).await?;
     Ok(respond(&state, jar, s))
 }
@@ -64,7 +79,11 @@ pub async fn login(State(state): State<AppState>, jar: CookieJar, Client(client)
 /// Trade the refresh cookie for a new access token. Rotates the cookie.
 #[utoipa::path(post, path = "/auth/refresh", tag = "auth",
     responses((status = 200, body = SessionResponse), (status = 401, body = ErrorBody)))]
-pub async fn refresh(State(state): State<AppState>, jar: CookieJar, Client(client): Client) -> ApiResult<(CookieJar, Json<SessionResponse>)> {
+pub async fn refresh(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    Client(client): Client,
+) -> ApiResult<(CookieJar, Json<SessionResponse>)> {
     let token = jar.get(REFRESH_COOKIE).map(|c| c.value().to_string()).filter(|v| !v.is_empty()).ok_or(AppError::Unauthenticated)?;
     match auth::refresh(&state.ctx, &token, &client).await {
         Ok(s) => Ok(respond(&state, jar, s)),
@@ -108,7 +127,11 @@ pub struct ForgotInput {
 /// Email a reset link. Always 202, whether or not the address has an account.
 #[utoipa::path(post, path = "/auth/password/forgot", tag = "auth", request_body = ForgotInput,
     responses((status = 202), (status = 429, body = ErrorBody)))]
-pub async fn forgot_password(State(state): State<AppState>, Client(client): Client, JsonBody(input): JsonBody<ForgotInput>) -> ApiResult<StatusCode> {
+pub async fn forgot_password(
+    State(state): State<AppState>,
+    Client(client): Client,
+    JsonBody(input): JsonBody<ForgotInput>,
+) -> ApiResult<StatusCode> {
     auth::forgot_password(&state.ctx, &input.email, &client).await?;
     Ok(StatusCode::ACCEPTED)
 }

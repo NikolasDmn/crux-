@@ -16,7 +16,11 @@ pub struct CourseAccess {
 }
 
 pub fn member_role(access: &CourseAccess) -> Option<MemberRole> {
-    if access.actor_is_owner { Some(MemberRole::Owner) } else { access.member_role }
+    if access.actor_is_owner {
+        Some(MemberRole::Owner)
+    } else {
+        access.member_role
+    }
 }
 
 pub fn can_read_course(access: &CourseAccess) -> bool {
@@ -68,12 +72,7 @@ mod tests {
 
     #[test]
     fn course_predicates_by_role() {
-        let table = [
-            (OWNER, true, true, true),
-            (EDITOR, true, true, false),
-            (VIEWER, true, false, false),
-            (STRANGER, false, false, false),
-        ];
+        let table = [(OWNER, true, true, true), (EDITOR, true, true, false), (VIEWER, true, false, false), (STRANGER, false, false, false)];
         for (access, read, edit, manage) in table {
             assert_eq!(can_read_course(&access), read, "{access:?}");
             assert_eq!(can_edit_course(&access), edit, "{access:?}");

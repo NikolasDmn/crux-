@@ -45,7 +45,13 @@ pub async fn publish_batch(pool: &MySqlPool, bus: &dyn EventBus, clock: &dyn Clo
 }
 
 /// Continuous relay: drains while there is work, then polls every `idle`.
-pub async fn run(pool: MySqlPool, bus: std::sync::Arc<dyn EventBus>, clock: std::sync::Arc<dyn Clock>, producer: &'static str, mut shutdown: tokio::sync::watch::Receiver<bool>) {
+pub async fn run(
+    pool: MySqlPool,
+    bus: std::sync::Arc<dyn EventBus>,
+    clock: std::sync::Arc<dyn Clock>,
+    producer: &'static str,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
+) {
     let idle = Duration::from_millis(500);
     tracing::info!(producer, "outbox relay started");
     loop {

@@ -45,7 +45,8 @@ pub async fn layer(State(state): State<AppState>, req: Request, next: Next) -> R
         return next.run(req).await;
     };
     if key.is_empty() || key.len() > 128 {
-        return ApiError(crux_domain::ValidationErrors::single("Idempotency-Key", "invalid", "Use 1-128 characters.").into()).into_response();
+        return ApiError(crux_domain::ValidationErrors::single("Idempotency-Key", "invalid", "Use 1-128 characters.").into())
+            .into_response();
     }
     let redis_key = format!("crux:idem:{sub}:{}", &token_hash(&format!("{} {}|{key}", req.method(), req.uri().path()))[..40]);
 

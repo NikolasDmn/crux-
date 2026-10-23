@@ -226,6 +226,49 @@ mod tests {
         assert!(k.verify_service(&access, ACCESS_AUDIENCE, 1500).is_err(), "and vice versa");
     }
 
+    const INTEROP: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../contracts/fixtures/jwt-interop.json");
+
+    /// Regenerate with `cargo test -p crux-service write_interop_fixture -- --ignored`.
+    /// The Python services verify the same fixture (services/common/tests/test_auth.py).
+    #[test]
+    #[ignore]
+    fn write_interop_fixture() {
+        let pem = JwtKeys::generate_pem();
+        let k = JwtKeys::from_pkcs8_pem(&pem).unwrap();
+        let fixture = serde_json::json!({
+            "comment": "Test-only key. Tokens signed by crux-core; verified by the Python services.",
+            "privateKeyPem": pem,
+            "jwks": k.jwks(),
+            "accessToken": k.sign_access(&claims(4_102_444_800)),
+            "serviceToken": k.sign(&ServiceClaims {
+                iss: ISSUER.into(), aud: "files".into(), sub: "core".into(), typ: "service".into(), iat: 1000, exp: 4_102_444_800,
+            }),
+        });
+        std::fs::create_dir_all(std::path::Path::new(INTEROP).parent().unwrap()).unwrap();
+        std::fs::write(INTEROP, serde_json::to_string_pretty(&fixture).unwrap() + "\n").unwrap();
+    }
+
+    #[test]
+    fn interop_fixture_is_current() {
+        let Ok(text) = std::fs::read_to_string(INTEROP) else { return };
+        let f: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let k = JwtKeys::from_pkcs8_pem(f["privateKeyPem"].as_str().unwrap()).unwrap();
+        assert_eq!(k.jwks(), f["jwks"]);
+        assert_eq!(k.verify_access(f["accessToken"].as_str().unwrap(), 2000).unwrap(), claims(4_102_444_800));
+        assert_eq!(k.verify_service(f["serviceToken"].as_str().unwrap(), "files", 2000).unwrap().sub, "core");
+    }
+
+    /// `openssl genpkey -algorithm ed25519` (PKCS#8 v1, no public key) is how `make keys` and CI
+    /// make the signing key. Test-only key.
+    #[test]
+    fn loads_openssl_generated_keys() {
+        let pem =
+            "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEILaMKfsZspqulSZJver4+S54NGJL15TMRTrBYotv8Cw3\n-----END PRIVATE KEY-----\n";
+        let k = JwtKeys::from_pkcs8_pem(pem).unwrap();
+        let token = k.sign_access(&claims(2000));
+        assert!(k.verify_access(&token, 1500).is_ok());
+    }
+
     #[test]
     fn jwks_exposes_public_key_only() {
         let k = keys();

@@ -40,7 +40,8 @@ pub struct Delivery {
 pub trait EventBus: Send + Sync {
     async fn publish(&self, envelope: &Envelope) -> Result<(), ClientError>;
     /// Reads up to `count` new messages for `group` across `topics`, blocking up to `block_ms`.
-    async fn read(&self, group: &str, consumer: &str, topics: &[&str], count: usize, block_ms: usize) -> Result<Vec<Delivery>, ClientError>;
+    async fn read(&self, group: &str, consumer: &str, topics: &[&str], count: usize, block_ms: usize)
+        -> Result<Vec<Delivery>, ClientError>;
     /// This consumer's delivered-but-unacked messages (failed handlers), oldest first.
     async fn read_pending(&self, group: &str, consumer: &str, topics: &[&str], count: usize) -> Result<Vec<Delivery>, ClientError>;
     async fn ack(&self, group: &str, delivery: &Delivery) -> Result<(), ClientError>;
@@ -93,7 +94,14 @@ impl EventBus for RedisBus {
         Ok(())
     }
 
-    async fn read(&self, group: &str, consumer: &str, topics: &[&str], count: usize, block_ms: usize) -> Result<Vec<Delivery>, ClientError> {
+    async fn read(
+        &self,
+        group: &str,
+        consumer: &str,
+        topics: &[&str],
+        count: usize,
+        block_ms: usize,
+    ) -> Result<Vec<Delivery>, ClientError> {
         self.read_from(group, consumer, topics, count, Some(block_ms), ">").await
     }
 
@@ -110,7 +118,15 @@ impl EventBus for RedisBus {
 
 impl RedisBus {
     /// `from` = ">" for new messages, "0" for this consumer's pending ones.
-    async fn read_from(&self, group: &str, consumer: &str, topics: &[&str], count: usize, block_ms: Option<usize>, from: &str) -> Result<Vec<Delivery>, ClientError> {
+    async fn read_from(
+        &self,
+        group: &str,
+        consumer: &str,
+        topics: &[&str],
+        count: usize,
+        block_ms: Option<usize>,
+        from: &str,
+    ) -> Result<Vec<Delivery>, ClientError> {
         let mut c = self.conn.clone();
         let keys: Vec<String> = topics.iter().map(|t| stream_key(t)).collect();
         let ids: Vec<&str> = keys.iter().map(|_| from).collect();
@@ -158,7 +174,14 @@ impl EventBus for MemoryBus {
         Ok(())
     }
 
-    async fn read(&self, _group: &str, _consumer: &str, topics: &[&str], count: usize, _block_ms: usize) -> Result<Vec<Delivery>, ClientError> {
+    async fn read(
+        &self,
+        _group: &str,
+        _consumer: &str,
+        topics: &[&str],
+        count: usize,
+        _block_ms: usize,
+    ) -> Result<Vec<Delivery>, ClientError> {
         let all = self.published.lock().unwrap();
         Ok(all
             .iter()

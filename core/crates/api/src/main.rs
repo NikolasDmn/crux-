@@ -144,10 +144,11 @@ async fn main() -> anyhow::Result<()> {
             let listener = tokio::net::TcpListener::bind(&cli.listen).await?;
             tracing::info!(listen = %cli.listen, "core listening");
             let mut rx = shutdown_rx.clone();
-            axum::serve(listener, crux_api::app(state)).with_graceful_shutdown(async move {
-                let _ = rx.changed().await;
-            })
-            .await?;
+            axum::serve(listener, crux_api::app(state))
+                .with_graceful_shutdown(async move {
+                    let _ = rx.changed().await;
+                })
+                .await?;
         }
         Cmd::Jobs => run_jobs(&cli, ctx, shutdown_rx).await?,
         _ => unreachable!(),
@@ -156,7 +157,8 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn build_ctx(cli: &Cli, pool: crux_repo::MySqlPool) -> anyhow::Result<Ctx> {
-    let pem = std::fs::read_to_string(&cli.jwt_key_file).with_context(|| format!("read JWT key {} (run `crux-core gen-keys`)", cli.jwt_key_file))?;
+    let pem = std::fs::read_to_string(&cli.jwt_key_file)
+        .with_context(|| format!("read JWT key {} (run `crux-core gen-keys`)", cli.jwt_key_file))?;
     let breached = std::fs::read_to_string(&cli.breached_file).unwrap_or_else(|_| {
         tracing::warn!(file = %cli.breached_file, "breached-password list missing; only length is checked");
         String::new()
@@ -170,7 +172,10 @@ async fn build_ctx(cli: &Cli, pool: crux_repo::MySqlPool) -> anyhow::Result<Ctx>
         kv: Arc::new(kv),
         keys: Arc::new(JwtKeys::from_pkcs8_pem(&pem)?),
         breached_passwords: Arc::new(load_breached_passwords(&breached)),
-        config: Arc::new(Config { app_base_url: cli.app_base_url.trim_end_matches('/').to_string(), service_secret: cli.service_secret.clone() }),
+        config: Arc::new(Config {
+            app_base_url: cli.app_base_url.trim_end_matches('/').to_string(),
+            service_secret: cli.service_secret.clone(),
+        }),
     })
 }
 
@@ -188,7 +193,13 @@ async fn run_jobs(cli: &Cli, ctx: Ctx, shutdown: tokio::sync::watch::Receiver<bo
     Ok(())
 }
 
-async fn create_invite_cli(pool: &crux_repo::MySqlPool, email: Option<&str>, tier: Option<&str>, max_uses: i32, days: i64) -> anyhow::Result<String> {
+async fn create_invite_cli(
+    pool: &crux_repo::MySqlPool,
+    email: Option<&str>,
+    tier: Option<&str>,
+    max_uses: i32,
+    days: i64,
+) -> anyhow::Result<String> {
     use crux_domain::auth::{normalize_email, normalize_invite_code, token_hash};
     let ids = UlidGen::default();
     let code = ids.invite_code();

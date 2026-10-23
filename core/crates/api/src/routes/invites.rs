@@ -13,7 +13,11 @@ use crate::AppState;
 #[utoipa::path(post, path = "/invites", tag = "invites", security(("bearer" = [])), request_body = CreateInviteInput,
     params(("Idempotency-Key" = Option<String>, Header)),
     responses((status = 201, body = CreatedInvite), (status = 403, body = ErrorBody, description = "email_unverified"), (status = 422, body = ErrorBody)))]
-pub async fn create(State(state): State<AppState>, Auth(actor): Auth, JsonBody(input): JsonBody<CreateInviteInput>) -> ApiResult<(StatusCode, Json<CreatedInvite>)> {
+pub async fn create(
+    State(state): State<AppState>,
+    Auth(actor): Auth,
+    JsonBody(input): JsonBody<CreateInviteInput>,
+) -> ApiResult<(StatusCode, Json<CreatedInvite>)> {
     Ok((StatusCode::CREATED, Json(invites::create(&state.ctx, &actor, input, false).await?)))
 }
 

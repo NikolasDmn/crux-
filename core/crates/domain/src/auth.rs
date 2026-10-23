@@ -53,11 +53,7 @@ pub fn validate_username(username: &str) -> ValidationErrors {
     let charset_ok = username.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'));
     let starts_ok = username.chars().next().is_some_and(|c| c.is_ascii_alphanumeric());
     if !(3..=32).contains(&len) || !charset_ok || !starts_ok {
-        errors.push(
-            "username",
-            "invalid",
-            "Use 3-32 letters, digits, '_', '.' or '-', starting with a letter or digit.",
-        );
+        errors.push("username", "invalid", "Use 3-32 letters, digits, '_', '.' or '-', starting with a letter or digit.");
     }
     errors
 }

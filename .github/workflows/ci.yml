@@ -1,0 +1,99 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CRUX_TEST_MYSQL_URL: mysql://crux_test:crux-test@127.0.0.1:3306
+  CARGO_TERM_COLOR: always
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0.40
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot" --health-interval 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: MySQL users (same as deploy/mysql/init.sql)
+        run: mysql -h 127.0.0.1 -uroot -proot < deploy/mysql/init.sql
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: fmt
+        working-directory: core
+        run: cargo fmt --all --check
+      - name: clippy
+        working-directory: core
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test (unit + integration on MySQL, migrations from empty)
+        working-directory: core
+        run: cargo test --workspace
+      - name: coverage (domain, state modules, adapters >= 80%)
+        working-directory: core
+        run: |
+          cargo install cargo-llvm-cov --locked
+          cargo llvm-cov --workspace --fail-under-lines 80 \
+            --ignore-filename-regex '(api/src/main.rs|testkit)'
+      - name: audit
+        working-directory: core
+        run: cargo install cargo-audit --locked && cargo audit
+
+  python:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0.40
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot" --health-interval 5s --health-retries 30
+    defaults:
+      run:
+        working-directory: services
+    steps:
+      - uses: actions/checkout@v4
+      - name: MySQL users
+        working-directory: .
+        run: mysql -h 127.0.0.1 -uroot -proot < deploy/mysql/init.sql
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --python 3.12 --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy common/src
+      - name: mypy per service
+        run: for s in files notify ai; do (cd $s && MYPYPATH=../common/src uv run mypy --config-file ../pyproject.toml app); done
+      - name: tests (unit + integration, migrations from empty)
+        run: |
+          uv run pytest common/tests --cov=crux_common --cov-fail-under=80
+          for s in files notify ai; do (cd $s && uv run pytest); done
+      - run: uv run --with pip-audit pip-audit
+
+  # Spec 9.6: with the ai service absent, the non-AI suite passes. Core's tests never start ai.
+  no-ai:
+    runs-on: ubuntu-latest
+    needs: [core, python]
+    steps:
+      - uses: actions/checkout@v4
+      - name: compose up without the ai profile
+        run: |
+          mkdir -p deploy/secrets
+          openssl genpkey -algorithm ed25519 -out deploy/secrets/jwt_ed25519.pem
+          chmod 644 deploy/secrets/jwt_ed25519.pem
+          docker compose -f deploy/compose.yaml up -d --build --wait core core-jobs files files-worker notify notify-worker gateway
+      - name: smoke (signup, me, events reach files + notify)
+        run: ./scripts/smoke.sh http://localhost:8000
+      - name: logs on failure
+        if: failure()
+        run: docker compose -f deploy/compose.yaml logs --tail 200

@@ -1,0 +1,44 @@
+# Open questions
+
+Per backend-spec "Rules for the build agent": anything the spec doesn't cover is listed here, and the
+smallest version that doesn't block the question is built. Each item says what was built meanwhile.
+Answer inline (or tell the build agent) and the code follows.
+
+## Spec ↔ schema differences (the schema wins; flagged here)
+
+| # | Difference | What was built |
+|---|---|---|
+| S-1 | Schema headers name the databases `exam_core`, `exam_files`, `exam_ai`, `exam_notify`; the README says `crux_*`. | `crux_*` everywhere (compose, init.sql). The schema files are copied verbatim, so their header comments still say `exam_*`. |
+| S-2 | `Invite` has no `PublicId`, but `DELETE /invites/{id}` and `/admin/invites` need an id, and only PublicIds may leave a service (3.1). | Core migration `0002_invite_public_id.sql` adds `Invite.PublicId CHAR(26) NULL UNIQUE`. |
+| S-3 | `Tier` has no `PublicId`. | Admin tier routes address tiers by `Code` (`PATCH /admin/tiers/{code}`). |
+| S-4 | Built-in tutor PublicIds `01JBUILTIN000…` aren't valid ULIDs (Crockford base32 excludes I, L, O, U). | PublicId parsing is loose everywhere: 26 chars of `[0-9A-Z]`. |
+| S-5 | `Course.Color` comment says "owner/Editors change it"; spec 4.2 says Owner only. | Will follow the spec (Owner only) in milestone 2. |
+| S-6 | `WeekSummary` (5.11) and the `user.purged` ack tracking (9.4) have no tables. | Not needed in M1. Will be added as core migrations in milestones 5 and 9. |
+
+## Product / behaviour
+
+| # | Question | Built meanwhile |
+|---|---|---|
+| Q-auth-1 | Refresh-token lifetime? Spec gives 15 min for access only. | 30 days, rotating. Revoked rows kept 30 days so reuse is still detected. |
+| Q-auth-2 | Username rules? | 3-32 of letters, digits, `_ . -`, starting with a letter or digit; unique case-insensitively. |
+| Q-auth-3 | The "top-100k breached list shipped with the app": which list, and may it be downloaded? | Loader in place (`core/data/breached-passwords.txt`, one per line, case-insensitive). The file is a 30-entry placeholder until the real list (e.g. SecLists 100k filtered to ≥ 10 chars) is added. |
+| Q-auth-4 | Verify-email and reset-password emails go to *unverified* addresses and can't be opt-in. Spec 8 says email only to verified addresses and every kind opt-in. | `notify.requested` carries `transactional: true` for `auth.verify_email` / `auth.password_reset`; notify will send those regardless of preferences and verification. Sending lands with notify (milestone 6). Until then, links are in the core Outbox row. |
+| Q-auth-5 | Token TTLs for verify (48 h) and reset (1 h)? | As stated. Requesting a new link voids the older one. |
+| Q-auth-6 | Two tabs refreshing at the same moment: the slower one presents a just-rotated token, which spec 4.1 treats as reuse and revokes every session. Allow a few seconds of grace? | Strict, as specced. The SPA should funnel refreshes through one in-flight request (BroadcastChannel across tabs). |
+| Q-auth-7 | A logged-in user whose account is `PendingDeletion` can still log in (to cancel). OK? | Yes: only `Disabled` blocks login. |
+| Q-inv-1 | Limits on invites made by ordinary users? | ≤ 5 uses, ≤ 30 days (default 14 days, 1 use). Admin: ≤ 10,000 uses, ≤ 365 days, any tier. |
+| Q-inv-2 | Error code when an unverified user tries to invite? Not in the 3.1 table. | `403 email_unverified`. |
+| Q-admin-1 | Changing a tier's quota affects every user on it. | Core emits `user.tier_changed` per user on that tier (fine at v1 scale; batch later). |
+| Q-admin-2 | "Each admin read of another user's data writes a UserEvent": does listing users count? | Yes: one `admin.user_read` event per listed user. |
+
+## Architecture
+
+| # | Question | Built meanwhile |
+|---|---|---|
+| Q-arch-1 | How do services get their first service token? Spec 3.2: "minted on start". | Each service presents a shared `CRUX_SERVICE_SECRET` to `POST /internal/v1/service-token` and gets a 5-min EdDSA token (`aud` = callee, `sub` = caller). Per-service secrets later if needed. |
+| Q-arch-2 | Rate limits "at the gateway": Caddy has no built-in limiter. | Implemented in core on Redis counters (login 5/15 min per account + 20 per IP; signup 5/h per IP). AI and upload limits go in their services. |
+| Q-arch-3 | sqlx `query!` macros need a database at compile time. | M1 uses runtime-checked `sqlx::query_as`. Switch to `query!` + `cargo sqlx prepare` (offline data committed) once CI has run green on MySQL. |
+| Q-arch-4 | SeaORM for CRUD (2.2). | Not used in M1: the auth tables are few and hand-written SQL is clearer. Will be introduced in milestone 2 (catalog CRUD), entities generated from the migrated schema. |
+| Q-arch-5 | Unsubscribe links: `Recipient.UnsubscribeTokenHash` stores only a hash, so the token must be re-derivable for each email. | Token = HMAC-SHA256(`CRUX_UNSUBSCRIBE_SECRET`, userRef); only its sha256 is stored. |
+| Q-arch-6 | Metrics endpoint (`/metrics`) and Grafana/Loki. | Planned for milestone 9 (hardening); logs are already structured JSON. |
+| Q-arch-7 | Prod DB passwords: `deploy/mysql/init.sql` holds dev passwords. | Fine for dev/CI. A prod init script reading `.env` comes with deployment (milestone 9). |

@@ -71,9 +71,6 @@ pub async fn void_unused(conn: &mut MySqlConnection, user_id: i64, purpose: Purp
 }
 
 pub async fn purge(conn: &mut MySqlConnection, now: DateTime<Utc>) -> RepoResult<u64> {
-    let res = sqlx::query("DELETE FROM AuthToken WHERE ExpiresAt <= ? OR UsedAt IS NOT NULL")
-        .bind(now)
-        .execute(conn)
-        .await?;
+    let res = sqlx::query("DELETE FROM AuthToken WHERE ExpiresAt <= ? OR UsedAt IS NOT NULL").bind(now).execute(conn).await?;
     Ok(res.rows_affected())
 }

@@ -1,0 +1,19 @@
+[project]
+name = "crux-ai"
+version = "0.1.0"
+description = "AI settings + consent, keys, tutors, gate, budget, runs, chat, grading, import, generation (backend-spec 7)."
+requires-python = ">=3.12,<3.13"
+dependencies = ["crux-common"]
+
+[tool.uv.sources]
+crux-common = { workspace = true }
+
+# Virtual member: contributes dependencies only. The code is the top-level `app` package, run
+# from this directory (uvicorn app.main:app), so the three services never share an import path.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

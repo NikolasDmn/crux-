@@ -26,7 +26,9 @@ async fn signup_login_me_and_events() {
     assert_eq!(me.status, StatusCode::OK);
     assert_eq!(me.json["email"], "nick@example.com");
 
-    let login = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "NICK@example.com", "password": "correct horse battery"})), &[]).await;
+    let login =
+        call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "NICK@example.com", "password": "correct horse battery"})), &[])
+            .await;
     assert_eq!(login.status, StatusCode::OK, "{}", login.json);
 
     let bad = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "nick", "password": "wrong password!"})), &[]).await;
@@ -57,16 +59,26 @@ async fn invite_rules() {
     let code = seed_invite(&h.t.ctx, 5).await;
     let dup = call(&h.app, "POST", "/auth/signup", None, Some(signup_body(&code, "first")), &[]).await;
     assert_eq!(dup.status, StatusCode::UNPROCESSABLE_ENTITY);
-    let fields: Vec<&str> = dup.json["error"]["details"]["fields"].as_array().unwrap().iter().map(|f| f["field"].as_str().unwrap()).collect();
+    let fields: Vec<&str> =
+        dup.json["error"]["details"]["fields"].as_array().unwrap().iter().map(|f| f["field"].as_str().unwrap()).collect();
     assert_eq!(fields, ["username"]);
     let uses: (i32,) = sqlx::query_as("SELECT Uses FROM Invite WHERE MaxUses = 5").fetch_one(&h.db.pool).await.unwrap();
     assert_eq!(uses.0, 0, "a failed signup doesn't burn an invite use");
 
-    let weak = call(&h.app, "POST", "/auth/signup", None, Some(json!({
-        "inviteCode": code, "email": "bad", "username": "u", "firstName": "", "lastName": "B",
-        "password": "password123456", "timeZone": "Mars/Base"
-    })), &[]).await;
-    let fields: Vec<&str> = weak.json["error"]["details"]["fields"].as_array().unwrap().iter().map(|f| f["field"].as_str().unwrap()).collect();
+    let weak = call(
+        &h.app,
+        "POST",
+        "/auth/signup",
+        None,
+        Some(json!({
+            "inviteCode": code, "email": "bad", "username": "u", "firstName": "", "lastName": "B",
+            "password": "password123456", "timeZone": "Mars/Base"
+        })),
+        &[],
+    )
+    .await;
+    let fields: Vec<&str> =
+        weak.json["error"]["details"]["fields"].as_array().unwrap().iter().map(|f| f["field"].as_str().unwrap()).collect();
     assert_eq!(fields, ["email", "username", "firstName", "timeZone", "password"]);
     h.db.drop_db().await;
 }
@@ -140,7 +152,15 @@ async fn patch_me_needs_if_match_and_detects_conflicts() {
 
     let s = call(&h.app, "GET", "/me/settings", Some(&token), None, &[]).await;
     let sv = s.json["version"].as_i64().unwrap().to_string();
-    let s2 = call(&h.app, "PATCH", "/me/settings", Some(&token), Some(json!({"flashNewPerDay": 10, "extra": {"dailyHours": 3}})), &[("if-match", &sv)]).await;
+    let s2 = call(
+        &h.app,
+        "PATCH",
+        "/me/settings",
+        Some(&token),
+        Some(json!({"flashNewPerDay": 10, "extra": {"dailyHours": 3}})),
+        &[("if-match", &sv)],
+    )
+    .await;
     assert_eq!(s2.status, StatusCode::OK, "{}", s2.json);
     assert_eq!(s2.json["flashNewPerDay"], 10);
     assert_eq!(s2.json["flashRetention"], 0.9);
@@ -151,10 +171,11 @@ async fn patch_me_needs_if_match_and_detects_conflicts() {
 async fn verify_email_and_reset_password() {
     let Some(h) = common::harness().await else { return };
     let (token, user, _) = signup(&h.app, &h.t.ctx, "mail").await;
-    let link: String = sqlx::query_scalar("SELECT JSON_UNQUOTE(JSON_EXTRACT(Payload, '$.payload.link')) FROM Outbox WHERE Topic = 'notify.requested'")
-        .fetch_one(&h.db.pool)
-        .await
-        .unwrap();
+    let link: String =
+        sqlx::query_scalar("SELECT JSON_UNQUOTE(JSON_EXTRACT(Payload, '$.payload.link')) FROM Outbox WHERE Topic = 'notify.requested'")
+            .fetch_one(&h.db.pool)
+            .await
+            .unwrap();
     let verify_token = link.split("token=").nth(1).unwrap();
     let r = call(&h.app, "POST", "/auth/verify-email/confirm", None, Some(json!({"token": verify_token})), &[]).await;
     assert_eq!(r.status, StatusCode::OK, "{}", r.json);
@@ -172,7 +193,9 @@ async fn verify_email_and_reset_password() {
         .await
         .unwrap();
     let reset_token = link.split("token=").nth(1).unwrap();
-    let r = call(&h.app, "POST", "/auth/password/reset", None, Some(json!({"token": reset_token, "password": "a whole new passphrase"})), &[]).await;
+    let r =
+        call(&h.app, "POST", "/auth/password/reset", None, Some(json!({"token": reset_token, "password": "a whole new passphrase"})), &[])
+            .await;
     assert_eq!(r.status, StatusCode::NO_CONTENT, "{}", r.json);
     let old = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "mail", "password": "correct horse battery"})), &[]).await;
     assert_eq!(old.status, StatusCode::UNAUTHORIZED);
@@ -233,19 +256,39 @@ async fn admin_changes_tier_with_audit_and_event() {
     crux_testkit::make_admin(&h.t.ctx, admin["id"].as_str().unwrap()).await;
     let (_, user, _) = signup(&h.app, &h.t.ctx, "member").await;
 
-    let t = call(&h.app, "POST", "/admin/tiers", Some(&admin_token), Some(json!({"code": "plus", "name": "Plus", "storageQuotaBytes": 5_368_709_120i64})), &[]).await;
+    let t = call(
+        &h.app,
+        "POST",
+        "/admin/tiers",
+        Some(&admin_token),
+        Some(json!({"code": "plus", "name": "Plus", "storageQuotaBytes": 5_368_709_120i64})),
+        &[],
+    )
+    .await;
     assert_eq!(t.status, StatusCode::CREATED, "{}", t.json);
 
     let uid = user["id"].as_str().unwrap();
-    let p = call(&h.app, "PATCH", &format!("/admin/users/{uid}"), Some(&admin_token), Some(json!({"tierCode": "plus", "reason": "beta tester"})), &[]).await;
+    let p = call(
+        &h.app,
+        "PATCH",
+        &format!("/admin/users/{uid}"),
+        Some(&admin_token),
+        Some(json!({"tierCode": "plus", "reason": "beta tester"})),
+        &[],
+    )
+    .await;
     assert_eq!(p.status, StatusCode::OK, "{}", p.json);
     assert_eq!(p.json["tier"], "plus");
 
     let topics = outbox_topics(&h.db.pool).await;
     assert!(topics.contains(&"user.tier_changed".to_string()));
-    let audit: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM UserEvent WHERE Type = 'admin.user_update' AND ActorUserId IS NOT NULL").fetch_one(&h.db.pool).await.unwrap();
+    let audit: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM UserEvent WHERE Type = 'admin.user_update' AND ActorUserId IS NOT NULL")
+        .fetch_one(&h.db.pool)
+        .await
+        .unwrap();
     assert_eq!(audit.0, 1);
-    let change: (String,) = sqlx::query_as("SELECT Reason FROM UserTierChange WHERE ChangedBy IS NOT NULL").fetch_one(&h.db.pool).await.unwrap();
+    let change: (String,) =
+        sqlx::query_as("SELECT Reason FROM UserTierChange WHERE ChangedBy IS NOT NULL").fetch_one(&h.db.pool).await.unwrap();
     assert_eq!(change.0, "beta tester");
     h.db.drop_db().await;
 }

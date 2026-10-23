@@ -3,9 +3,9 @@
 use crux_domain::topics;
 use crux_domain::user::{validate_profile_patch, validate_settings_patch, ProfilePatch, SettingsPatch};
 use crux_domain::ValidationErrors;
-use crux_repo::{settings, tiers, users, RepoError};
 use crux_repo::settings::SettingsRow;
 use crux_repo::sqlx_reexport::Json;
+use crux_repo::{settings, tiers, users, RepoError};
 
 use crate::events::{emit, user_payload};
 use crate::views::{SettingsView, TierView, UserView};
@@ -23,7 +23,10 @@ pub async fn patch(ctx: &Ctx, actor: &Actor, version: i32, patch: ProfilePatch) 
     let mut tx = crux_repo::begin(&ctx.pool).await?;
     let cur = users::by_id(&mut tx, actor.user_id).await?.ok_or(AppError::NotFound)?;
     if cur.row_version != version {
-        return Err(AppError::Conflict { message: "Changed somewhere else.".into(), current: Some(serde_json::to_value(UserView::from(&cur)).unwrap_or_default()) });
+        return Err(AppError::Conflict {
+            message: "Changed somewhere else.".into(),
+            current: Some(serde_json::to_value(UserView::from(&cur)).unwrap_or_default()),
+        });
     }
     let update = users::ProfileUpdate {
         username: patch.username.as_deref().map(str::trim).unwrap_or(&cur.username),
@@ -53,7 +56,10 @@ pub async fn patch_settings(ctx: &Ctx, actor: &Actor, version: i32, patch: Setti
     let mut tx = crux_repo::begin(&ctx.pool).await?;
     let cur = settings::get(&mut tx, actor.user_id).await?.ok_or(AppError::NotFound)?;
     if cur.row_version != version {
-        return Err(AppError::Conflict { message: "Changed somewhere else.".into(), current: Some(serde_json::to_value(SettingsView::from(&cur)).unwrap_or_default()) });
+        return Err(AppError::Conflict {
+            message: "Changed somewhere else.".into(),
+            current: Some(serde_json::to_value(SettingsView::from(&cur)).unwrap_or_default()),
+        });
     }
     let next = SettingsRow {
         flash_retention: patch.flash_retention.unwrap_or(cur.flash_retention),

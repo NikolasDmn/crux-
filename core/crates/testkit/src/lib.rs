@@ -142,7 +142,11 @@ pub async fn call(app: &Router, method: &str, path: &str, token: Option<&str>, b
     let status = resp.status();
     let headers = resp.headers().clone();
     let bytes = resp.into_body().collect().await.unwrap().to_bytes();
-    let json = if bytes.is_empty() { Value::Null } else { serde_json::from_slice(&bytes).unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into())) };
+    let json = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(Value::String(String::from_utf8_lossy(&bytes).into()))
+    };
     Resp { status, headers, json }
 }
 

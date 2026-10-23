@@ -20,14 +20,7 @@ pub async fn emit(
     let event_id = ctx.ids.ulid();
     messaging::insert_outbox(
         conn,
-        &NewOutbox {
-            event_id: &event_id,
-            topic,
-            schema_version: 1,
-            aggregate_ref,
-            payload: &payload,
-            created_at: ctx.clock.now(),
-        },
+        &NewOutbox { event_id: &event_id, topic, schema_version: 1, aggregate_ref, payload: &payload, created_at: ctx.clock.now() },
     )
     .await?;
     Ok(())

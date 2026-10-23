@@ -17,7 +17,11 @@ pub struct InvalidId;
 impl PublicId {
     pub fn parse(s: &str) -> Result<Self, InvalidId> {
         let ok = s.len() == 26 && s.bytes().all(|b| b.is_ascii_digit() || b.is_ascii_uppercase());
-        if ok { Ok(Self(s.to_owned())) } else { Err(InvalidId) }
+        if ok {
+            Ok(Self(s.to_owned()))
+        } else {
+            Err(InvalidId)
+        }
     }
 
     /// For values that come out of our own database or id generator.

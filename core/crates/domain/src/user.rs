@@ -19,7 +19,11 @@ impl Role {
     }
 
     pub fn from_db(s: &str) -> Self {
-        if s == "Admin" { Role::Admin } else { Role::User }
+        if s == "Admin" {
+            Role::Admin
+        } else {
+            Role::User
+        }
     }
 }
 

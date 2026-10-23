@@ -37,7 +37,11 @@ impl ValidationErrors {
 
     /// `Ok(())` when nothing was pushed, so callers can end with `errors.into_result()?`.
     pub fn into_result(self) -> Result<(), ValidationErrors> {
-        if self.is_empty() { Ok(()) } else { Err(self) }
+        if self.is_empty() {
+            Ok(())
+        } else {
+            Err(self)
+        }
     }
 }
 

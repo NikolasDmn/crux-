@@ -25,10 +25,7 @@ const SELECT: &str = "SELECT i.Id, i.PublicId, i.CodeHash, i.Email, i.InvitedBy,
 
 /// Locks the invite row so two signups can't both take the last use.
 pub async fn by_code_hash_for_update(conn: &mut MySqlConnection, code_hash: &str) -> RepoResult<Option<InviteRow>> {
-    Ok(sqlx::query_as(&format!("{SELECT} WHERE i.CodeHash = ? FOR UPDATE"))
-        .bind(code_hash)
-        .fetch_optional(conn)
-        .await?)
+    Ok(sqlx::query_as(&format!("{SELECT} WHERE i.CodeHash = ? FOR UPDATE")).bind(code_hash).fetch_optional(conn).await?)
 }
 
 pub async fn increment_uses(conn: &mut MySqlConnection, id: i64) -> RepoResult<()> {
@@ -47,32 +44,31 @@ pub struct NewInvite<'a> {
 }
 
 pub async fn insert(conn: &mut MySqlConnection, i: &NewInvite<'_>) -> RepoResult<i64> {
-    let res = sqlx::query("INSERT INTO Invite (PublicId, CodeHash, Email, InvitedBy, TierId, MaxUses, ExpiresAt) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .bind(i.public_id)
-        .bind(i.code_hash)
-        .bind(i.email)
-        .bind(i.invited_by)
-        .bind(i.tier_id)
-        .bind(i.max_uses)
-        .bind(i.expires_at)
-        .execute(conn)
-        .await
-        .map_err(map_unique)?;
+    let res =
+        sqlx::query("INSERT INTO Invite (PublicId, CodeHash, Email, InvitedBy, TierId, MaxUses, ExpiresAt) VALUES (?, ?, ?, ?, ?, ?, ?)")
+            .bind(i.public_id)
+            .bind(i.code_hash)
+            .bind(i.email)
+            .bind(i.invited_by)
+            .bind(i.tier_id)
+            .bind(i.max_uses)
+            .bind(i.expires_at)
+            .execute(conn)
+            .await
+            .map_err(map_unique)?;
     Ok(res.last_insert_id() as i64)
 }
 
 /// `inviter = None` lists every invite (admin).
 pub async fn list(conn: &mut MySqlConnection, inviter: Option<i64>, before_id: Option<i64>, limit: u32) -> RepoResult<Vec<InviteRow>> {
-    Ok(sqlx::query_as(&format!(
-        "{SELECT} WHERE (? IS NULL OR i.InvitedBy = ?) AND (? IS NULL OR i.Id < ?) ORDER BY i.Id DESC LIMIT ?"
-    ))
-    .bind(inviter)
-    .bind(inviter)
-    .bind(before_id)
-    .bind(before_id)
-    .bind(limit)
-    .fetch_all(conn)
-    .await?)
+    Ok(sqlx::query_as(&format!("{SELECT} WHERE (? IS NULL OR i.InvitedBy = ?) AND (? IS NULL OR i.Id < ?) ORDER BY i.Id DESC LIMIT ?"))
+        .bind(inviter)
+        .bind(inviter)
+        .bind(before_id)
+        .bind(before_id)
+        .bind(limit)
+        .fetch_all(conn)
+        .await?)
 }
 
 /// Scoped to the inviter unless `inviter` is None (admin). PublicId comes from migration 0002.
@@ -86,10 +82,6 @@ pub async fn by_public_id(conn: &mut MySqlConnection, public_id: &str, inviter: 
 }
 
 pub async fn revoke(conn: &mut MySqlConnection, id: i64, at: DateTime<Utc>) -> RepoResult<()> {
-    sqlx::query("UPDATE Invite SET RevokedAt = COALESCE(RevokedAt, ?) WHERE Id = ?")
-        .bind(at)
-        .bind(id)
-        .execute(conn)
-        .await?;
+    sqlx::query("UPDATE Invite SET RevokedAt = COALESCE(RevokedAt, ?) WHERE Id = ?").bind(at).bind(id).execute(conn).await?;
     Ok(())
 }

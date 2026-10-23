@@ -1,0 +1,19 @@
+[project]
+name = "crux-notify"
+version = "0.1.0"
+description = "Preferences, in-app inbox, email delivery, unsubscribe, suppression (backend-spec 8)."
+requires-python = ">=3.12,<3.13"
+dependencies = ["crux-common"]
+
+[tool.uv.sources]
+crux-common = { workspace = true }
+
+# Virtual member: contributes dependencies only. The code is the top-level `app` package, run
+# from this directory (uvicorn app.main:app), so the three services never share an import path.
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

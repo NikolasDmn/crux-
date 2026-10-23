@@ -18,7 +18,12 @@ pub async fn get_me(State(state): State<AppState>, Auth(actor): Auth) -> ApiResu
 #[utoipa::path(patch, path = "/me", tag = "me", security(("bearer" = [])), request_body = ProfilePatch,
     params(("If-Match" = i32, Header, description = "The version you edited")),
     responses((status = 200, body = UserView), (status = 409, body = ErrorBody), (status = 422, body = ErrorBody)))]
-pub async fn patch_me(State(state): State<AppState>, Auth(actor): Auth, IfMatch(version): IfMatch, JsonBody(patch): JsonBody<ProfilePatch>) -> ApiResult<Json<UserView>> {
+pub async fn patch_me(
+    State(state): State<AppState>,
+    Auth(actor): Auth,
+    IfMatch(version): IfMatch,
+    JsonBody(patch): JsonBody<ProfilePatch>,
+) -> ApiResult<Json<UserView>> {
     Ok(Json(me::patch(&state.ctx, &actor, version, patch).await?))
 }
 
@@ -31,7 +36,12 @@ pub async fn get_settings(State(state): State<AppState>, Auth(actor): Auth) -> A
 #[utoipa::path(patch, path = "/me/settings", tag = "me", security(("bearer" = [])), request_body = SettingsPatch,
     params(("If-Match" = i32, Header, description = "The version you edited")),
     responses((status = 200, body = SettingsView), (status = 409, body = ErrorBody), (status = 422, body = ErrorBody)))]
-pub async fn patch_settings(State(state): State<AppState>, Auth(actor): Auth, IfMatch(version): IfMatch, JsonBody(patch): JsonBody<SettingsPatch>) -> ApiResult<Json<SettingsView>> {
+pub async fn patch_settings(
+    State(state): State<AppState>,
+    Auth(actor): Auth,
+    IfMatch(version): IfMatch,
+    JsonBody(patch): JsonBody<SettingsPatch>,
+) -> ApiResult<Json<SettingsView>> {
     Ok(Json(me::patch_settings(&state.ctx, &actor, version, patch).await?))
 }
 

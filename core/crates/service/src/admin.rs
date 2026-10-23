@@ -16,10 +16,21 @@ use crate::views::{Page, TierView, UserView};
 use crate::{Actor, AppError, AppResult, Ctx};
 
 fn require_admin(actor: &Actor) -> AppResult<()> {
-    if actor.is_admin() { Ok(()) } else { Err(AppError::NotFound) }
+    if actor.is_admin() {
+        Ok(())
+    } else {
+        Err(AppError::NotFound)
+    }
 }
 
-async fn audit(conn: &mut MySqlConnection, ctx: &Ctx, actor: &Actor, subject_user_id: i64, kind: &str, payload: serde_json::Value) -> AppResult<()> {
+async fn audit(
+    conn: &mut MySqlConnection,
+    ctx: &Ctx,
+    actor: &Actor,
+    subject_user_id: i64,
+    kind: &str,
+    payload: serde_json::Value,
+) -> AppResult<()> {
     user_events::insert(
         conn,
         &NewUserEvent {
@@ -85,7 +96,9 @@ pub async fn patch_user(ctx: &Ctx, actor: &Actor, user_ref: &str, patch: AdminUs
     }
 
     if let Some(code) = &patch.tier_code {
-        let tier = tiers::by_code(&mut tx, code).await?.ok_or_else(|| ValidationErrors::single("tierCode", "unknown", "No tier with that code."))?;
+        let tier = tiers::by_code(&mut tx, code)
+            .await?
+            .ok_or_else(|| ValidationErrors::single("tierCode", "unknown", "No tier with that code."))?;
         if tier.id != target.tier_id {
             users::set_tier(&mut tx, target.id, tier.id).await?;
             let reason = patch.reason.as_deref().unwrap_or("admin");

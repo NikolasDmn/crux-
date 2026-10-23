@@ -48,7 +48,11 @@ pub enum ContractError {
 pub fn validate(topic: &str, version: u16, payload: &serde_json::Value) -> Result<(), ContractError> {
     let v = validators().get(&(topic.to_string(), version)).ok_or_else(|| ContractError::Unknown(topic.into(), version))?;
     let errors: Vec<String> = v.iter_errors(payload).map(|e| format!("{}: {}", e.instance_path, e)).collect();
-    if errors.is_empty() { Ok(()) } else { Err(ContractError::Invalid { topic: topic.into(), version, errors }) }
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(ContractError::Invalid { topic: topic.into(), version, errors })
+    }
 }
 
 #[cfg(test)]

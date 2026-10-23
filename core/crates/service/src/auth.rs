@@ -157,7 +157,11 @@ pub async fn signup(ctx: &Ctx, input: SignupInput, client: &ClientInfo) -> AppRe
 
     let default_tier = tiers::default_tier(&mut tx).await?.ok_or_else(|| anyhow::anyhow!("no default tier"))?;
     let tier_id = signup_tier_id(invite.tier_id, default_tier.id);
-    let tier = if tier_id == default_tier.id { default_tier } else { tiers::by_id(&mut tx, tier_id).await?.ok_or_else(|| anyhow::anyhow!("invite tier missing"))? };
+    let tier = if tier_id == default_tier.id {
+        default_tier
+    } else {
+        tiers::by_id(&mut tx, tier_id).await?.ok_or_else(|| anyhow::anyhow!("invite tier missing"))?
+    };
 
     let public_id = ctx.ids.ulid();
     let user_id = users::insert(

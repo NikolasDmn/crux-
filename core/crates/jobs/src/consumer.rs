@@ -80,7 +80,9 @@ pub async fn run(
                     }
                 }
                 // Not acked: stays in this consumer's pending list; the next pending sweep retries it.
-                Err(e) => tracing::error!(event_id = %d.envelope.event_id, topic = %d.topic, error = %e, alert = true, "event handler failed"),
+                Err(e) => {
+                    tracing::error!(event_id = %d.envelope.event_id, topic = %d.topic, error = %e, alert = true, "event handler failed")
+                }
             }
         }
     }

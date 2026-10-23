@@ -1,0 +1,18 @@
+{
+  "accessToken": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6Ijc2OTVmZGY2OWMzYzdlZGIifQ.eyJpc3MiOiJjcnV4LWNvcmUiLCJhdWQiOiJjcnV4LWFwaSIsInN1YiI6IjAxVEVTVDAwMDAwMDAwMDAwMDAwMDAwMDAxIiwicm9sZSI6IlVzZXIiLCJ0aWVyIjoiZnJlZSIsImlhdCI6MTAwMCwiZXhwIjo0MTAyNDQ0ODAwfQ.j8qSZYN89owpoEMn0AkUAgfGqJxqXTMEUWxatb0_cvL7P7GkI3xjMUNhsH_72g-39xobiUZpToP12rWfi7ckAw",
+  "comment": "Test-only key. Tokens signed by crux-core; verified by the Python services.",
+  "jwks": {
+    "keys": [
+      {
+        "alg": "EdDSA",
+        "crv": "Ed25519",
+        "kid": "7695fdf69c3c7edb",
+        "kty": "OKP",
+        "use": "sig",
+        "x": "FOJIZoSo0qOTFjRsL0FpClP3I4pMFE3NzIZamKClID4"
+      }
+    ]
+  },
+  "privateKeyPem": "-----BEGIN PRIVATE KEY-----\nMFECAQEwBQYDK2VwBCIEIAK9OHkQ45VDc04u//pJsxlKUGvaEG9DSvs7YLYoVFu+\ngSEAFOJIZoSo0qOTFjRsL0FpClP3I4pMFE3NzIZamKClID4=\n-----END PRIVATE KEY-----\n",
+  "serviceToken": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6Ijc2OTVmZGY2OWMzYzdlZGIifQ.eyJpc3MiOiJjcnV4LWNvcmUiLCJhdWQiOiJmaWxlcyIsInN1YiI6ImNvcmUiLCJ0eXAiOiJzZXJ2aWNlIiwiaWF0IjoxMDAwLCJleHAiOjQxMDI0NDQ4MDB9.t9NXa7ErjQmehZ--NDho9ouR-Ci8dadHaAH2M2AqijXRBhOXGFn--F9P1tyV0c3L_726QlZEfsUlc7BGwh-ADA"
+}

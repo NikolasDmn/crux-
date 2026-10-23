@@ -61,7 +61,9 @@ impl IntoResponse for ApiError {
             AppError::Conflict { message, current } => (message.clone(), current.as_ref().map(|c| json!({ "current": c }))),
             AppError::InviteInvalid { reason } => ("This invite can't be used.".into(), Some(json!({ "reason": reason }))),
             AppError::EmailUnverified => ("Verify your email address first.".into(), None),
-            AppError::RateLimited { retry_after_secs } => ("Too many attempts. Try again later.".into(), Some(json!({ "retryAfterSecs": retry_after_secs }))),
+            AppError::RateLimited { retry_after_secs } => {
+                ("Too many attempts. Try again later.".into(), Some(json!({ "retryAfterSecs": retry_after_secs })))
+            }
             AppError::Internal(e) => {
                 tracing::error!(error = %e, request_id = request_id.as_deref().unwrap_or(""), "internal error");
                 ("Something went wrong.".into(), None)

@@ -116,7 +116,7 @@ pub async fn patch_user(ctx: &Ctx, actor: &Actor, user_ref: &str, patch: AdminUs
     if patch.role.is_some() || patch.status.is_some() {
         users::set_role_status(&mut tx, target.id, patch.role.as_deref(), patch.status.as_deref()).await?;
         if patch.status.as_deref() == Some("Disabled") {
-            crux_repo::sessions::revoke_all_for_user(&mut tx, target.id, now).await?;
+            crux_repo::sessions::revoke_all_for_user(&mut tx, target.id, now, crux_domain::auth::RevokeReason::Admin).await?;
         }
     }
     audit(

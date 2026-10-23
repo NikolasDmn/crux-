@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use sqlx::MySqlConnection;
 
+use crux_domain::auth::RevokeReason;
+
 use crate::RepoResult;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -10,6 +12,7 @@ pub struct SessionRow {
     pub user_id: i64,
     pub expires_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,
+    pub revoke_reason: Option<String>,
 }
 
 pub async fn insert(
@@ -35,20 +38,27 @@ pub async fn insert(
 }
 
 pub async fn by_token_hash_for_update(conn: &mut MySqlConnection, token_hash: &str) -> RepoResult<Option<SessionRow>> {
-    Ok(sqlx::query_as("SELECT Id, UserId, ExpiresAt, RevokedAt FROM UserSession WHERE TokenHash = ? FOR UPDATE")
+    Ok(sqlx::query_as("SELECT Id, UserId, ExpiresAt, RevokedAt, CAST(RevokeReason AS CHAR) AS RevokeReason FROM UserSession WHERE TokenHash = ? FOR UPDATE")
         .bind(token_hash)
         .fetch_optional(conn)
         .await?)
 }
 
-pub async fn revoke(conn: &mut MySqlConnection, id: i64, at: DateTime<Utc>) -> RepoResult<()> {
-    sqlx::query("UPDATE UserSession SET RevokedAt = COALESCE(RevokedAt, ?) WHERE Id = ?").bind(at).bind(id).execute(conn).await?;
+/// No-op on an already revoked session: the first reason sticks.
+pub async fn revoke(conn: &mut MySqlConnection, id: i64, at: DateTime<Utc>, reason: RevokeReason) -> RepoResult<()> {
+    sqlx::query("UPDATE UserSession SET RevokedAt = ?, RevokeReason = ? WHERE Id = ? AND RevokedAt IS NULL")
+        .bind(at)
+        .bind(reason.as_db())
+        .bind(id)
+        .execute(conn)
+        .await?;
     Ok(())
 }
 
-pub async fn revoke_all_for_user(conn: &mut MySqlConnection, user_id: i64, at: DateTime<Utc>) -> RepoResult<u64> {
-    let res = sqlx::query("UPDATE UserSession SET RevokedAt = ? WHERE UserId = ? AND RevokedAt IS NULL")
+pub async fn revoke_all_for_user(conn: &mut MySqlConnection, user_id: i64, at: DateTime<Utc>, reason: RevokeReason) -> RepoResult<u64> {
+    let res = sqlx::query("UPDATE UserSession SET RevokedAt = ?, RevokeReason = ? WHERE UserId = ? AND RevokedAt IS NULL")
         .bind(at)
+        .bind(reason.as_db())
         .bind(user_id)
         .execute(conn)
         .await?;

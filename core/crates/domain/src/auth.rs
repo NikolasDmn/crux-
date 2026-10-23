@@ -135,31 +135,84 @@ pub fn check_invite(invite: &InviteState, signup_email: &str, now: DateTime<Utc>
     Ok(())
 }
 
+/// Two tabs refreshing at once: the slower one presents a token rotated a moment ago. Within this
+/// window that's a race, not theft (Nick 2026-10-23).
+pub const REFRESH_REUSE_GRACE: Duration = Duration::seconds(10);
+
+/// `UserSession.RevokeReason` (migration 0003).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RevokeReason {
+    /// Replaced by a new session on refresh.
+    Rotated,
+    Logout,
+    /// Theft detection revoked it.
+    Reuse,
+    PasswordReset,
+    Admin,
+}
+
+impl RevokeReason {
+    pub fn as_db(self) -> &'static str {
+        match self {
+            RevokeReason::Rotated => "Rotated",
+            RevokeReason::Logout => "Logout",
+            RevokeReason::Reuse => "Reuse",
+            RevokeReason::PasswordReset => "PasswordReset",
+            RevokeReason::Admin => "Admin",
+        }
+    }
+
+    pub fn from_db(s: &str) -> Option<Self> {
+        Some(match s {
+            "Rotated" => RevokeReason::Rotated,
+            "Logout" => RevokeReason::Logout,
+            "Reuse" => RevokeReason::Reuse,
+            "PasswordReset" => RevokeReason::PasswordReset,
+            "Admin" => RevokeReason::Admin,
+            _ => return None,
+        })
+    }
+}
+
 /// What a refresh-token lookup found.
 #[derive(Debug, Clone)]
 pub struct SessionState {
     pub expires_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,
+    pub revoke_reason: Option<RevokeReason>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RefreshDecision {
     /// Rotate: revoke this session and issue a new one.
     Rotate,
+    /// A token rotated within the grace window (a racing tab): issue a new session, revoke nothing.
+    GraceReissue,
     /// The cookie is past its life; ask the user to log in.
     Expired,
-    /// A rotated (revoked) token came back: someone kept a copy. Revoke every session of the user.
+    /// Ended on purpose (logout, password reset, admin): ask the user to log in. No cascade, so a
+    /// stale tab left open after logging out doesn't sign out the user's other devices.
+    Revoked,
+    /// A rotated token came back after the grace window: someone kept a copy. Revoke every session.
     Reused,
 }
 
-/// Spec 4.1: the refresh token rotates on every use; reusing an old one revokes every session.
+/// Spec 4.1: the refresh token rotates on every use; reusing an old one revokes every session,
+/// except within `REFRESH_REUSE_GRACE` of its rotation.
 pub fn decide_refresh(session: &SessionState, now: DateTime<Utc>) -> RefreshDecision {
-    if session.revoked_at.is_some() {
-        RefreshDecision::Reused
-    } else if session.expires_at <= now {
-        RefreshDecision::Expired
-    } else {
-        RefreshDecision::Rotate
+    match (session.revoked_at, session.revoke_reason) {
+        (Some(at), Some(RevokeReason::Rotated)) => {
+            if now - at <= REFRESH_REUSE_GRACE && session.expires_at > now {
+                RefreshDecision::GraceReissue
+            } else {
+                RefreshDecision::Reused
+            }
+        }
+        // Revoked for any other reason (or before reasons were recorded).
+        (Some(_), Some(_)) => RefreshDecision::Revoked,
+        (Some(_), None) => RefreshDecision::Reused,
+        (None, _) if session.expires_at <= now => RefreshDecision::Expired,
+        (None, _) => RefreshDecision::Rotate,
     }
 }
 
@@ -258,14 +311,43 @@ mod tests {
 
     #[test]
     fn refresh_decisions() {
-        let live = SessionState { expires_at: now() + Duration::days(1), revoked_at: None };
+        let live = SessionState { expires_at: now() + Duration::days(1), revoked_at: None, revoke_reason: None };
         assert_eq!(decide_refresh(&live, now()), RefreshDecision::Rotate);
 
-        let expired = SessionState { expires_at: now(), revoked_at: None };
+        let expired = SessionState { expires_at: now(), ..live.clone() };
         assert_eq!(decide_refresh(&expired, now()), RefreshDecision::Expired);
+    }
 
-        let rotated = SessionState { revoked_at: Some(now() - Duration::minutes(1)), ..live };
-        assert_eq!(decide_refresh(&rotated, now()), RefreshDecision::Reused, "reuse wins over expiry");
+    #[test]
+    fn rotated_token_reused_within_grace_is_a_race_after_it_is_theft() {
+        let rotated = |ago: i64| SessionState {
+            expires_at: now() + Duration::days(1),
+            revoked_at: Some(now() - Duration::seconds(ago)),
+            revoke_reason: Some(RevokeReason::Rotated),
+        };
+        assert_eq!(decide_refresh(&rotated(0), now()), RefreshDecision::GraceReissue);
+        assert_eq!(decide_refresh(&rotated(10), now()), RefreshDecision::GraceReissue, "10 s inclusive");
+        assert_eq!(decide_refresh(&rotated(11), now()), RefreshDecision::Reused);
+        let past_life = SessionState { expires_at: now(), ..rotated(1) };
+        assert_eq!(decide_refresh(&past_life, now()), RefreshDecision::Reused, "no grace for an expired session");
+    }
+
+    #[test]
+    fn deliberate_revocations_never_get_grace_or_cascade() {
+        for reason in [RevokeReason::Logout, RevokeReason::PasswordReset, RevokeReason::Admin, RevokeReason::Reuse] {
+            let s = SessionState { expires_at: now() + Duration::days(1), revoked_at: Some(now()), revoke_reason: Some(reason) };
+            assert_eq!(decide_refresh(&s, now()), RefreshDecision::Revoked, "{reason:?}");
+        }
+        let legacy = SessionState { expires_at: now() + Duration::days(1), revoked_at: Some(now()), revoke_reason: None };
+        assert_eq!(decide_refresh(&legacy, now()), RefreshDecision::Reused, "unknown reason: assume theft");
+    }
+
+    #[test]
+    fn revoke_reason_round_trips() {
+        for r in [RevokeReason::Rotated, RevokeReason::Logout, RevokeReason::Reuse, RevokeReason::PasswordReset, RevokeReason::Admin] {
+            assert_eq!(RevokeReason::from_db(r.as_db()), Some(r));
+        }
+        assert_eq!(RevokeReason::from_db("x"), None);
     }
 
     #[test]

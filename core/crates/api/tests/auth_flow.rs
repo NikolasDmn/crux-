@@ -102,6 +102,8 @@ async fn refresh_rotates_and_reuse_revokes_everything() {
     let other = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "rot", "password": "correct horse battery"})), &[]).await;
     let other_cookie = refresh_cookie(&other.headers).unwrap();
 
+    // Past the 10 s grace window, a rotated token coming back is theft.
+    h.t.clock.advance(chrono::Duration::seconds(11));
     let replay = call(&h.app, "POST", "/auth/refresh", None, None, &[("cookie", &cookie_hdr(&cookie1))]).await;
     assert_eq!(replay.status, StatusCode::UNAUTHORIZED);
     for c in [&cookie2, &other_cookie] {
@@ -112,14 +114,35 @@ async fn refresh_rotates_and_reuse_revokes_everything() {
 }
 
 #[tokio::test]
-async fn logout_revokes_the_session() {
+async fn two_tabs_refreshing_at_once_both_stay_signed_in() {
+    let Some(h) = common::harness().await else { return };
+    let (_, _, cookie) = signup(&h.app, &h.t.ctx, "tabs").await;
+    let hdr = format!("crux_refresh={cookie}");
+    let first = call(&h.app, "POST", "/auth/refresh", None, None, &[("cookie", &hdr)]).await;
+    h.t.clock.advance(chrono::Duration::seconds(3));
+    let second = call(&h.app, "POST", "/auth/refresh", None, None, &[("cookie", &hdr)]).await;
+    assert_eq!((first.status, second.status), (StatusCode::OK, StatusCode::OK), "a racing tab within 10 s is not theft");
+    for r in [&first, &second] {
+        let c = format!("crux_refresh={}", refresh_cookie(&r.headers).unwrap());
+        let again = call(&h.app, "POST", "/auth/refresh", None, None, &[("cookie", &c)]).await;
+        assert_eq!(again.status, StatusCode::OK, "both tabs' new sessions work");
+    }
+    h.db.drop_db().await;
+}
+
+#[tokio::test]
+async fn logout_revokes_only_that_session() {
     let Some(h) = common::harness().await else { return };
     let (_, _, cookie) = signup(&h.app, &h.t.ctx, "bye").await;
+    let phone = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "bye", "password": "correct horse battery"})), &[]).await;
+    let phone_hdr = format!("crux_refresh={}", refresh_cookie(&phone.headers).unwrap());
     let hdr = format!("crux_refresh={cookie}");
     let out = call(&h.app, "POST", "/auth/logout", None, None, &[("cookie", &hdr)]).await;
     assert_eq!(out.status, StatusCode::NO_CONTENT);
     let r = call(&h.app, "POST", "/auth/refresh", None, None, &[("cookie", &hdr)]).await;
-    assert_eq!(r.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(r.status, StatusCode::UNAUTHORIZED, "no grace after logout");
+    let p = call(&h.app, "POST", "/auth/refresh", None, None, &[("cookie", &phone_hdr)]).await;
+    assert_eq!(p.status, StatusCode::OK, "a stale tab after logout doesn't sign out other devices");
     h.db.drop_db().await;
 }
 

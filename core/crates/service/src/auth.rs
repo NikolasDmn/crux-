@@ -1,7 +1,7 @@
 //! Signup, login, sessions, email verification, password reset (spec 4.1).
 
 use chrono::{DateTime, Utc};
-use crux_domain::auth::{self as rules, InviteRejection, RefreshDecision};
+use crux_domain::auth::{self as rules, InviteRejection, RefreshDecision, RevokeReason};
 use crux_domain::tier::signup_tier_id;
 use crux_domain::user::{Role, UserStatus};
 use crux_domain::{topics, ValidationErrors};
@@ -213,17 +213,23 @@ pub async fn refresh(ctx: &Ctx, refresh_token: &str, client: &ClientInfo) -> App
     let now = ctx.clock.now();
     let mut tx = crux_repo::begin(&ctx.pool).await?;
     let session = sessions::by_token_hash_for_update(&mut tx, &rules::token_hash(refresh_token)).await?.ok_or(AppError::Unauthenticated)?;
-    let state = rules::SessionState { expires_at: session.expires_at, revoked_at: session.revoked_at };
+    let state = rules::SessionState {
+        expires_at: session.expires_at,
+        revoked_at: session.revoked_at,
+        revoke_reason: session.revoke_reason.as_deref().and_then(RevokeReason::from_db),
+    };
     match rules::decide_refresh(&state, now) {
-        RefreshDecision::Expired => Err(AppError::Unauthenticated),
+        RefreshDecision::Expired | RefreshDecision::Revoked => Err(AppError::Unauthenticated),
         RefreshDecision::Reused => {
-            let n = sessions::revoke_all_for_user(&mut tx, session.user_id, now).await?;
+            let n = sessions::revoke_all_for_user(&mut tx, session.user_id, now, RevokeReason::Reuse).await?;
             tx.commit().await?;
             tracing::warn!(revoked = n, "refresh token reuse detected; all sessions revoked");
             Err(AppError::Unauthenticated)
         }
-        RefreshDecision::Rotate => {
-            sessions::revoke(&mut tx, session.id, now).await?;
+        decision @ (RefreshDecision::Rotate | RefreshDecision::GraceReissue) => {
+            if decision == RefreshDecision::Rotate {
+                sessions::revoke(&mut tx, session.id, now, RevokeReason::Rotated).await?;
+            }
             let user = users::by_id(&mut tx, session.user_id).await?.ok_or(AppError::Unauthenticated)?;
             if !UserStatus::from_db(&user.status).may_log_in() {
                 return Err(AppError::Unauthenticated);
@@ -240,9 +246,7 @@ pub async fn logout(ctx: &Ctx, refresh_token: Option<&str>) -> AppResult<()> {
     let Some(token) = refresh_token else { return Ok(()) };
     let mut tx = crux_repo::begin(&ctx.pool).await?;
     if let Some(s) = sessions::by_token_hash_for_update(&mut tx, &rules::token_hash(token)).await? {
-        if s.revoked_at.is_none() {
-            sessions::revoke(&mut tx, s.id, ctx.clock.now()).await?;
-        }
+        sessions::revoke(&mut tx, s.id, ctx.clock.now(), RevokeReason::Logout).await?;
     }
     tx.commit().await?;
     Ok(())
@@ -331,7 +335,7 @@ pub async fn reset_password(ctx: &Ctx, token: &str, new_password: &str) -> AppRe
         .ok_or_else(|| AppError::Validation(ValidationErrors::single("token", "invalid", "This link is invalid or has expired.")))?;
     auth_tokens::mark_used(&mut tx, row.id, now).await?;
     users::set_password_hash(&mut tx, row.user_id, &hash).await?;
-    sessions::revoke_all_for_user(&mut tx, row.user_id, now).await?;
+    sessions::revoke_all_for_user(&mut tx, row.user_id, now, RevokeReason::PasswordReset).await?;
     tx.commit().await?;
     Ok(())
 }

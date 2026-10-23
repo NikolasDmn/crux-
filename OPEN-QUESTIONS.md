@@ -20,12 +20,12 @@ Answer inline (or tell the build agent) and the code follows.
 
 | # | Question | Built meanwhile |
 |---|---|---|
-| Q-auth-1 | Refresh-token lifetime? Spec gives 15 min for access only. | 30 days, rotating. Revoked rows kept 30 days so reuse is still detected. |
+| Q-auth-1 | Refresh-token lifetime? | **Decided (Nick 2026-10-23): 30 days, sliding.** Revoked rows kept 30 days so reuse is still detected. |
 | Q-auth-2 | Username rules? | 3-32 of letters, digits, `_ . -`, starting with a letter or digit; unique case-insensitively. |
 | Q-auth-3 | The "top-100k breached list shipped with the app": which list, and may it be downloaded? | Loader in place (`core/data/breached-passwords.txt`, one per line, case-insensitive). The file is a 30-entry placeholder until the real list (e.g. SecLists 100k filtered to ≥ 10 chars) is added. |
 | Q-auth-4 | Verify-email and reset-password emails go to *unverified* addresses and can't be opt-in. Spec 8 says email only to verified addresses and every kind opt-in. | `notify.requested` carries `transactional: true` for `auth.verify_email` / `auth.password_reset`; notify will send those regardless of preferences and verification. Sending lands with notify (milestone 6). Until then, links are in the core Outbox row. |
 | Q-auth-5 | Token TTLs for verify (48 h) and reset (1 h)? | As stated. Requesting a new link voids the older one. |
-| Q-auth-6 | Two tabs refreshing at the same moment: the slower one presents a just-rotated token, which spec 4.1 treats as reuse and revokes every session. Allow a few seconds of grace? | Strict, as specced. The SPA should funnel refreshes through one in-flight request (BroadcastChannel across tabs). |
+| Q-auth-6 | Two tabs refreshing at once present a just-rotated token. | **Decided (Nick 2026-10-23): 10 s grace.** A token rotated ≤ 10 s ago gets a fresh session; after that, reuse revokes every session (spec 4.1). Build refinement: sessions ended on purpose (logout, password reset, admin) just answer 401 and don't cascade, so a stale tab after logout can't sign out other devices. Needs `UserSession.RevokeReason` (core migration 0003). |
 | Q-auth-7 | A logged-in user whose account is `PendingDeletion` can still log in (to cancel). OK? | Yes: only `Disabled` blocks login. |
 | Q-inv-1 | Limits on invites made by ordinary users? | ≤ 5 uses, ≤ 30 days (default 14 days, 1 use). Admin: ≤ 10,000 uses, ≤ 365 days, any tier. |
 | Q-inv-2 | Error code when an unverified user tries to invite? Not in the 3.1 table. | `403 email_unverified`. |

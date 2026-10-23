@@ -32,9 +32,10 @@ logs: ## follow logs
 invite: ## print a fresh invite code
 	@$(COMPOSE) exec -T core crux-core create-invite
 
-seed: ## load the demo data (milestone 1: an admin invite; the demo course arrives with milestone 2)
-	@echo "Admin invite code: $$($(COMPOSE) exec -T core crux-core create-invite --max-uses 5)"
-	@echo "Sign up with it, then: $(COMPOSE) exec core crux-core make-admin <your email>"
+seed: ## demo data: an admin (demo-admin@crux.test, password in deploy/secrets/demo-accounts.txt) + an invite
+	@test -f deploy/secrets/demo-accounts.txt || printf 'demo-admin  demo-admin@crux.test  demo-%s
+' "$$(openssl rand -hex 8)" > deploy/secrets/demo-accounts.txt
+	./scripts/demo-seed.sh http://localhost:$${CRUX_HTTP_PORT:-8000}
 
 smoke: ## smoke-test a running stack
 	./scripts/smoke.sh http://localhost:$${CRUX_HTTP_PORT:-8000}

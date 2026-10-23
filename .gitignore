@@ -1,0 +1,11 @@
+target/
+__pycache__/
+.venv/
+node_modules/
+dist/
+.env
+*.env
+!.env.example
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/

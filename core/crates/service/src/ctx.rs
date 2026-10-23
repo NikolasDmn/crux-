@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crux_clients::clock::Clock;
+use crux_clients::files::FilesApi;
 use crux_clients::ids::IdGen;
 use crux_clients::kv::KeyValue;
 use crux_domain::user::Role;
@@ -25,6 +26,7 @@ pub struct Ctx {
     pub ids: Arc<dyn IdGen>,
     pub kv: Arc<dyn KeyValue>,
     pub keys: Arc<JwtKeys>,
+    pub files: Arc<dyn FilesApi>,
     pub breached_passwords: Arc<HashSet<String>>,
     pub config: Arc<Config>,
 }

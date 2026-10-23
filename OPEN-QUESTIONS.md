@@ -30,6 +30,20 @@ Answer inline (or tell the build agent) and the code follows.
 | D2-8 | OCR languages | English | Tesseract `eng`. |
 | D2-9 | Plain invite with an email typed in | **Crux emails the invite link to that address** (the link can still be copied). Only that address can use it. | `invite.created` account email via notify. |
 
+### Routes added beyond spec 15 (from the decisions above)
+
+| Route | Why |
+|---|---|
+| `POST /courses/{id}/restore` | D2-5 trash with undo |
+| `DELETE /courses/{id}/members/{memberId}` | Remove a member, withdraw an email share, or leave (spec 15 lists DELETE on `/members` without saying whom) |
+| `GET /course-invitations`, `POST /course-invitations/{courseId}/accept`, `/decline` | D2-2 accept first |
+| `GET /courses?trashed=true` | D2-5 trash list |
+
+Other M2 build choices: creating a course subscribes the owner; accepting a share does not subscribe
+(spec 5.1: "must subscribe to track progress"). Request bodies are checked **after** access, so a
+stranger gets 404 rather than a validation error (spec 4.2); a body that can't be parsed at all is
+422 for everyone.
+
 ## Product / behaviour
 
 | # | Question | Built meanwhile |

@@ -13,6 +13,7 @@ use axum::http::{Request, StatusCode};
 use axum::Router;
 use chrono::{TimeZone, Utc};
 use crux_clients::clock::ManualClock;
+use crux_clients::files::MemoryFiles;
 use crux_clients::ids::UlidGen;
 use crux_clients::kv::MemoryKv;
 use crux_repo::MySqlPool;
@@ -72,11 +73,13 @@ impl TestDb {
 pub struct TestCtx {
     pub ctx: Ctx,
     pub clock: Arc<ManualClock>,
+    pub files: Arc<MemoryFiles>,
 }
 
 /// A Ctx on the test database with a hand-moved clock, in-memory Redis and a fresh signing key.
 pub fn test_ctx(pool: MySqlPool) -> TestCtx {
     let clock = Arc::new(ManualClock::new(Utc.with_ymd_and_hms(2026, 10, 23, 12, 0, 0).unwrap()));
+    let files = Arc::new(MemoryFiles::default());
     let breached: HashSet<String> = ["password123456".to_string()].into();
     let ctx = Ctx {
         pool,
@@ -84,10 +87,11 @@ pub fn test_ctx(pool: MySqlPool) -> TestCtx {
         ids: Arc::new(UlidGen::default()),
         kv: Arc::new(MemoryKv::default()),
         keys: Arc::new(JwtKeys::from_pkcs8_pem(&JwtKeys::generate_pem()).unwrap()),
+        files: files.clone(),
         breached_passwords: Arc::new(breached),
         config: Arc::new(Config { app_base_url: "http://crux.test".into(), service_secret: "test-service-secret".into() }),
     };
-    TestCtx { ctx, clock }
+    TestCtx { ctx, clock, files }
 }
 
 /// Creates an invite straight in the DB and returns its code.

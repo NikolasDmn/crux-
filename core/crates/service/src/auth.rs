@@ -183,6 +183,8 @@ pub async fn signup(ctx: &Ctx, input: SignupInput, client: &ClientInfo) -> AppRe
     .await
     .map_err(duplicate_to_validation)?;
     settings::insert_defaults(&mut tx, user_id).await?;
+    // D2-3: signing up through a course-share link accepts the share.
+    crate::courses::accept_shares_for_invite(&mut tx, ctx, invite.id, user_id, &public_id, &email).await?;
     tiers::record_change(&mut tx, user_id, None, tier.id, None, "signup", now).await?;
 
     let user = users::by_id(&mut tx, user_id).await?.ok_or(AppError::NotFound)?;

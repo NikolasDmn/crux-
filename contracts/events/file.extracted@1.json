@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/file.extracted@1",
+  "title": "file.extracted v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fileRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "pageCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "chunkCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "extractorVersion": {
+      "type": "string",
+      "maxLength": 16
+    }
+  },
+  "required": [
+    "fileRef",
+    "pageCount",
+    "chunkCount",
+    "extractorVersion"
+  ]
+}

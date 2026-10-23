@@ -3,7 +3,9 @@
 
 pub mod admin;
 pub mod auth;
+pub mod catalog;
 pub mod contracts;
+pub mod courses;
 pub mod ctx;
 pub mod error;
 pub mod events;

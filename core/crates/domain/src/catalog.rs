@@ -104,7 +104,11 @@ pub enum ShareTarget {
 
 pub fn share_target(raw: &str) -> ShareTarget {
     let t = raw.trim();
-    if t.contains('@') { ShareTarget::Email(crate::auth::normalize_email(t)) } else { ShareTarget::Username(t.to_string()) }
+    if t.contains('@') {
+        ShareTarget::Email(crate::auth::normalize_email(t))
+    } else {
+        ShareTarget::Username(t.to_string())
+    }
 }
 
 // ---------- components (lectures) ----------
@@ -155,7 +159,7 @@ pub fn has_cycle(edges: &[(i64, i64)]) -> bool {
     // Iterative three-colour DFS.
     let mut state: HashMap<i64, u8> = HashMap::new(); // 1 = on stack, 2 = done
     for &start in graph.keys() {
-        if state.get(&start).is_some() {
+        if state.contains_key(&start) {
             continue;
         }
         let mut stack = vec![(start, 0usize)];
@@ -423,7 +427,8 @@ mod tests {
 
     #[test]
     fn material_validation() {
-        let md = MaterialFields { kind: Some("Notes".into()), title: Some("Week 1".into()), content: Some("# Hi".into()), ..Default::default() };
+        let md =
+            MaterialFields { kind: Some("Notes".into()), title: Some("Week 1".into()), content: Some("# Hi".into()), ..Default::default() };
         assert!(validate_material(&md, true, false).is_empty());
         let both = MaterialFields { file_id: Some("01X".into()), ..md.clone() };
         assert_eq!(validate_material(&both, true, false).0[0].code, "exclusive");
@@ -456,8 +461,15 @@ mod tests {
 
     #[test]
     fn grade_scale_validation() {
-        let numeric =
-            GradeScaleFields { name: "UK".into(), kind: "Numeric".into(), scale_min: Some(0.0), scale_max: Some(100.0), step: Some(1.0), pass_value: Some(40.0), labels: None };
+        let numeric = GradeScaleFields {
+            name: "UK".into(),
+            kind: "Numeric".into(),
+            scale_min: Some(0.0),
+            scale_max: Some(100.0),
+            step: Some(1.0),
+            pass_value: Some(40.0),
+            labels: None,
+        };
         assert!(validate_grade_scale(&numeric).is_empty());
         let bad = GradeScaleFields { pass_value: Some(120.0), ..numeric.clone() };
         assert_eq!(validate_grade_scale(&bad).0[0].field, "passValue");
@@ -468,7 +480,10 @@ mod tests {
             scale_max: None,
             step: None,
             pass_value: None,
-            labels: Some(vec![GradeLabel { label: "A".into(), value: 4.0, pass: true }, GradeLabel { label: "F".into(), value: 0.0, pass: false }]),
+            labels: Some(vec![
+                GradeLabel { label: "A".into(), value: 4.0, pass: true },
+                GradeLabel { label: "F".into(), value: 0.0, pass: false },
+            ]),
         };
         assert!(validate_grade_scale(&letters).is_empty());
         let all_pass = GradeScaleFields { labels: Some(vec![GradeLabel { label: "A".into(), value: 4.0, pass: true }; 2]), ..letters };

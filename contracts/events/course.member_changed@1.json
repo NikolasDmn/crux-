@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/course.member_changed@1",
+  "title": "course.member_changed v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "courseRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "userRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "role": {
+      "enum": [
+        "Editor",
+        "Viewer",
+        null
+      ],
+      "description": "null = removed"
+    }
+  },
+  "required": [
+    "courseRef",
+    "userRef",
+    "role"
+  ]
+}

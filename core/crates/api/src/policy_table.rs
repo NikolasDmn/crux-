@@ -12,6 +12,12 @@ pub enum Policy {
     VerifiedEmail,
     /// `Users.Role = 'Admin'`.
     Admin,
+    /// `can_read_course` on the course the path names (spec 4.2).
+    Read,
+    /// `can_edit_course`: Owner or Editor.
+    Edit,
+    /// `can_manage_course`: Owner only.
+    Manage,
 }
 
 /// `(METHOD, path, policy)`. Paths are as the router sees them (after `/api/v1` is stripped).
@@ -41,6 +47,35 @@ pub const ROUTES: &[(&str, &str, Policy)] = &[
     ("GET", "/admin/invites", Policy::Admin),
     ("POST", "/admin/invites", Policy::Admin),
     ("DELETE", "/admin/invites/{id}", Policy::Admin),
+    ("GET", "/courses", Policy::Owns),
+    ("POST", "/courses", Policy::Owns),
+    ("GET", "/courses/{id}", Policy::Read),
+    ("PATCH", "/courses/{id}", Policy::Edit),
+    ("DELETE", "/courses/{id}", Policy::Manage),
+    ("POST", "/courses/{id}/restore", Policy::Manage),
+    ("GET", "/courses/{id}/members", Policy::Manage),
+    ("POST", "/courses/{id}/members", Policy::Manage),
+    ("DELETE", "/courses/{id}/members/{memberId}", Policy::Manage),
+    ("POST", "/courses/{id}/subscription", Policy::Read),
+    ("DELETE", "/courses/{id}/subscription", Policy::Read),
+    ("GET", "/course-invitations", Policy::Owns),
+    ("POST", "/course-invitations/{courseId}/accept", Policy::Owns),
+    ("POST", "/course-invitations/{courseId}/decline", Policy::Owns),
+    ("GET", "/grade-scales", Policy::Owns),
+    ("POST", "/grade-scales", Policy::Owns),
+    ("GET", "/courses/{id}/components", Policy::Read),
+    ("POST", "/courses/{id}/components", Policy::Edit),
+    ("PATCH", "/components/{id}", Policy::Edit),
+    ("DELETE", "/components/{id}", Policy::Edit),
+    ("GET", "/courses/{id}/concepts", Policy::Read),
+    ("POST", "/courses/{id}/concepts", Policy::Edit),
+    ("GET", "/components/{id}/materials", Policy::Read),
+    ("POST", "/components/{id}/materials", Policy::Edit),
+    ("PATCH", "/materials/{id}", Policy::Edit),
+    ("DELETE", "/materials/{id}", Policy::Edit),
+    ("GET", "/courses/{id}/papers", Policy::Read),
+    ("POST", "/courses/{id}/papers", Policy::Edit),
+    ("PATCH", "/papers/{id}", Policy::Edit),
 ];
 
 pub fn policy_of(method: &str, path: &str) -> Option<Policy> {

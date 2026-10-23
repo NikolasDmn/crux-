@@ -4,6 +4,8 @@
 //! Every query on user data is scoped by the caller's `UserId` here (schema header).
 
 pub mod auth_tokens;
+pub mod catalog;
+pub mod courses;
 pub mod db;
 pub mod invites;
 pub mod messaging;

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/course.created@1",
+  "title": "course.created v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "courseRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "ownerRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "memberRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9A-Z]{26}$"
+      },
+      "description": "Owner + accepted members"
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$"
+    }
+  },
+  "required": [
+    "courseRef",
+    "ownerRef",
+    "memberRefs",
+    "color"
+  ]
+}

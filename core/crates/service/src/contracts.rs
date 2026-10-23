@@ -19,6 +19,13 @@ const SCHEMAS: &[((&str, &str), &str)] = &[
     schema!("user.deleted", "1"),
     schema!("user.tier_changed", "1"),
     schema!("notify.requested", "1"),
+    schema!("course.created", "1"),
+    schema!("course.updated", "1"),
+    schema!("course.archived", "1"),
+    schema!("course.deleted", "1"),
+    schema!("course.member_changed", "1"),
+    schema!("material.created", "1"),
+    schema!("material.updated", "1"),
 ];
 
 pub const ENVELOPE: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../contracts/events/envelope.json"));

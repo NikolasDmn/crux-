@@ -86,8 +86,22 @@ pub async fn create(ctx: &Ctx, actor: &Actor, input: CreateInviteInput, as_admin
     )
     .await?;
     let row = invites::by_public_id(&mut tx, &public_id, None).await?.ok_or_else(|| anyhow::anyhow!("invite {id} vanished"))?;
+    let signup_url = format!("{}/signup?invite={code}", ctx.config.app_base_url);
+    // D2-9: an invite for a specific address is emailed to it.
+    if let Some(to) = &email {
+        let me = crux_repo::users::by_id(&mut tx, actor.user_id).await?.ok_or(AppError::NotFound)?;
+        crate::events::request_account_email(
+            &mut tx,
+            ctx,
+            &actor.public_id,
+            "invite.created",
+            &format!("invite.created:{public_id}"),
+            serde_json::json!({ "to": to, "inviterName": format!("{} {}", me.first_name, me.last_name), "link": signup_url }),
+        )
+        .await?;
+    }
     tx.commit().await?;
-    Ok(CreatedInvite { invite: InviteView::from(&row), signup_url: format!("{}/signup?invite={code}", ctx.config.app_base_url), code })
+    Ok(CreatedInvite { invite: InviteView::from(&row), signup_url, code })
 }
 
 /// `as_admin` lists everyone's invites; otherwise only the actor's own.

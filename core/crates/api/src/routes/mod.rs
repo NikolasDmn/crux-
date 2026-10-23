@@ -1,5 +1,7 @@
 pub mod admin;
 pub mod auth;
+pub mod catalog;
+pub mod courses;
 pub mod health;
 pub mod internal;
 pub mod invites;
@@ -35,6 +37,23 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(admin::update_tier))
         .routes(routes!(admin::list_invites, admin::create_invite))
         .routes(routes!(admin::revoke_invite))
+        .routes(routes!(courses::list, courses::create))
+        .routes(routes!(courses::get, courses::patch, courses::trash))
+        .routes(routes!(courses::restore))
+        .routes(routes!(courses::members, courses::share))
+        .routes(routes!(courses::remove_member))
+        .routes(routes!(courses::subscribe, courses::unsubscribe))
+        .routes(routes!(courses::invitations))
+        .routes(routes!(courses::accept))
+        .routes(routes!(courses::decline))
+        .routes(routes!(courses::grade_scales, courses::create_grade_scale))
+        .routes(routes!(catalog::list_components, catalog::create_component))
+        .routes(routes!(catalog::patch_component, catalog::archive_component))
+        .routes(routes!(catalog::list_concepts, catalog::create_concept))
+        .routes(routes!(catalog::list_materials, catalog::create_material))
+        .routes(routes!(catalog::patch_material, catalog::archive_material))
+        .routes(routes!(catalog::list_papers, catalog::create_paper))
+        .routes(routes!(catalog::patch_paper))
 }
 
 /// `?limit=&cursor=` (spec 3.1).

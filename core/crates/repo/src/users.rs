@@ -76,6 +76,10 @@ pub async fn by_login(conn: &mut MySqlConnection, login: &str) -> RepoResult<Opt
         .await?)
 }
 
+pub async fn by_username(conn: &mut MySqlConnection, username: &str) -> RepoResult<Option<UserRow>> {
+    Ok(sqlx::query_as(&format!("{SELECT} WHERE u.Username = ?")).bind(username).fetch_optional(conn).await?)
+}
+
 pub async fn by_email(conn: &mut MySqlConnection, email: &str) -> RepoResult<Option<UserRow>> {
     Ok(sqlx::query_as(&format!("{SELECT} WHERE u.Email = ?")).bind(email).fetch_optional(conn).await?)
 }

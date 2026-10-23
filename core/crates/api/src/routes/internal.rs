@@ -2,18 +2,54 @@
 //! Listed in core's OpenAPI under the tag `internal` in a later milestone, once the routes that
 //! carry data (access checks, apply) exist.
 
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
 use crate::error::ApiResult;
-use crate::extract::{bearer, JsonBody};
+use crate::extract::{bearer, JsonBody, Service};
 use crate::AppState;
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/internal/v1/jwks", get(jwks)).route("/internal/v1/service-token", post(service_token))
+    Router::new()
+        .route("/internal/v1/jwks", get(jwks))
+        .route("/internal/v1/service-token", post(service_token))
+        .route("/internal/v1/access", get(access))
+        .route("/internal/v1/access/file-ref", get(file_ref_access))
+}
+
+#[derive(Deserialize)]
+struct AccessQuery {
+    user: String,
+    course: String,
+}
+
+/// Spec 4.2: the other services ask core for a user's role on a course (cache ≤ 30 s).
+async fn access(
+    State(state): State<AppState>,
+    _svc: Service,
+    Query(q): Query<AccessQuery>,
+) -> ApiResult<Json<crux_service::catalog::AccessAnswer>> {
+    Ok(Json(crux_service::catalog::access(&state.ctx, &q.user, &q.course).await?))
+}
+
+#[derive(Deserialize)]
+struct FileRefQuery {
+    user: String,
+    #[serde(rename = "ref")]
+    file_ref: String,
+}
+
+/// Spec 6.1 step 7: may this user download the file because a course they read references it?
+async fn file_ref_access(
+    State(state): State<AppState>,
+    _svc: Service,
+    Query(q): Query<FileRefQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let allowed = crux_service::catalog::file_ref_access(&state.ctx, &q.user, &q.file_ref).await?;
+    Ok(Json(serde_json::json!({ "allowed": allowed })))
 }
 
 /// Public keys for verifying access and service tokens. Public data; cache for a few minutes.

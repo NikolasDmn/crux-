@@ -176,6 +176,7 @@ async fn build_ctx(cli: &Cli, pool: crux_repo::MySqlPool) -> anyhow::Result<Ctx>
         ids: Arc::new(UlidGen::default()),
         kv: Arc::new(kv),
         keys: Arc::new(JwtKeys::from_pkcs8_pem(&pem)?),
+        files: Arc::new(crux_clients::files::HttpFiles::new(&cli.files_url)),
         breached_passwords: Arc::new(load_breached_passwords(&breached)),
         config: Arc::new(Config {
             app_base_url: cli.app_base_url.trim_end_matches('/').to_string(),
@@ -194,7 +195,12 @@ async fn run_jobs(cli: &Cli, ctx: Ctx, shutdown: tokio::sync::watch::Receiver<bo
         let (pool, clock) = (pool.clone(), clock.clone());
         async move { crux_jobs::tokens::purge(&pool, clock.as_ref()).await }
     }));
-    let _ = tokio::join!(relay, tokens);
+    let purge_ctx = ctx.clone();
+    let trash = tokio::spawn(crux_jobs::every("courses.purge_trashed", Duration::from_secs(24 * 3600), shutdown.clone(), move || {
+        let ctx = purge_ctx.clone();
+        async move { crux_service::courses::purge_trashed(&ctx).await }
+    }));
+    let _ = tokio::join!(relay, tokens, trash);
     Ok(())
 }
 

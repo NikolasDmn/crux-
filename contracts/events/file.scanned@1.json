@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/file.scanned@1",
+  "title": "file.scanned v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fileRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "ownerRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "status": {
+      "enum": [
+        "Clean",
+        "Infected",
+        "Failed"
+      ]
+    }
+  },
+  "required": [
+    "fileRef",
+    "ownerRef",
+    "status"
+  ]
+}

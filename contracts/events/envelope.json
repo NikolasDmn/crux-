@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/envelope",
+  "title": "Event envelope (backend-spec 3.3)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "topic": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "producer": {
+      "enum": [
+        "core",
+        "files",
+        "ai",
+        "notify"
+      ]
+    },
+    "aggregateRef": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "eventId",
+    "topic",
+    "schemaVersion",
+    "occurredAt",
+    "producer",
+    "aggregateRef",
+    "payload"
+  ]
+}

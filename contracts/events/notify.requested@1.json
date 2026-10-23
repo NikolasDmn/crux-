@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/notify.requested@1",
+  "title": "notify.requested v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "userRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z]+(\\.[a-z_]+)+$"
+    },
+    "dedupeKey": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "dueAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "transactional": {
+      "type": "boolean",
+      "description": "Account emails (verify, reset): sent regardless of preferences and verification. See OPEN-QUESTIONS.md."
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "userRef",
+    "kind",
+    "dedupeKey",
+    "dueAt",
+    "payload"
+  ]
+}

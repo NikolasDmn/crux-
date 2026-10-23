@@ -1,0 +1,16 @@
+[package]
+name = "crux-repo"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+# DB access only. Hand-written SQL for now (sqlx::query_as, checked at runtime); moves to
+# compile-time-checked `query!` once the CI database exists (see OPEN-QUESTIONS.md).
+[dependencies]
+crux-domain.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

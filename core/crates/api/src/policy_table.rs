@@ -1,0 +1,102 @@
+//! The public route table (backend-spec 15) as data: every route in the OpenAPI document has
+//! exactly one policy here (unit test below), and the cross-user harness (`tests/cross_user.rs`)
+//! uses it to prove that one user can't reach another's resources (404).
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Policy {
+    /// No sign-in.
+    Public,
+    /// Signed in; acts only on the caller's own data.
+    Owns,
+    /// Signed in with a verified email.
+    VerifiedEmail,
+    /// `Users.Role = 'Admin'`.
+    Admin,
+}
+
+/// `(METHOD, path, policy)`. Paths are as the router sees them (after `/api/v1` is stripped).
+pub const ROUTES: &[(&str, &str, Policy)] = &[
+    ("POST", "/auth/signup", Policy::Public),
+    ("POST", "/auth/login", Policy::Public),
+    ("POST", "/auth/refresh", Policy::Public),
+    ("POST", "/auth/logout", Policy::Public),
+    ("POST", "/auth/verify-email", Policy::Owns),
+    ("POST", "/auth/verify-email/confirm", Policy::Public),
+    ("POST", "/auth/password/forgot", Policy::Public),
+    ("POST", "/auth/password/reset", Policy::Public),
+    ("GET", "/me", Policy::Owns),
+    ("PATCH", "/me", Policy::Owns),
+    ("GET", "/me/settings", Policy::Owns),
+    ("PATCH", "/me/settings", Policy::Owns),
+    ("GET", "/me/tier", Policy::Owns),
+    ("POST", "/invites", Policy::VerifiedEmail),
+    ("GET", "/invites", Policy::Owns),
+    ("DELETE", "/invites/{id}", Policy::Owns),
+    ("POST", "/sse-ticket", Policy::Owns),
+    ("GET", "/admin/users", Policy::Admin),
+    ("PATCH", "/admin/users/{id}", Policy::Admin),
+    ("GET", "/admin/tiers", Policy::Admin),
+    ("POST", "/admin/tiers", Policy::Admin),
+    ("PATCH", "/admin/tiers/{code}", Policy::Admin),
+    ("GET", "/admin/invites", Policy::Admin),
+    ("POST", "/admin/invites", Policy::Admin),
+    ("DELETE", "/admin/invites/{id}", Policy::Admin),
+];
+
+pub fn policy_of(method: &str, path: &str) -> Option<Policy> {
+    ROUTES.iter().find(|(m, p, _)| *m == method && *p == path).map(|(_, _, pol)| *pol)
+}
+
+/// Every `(METHOD, path)` in an OpenAPI document.
+pub fn operations(api: &utoipa::openapi::OpenApi) -> Vec<(String, String)> {
+    let mut ops = Vec::new();
+    for (path, item) in &api.paths.paths {
+        let methods = [
+            ("GET", item.get.is_some()),
+            ("POST", item.post.is_some()),
+            ("PUT", item.put.is_some()),
+            ("PATCH", item.patch.is_some()),
+            ("DELETE", item.delete.is_some()),
+        ];
+        for (m, present) in methods {
+            if present {
+                ops.push((m.to_string(), path.clone()));
+            }
+        }
+    }
+    ops.sort();
+    ops
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_route_has_exactly_one_policy_and_vice_versa() {
+        let api = crate::openapi_doc();
+        let ops = operations(&api);
+        for (m, p) in &ops {
+            assert!(policy_of(m, p).is_some(), "route {m} {p} is missing from policy_table::ROUTES");
+        }
+        for (m, p, _) in ROUTES {
+            assert!(ops.contains(&(m.to_string(), p.to_string())), "policy for {m} {p} has no route");
+        }
+        let mut seen = std::collections::HashSet::new();
+        for (m, p, _) in ROUTES {
+            assert!(seen.insert((m, p)), "duplicate policy row {m} {p}");
+        }
+    }
+
+    #[test]
+    fn signed_in_routes_declare_bearer_security() {
+        let api = crate::openapi_doc();
+        for (path, item) in &api.paths.paths {
+            for (m, op) in [("GET", &item.get), ("POST", &item.post), ("PATCH", &item.patch), ("DELETE", &item.delete)] {
+                let Some(op) = op else { continue };
+                let needs_auth = policy_of(m, path).is_some_and(|p| p != Policy::Public);
+                assert_eq!(op.security.is_some(), needs_auth, "{m} {path}: security annotation must match the policy");
+            }
+        }
+    }
+}

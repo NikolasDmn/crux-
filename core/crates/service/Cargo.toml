@@ -1,0 +1,28 @@
+[package]
+name = "crux-service"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+crux-domain.workspace = true
+crux-repo.workspace = true
+crux-clients.workspace = true
+anyhow.workspace = true
+argon2.workspace = true
+base64.workspace = true
+chrono.workspace = true
+ed25519-dalek.workspace = true
+hex.workspace = true
+jsonschema.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+utoipa.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

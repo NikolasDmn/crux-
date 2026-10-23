@@ -1,0 +1,164 @@
+# Crux: full stack on one host (backend-spec section 1).
+# Local:  docker compose -f deploy/compose.yaml --env-file .env up --build
+# Profiles: "ai" adds the ai service + worker (the non-AI product runs without it, spec 1 / 9.6);
+#           "monitoring" adds Grafana + Loki (later milestone).
+
+name: crux
+
+x-python-env: &python-env
+  CRUX_ENV: ${CRUX_ENV:-dev}
+  CRUX_REDIS_URL: redis://redis:6379/0
+  CRUX_CORE_INTERNAL_URL: http://core:8080
+  CRUX_JWKS_URL: http://core:8080/internal/v1/jwks
+  CRUX_S3_ENDPOINT: http://minio:9000
+  CRUX_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-crux}
+  CRUX_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-crux-dev-secret}
+  CRUX_S3_BUCKET: crux
+  CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET:-dev-service-secret-change-me}
+
+services:
+  gateway:
+    image: caddy:2.8
+    ports: ["${CRUX_HTTP_PORT:-8000}:80"]
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../web/dist:/srv/web:ro
+    environment:
+      CRUX_SITE_ADDRESS: ${CRUX_SITE_ADDRESS:-:80}
+    depends_on: [core, files, notify]
+
+  mysql:
+    image: mysql:8.0.40
+    command:
+      - --default-time-zone=+00:00
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-crux-root}
+    ports: ["${CRUX_MYSQL_PORT:-3306}:3306"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-crux-root}"]
+      interval: 5s
+      retries: 30
+
+  redis:
+    image: redis:7.4
+    ports: ["${CRUX_REDIS_PORT:-6379}:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+
+  minio:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-crux}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-crux-dev-secret}
+    ports: ["${CRUX_MINIO_PORT:-9000}:9000", "9001:9001"]
+    volumes: [minio-data:/data]
+
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: ["full"]
+
+  mailpit:
+    image: axllent/mailpit:v1.20
+    ports: ["8025:8025"]
+
+  core:
+    build: ../core
+    environment:
+      CRUX_ENV: ${CRUX_ENV:-dev}
+      CRUX_DATABASE_URL: mysql://crux_core:${CRUX_CORE_DB_PASSWORD:-crux-core}@mysql:3306/crux_core
+      CRUX_REDIS_URL: redis://redis:6379/0
+      CRUX_JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_ed25519.pem
+      CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET:-dev-service-secret-change-me}
+      CRUX_COOKIE_SECURE: ${CRUX_COOKIE_SECURE:-false}
+      CRUX_AI_INTERNAL_URL: http://ai:8080
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  core-jobs:
+    build: ../core
+    command: ["crux-core", "jobs"]
+    environment:
+      CRUX_DATABASE_URL: mysql://crux_core:${CRUX_CORE_DB_PASSWORD:-crux-core}@mysql:3306/crux_core
+      CRUX_REDIS_URL: redis://redis:6379/0
+      CRUX_JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_ed25519.pem
+      CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET:-dev-service-secret-change-me}
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on: [core]
+
+  files:
+    build: {context: ../services, args: {SERVICE: files}}
+    environment:
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_files:${CRUX_FILES_DB_PASSWORD:-crux-files}@mysql:3306/crux_files
+      CRUX_SERVICE_NAME: files
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  files-worker:
+    build: {context: ../services, args: {SERVICE: files}}
+    command: ["python", "-m", "app.jobs"]
+    environment:
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_files:${CRUX_FILES_DB_PASSWORD:-crux-files}@mysql:3306/crux_files
+      CRUX_SERVICE_NAME: files
+    depends_on: [files]
+
+  notify:
+    build: {context: ../services, args: {SERVICE: notify}}
+    environment:
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_notify:${CRUX_NOTIFY_DB_PASSWORD:-crux-notify}@mysql:3306/crux_notify
+      CRUX_SERVICE_NAME: notify
+      CRUX_SMTP_URL: smtp://mailpit:1025
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  notify-worker:
+    build: {context: ../services, args: {SERVICE: notify}}
+    command: ["python", "-m", "app.jobs"]
+    environment:
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_notify:${CRUX_NOTIFY_DB_PASSWORD:-crux-notify}@mysql:3306/crux_notify
+      CRUX_SERVICE_NAME: notify
+      CRUX_SMTP_URL: smtp://mailpit:1025
+    depends_on: [notify]
+
+  ai:
+    profiles: ["ai"]
+    build: {context: ../services, args: {SERVICE: ai}}
+    environment:
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_ai:${CRUX_AI_DB_PASSWORD:-crux-ai}@mysql:3306/crux_ai
+      CRUX_SERVICE_NAME: ai
+      CRUX_KMS_MASTER_KEY: ${CRUX_KMS_MASTER_KEY:-}
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  ai-worker:
+    profiles: ["ai"]
+    build: {context: ../services, args: {SERVICE: ai}}
+    command: ["python", "-m", "app.jobs"]
+    environment:
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_ai:${CRUX_AI_DB_PASSWORD:-crux-ai}@mysql:3306/crux_ai
+      CRUX_SERVICE_NAME: ai
+      CRUX_KMS_MASTER_KEY: ${CRUX_KMS_MASTER_KEY:-}
+    depends_on: [ai]
+
+volumes:
+  mysql-data:
+  minio-data:

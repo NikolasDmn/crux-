@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/user.created@1",
+  "title": "user.created v1 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "userRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "email": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "emailVerified": {
+      "type": "boolean"
+    },
+    "timeZone": {
+      "type": "string"
+    },
+    "locale": {
+      "type": "string"
+    },
+    "tierCode": {
+      "type": "string"
+    },
+    "storageQuotaBytes": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "userRef",
+    "email",
+    "emailVerified",
+    "timeZone",
+    "locale",
+    "tierCode",
+    "storageQuotaBytes"
+  ]
+}

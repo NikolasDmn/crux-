@@ -320,3 +320,20 @@ async fn admin_changes_tier_with_audit_and_event() {
     assert_eq!(change.0, "beta tester");
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn breached_password_warns_until_the_user_accepts() {
+    let Some(h) = common::harness().await else { return };
+    let code = seed_invite(&h.t.ctx, 1).await;
+    let mut body = signup_body(&code, "risky");
+    body["password"] = json!("password123456"); // in the test breached list
+
+    let warn = call(&h.app, "POST", "/auth/signup", None, Some(body.clone()), &[]).await;
+    assert_eq!(warn.status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(warn.json["error"]["details"]["fields"][0]["code"], "breached");
+
+    body["acceptBreachedPassword"] = json!(true);
+    let ok = call(&h.app, "POST", "/auth/signup", None, Some(body), &[]).await;
+    assert_eq!(ok.status, StatusCode::OK, "{}", ok.json);
+    h.db.drop_db().await;
+}

@@ -28,6 +28,9 @@ pub struct SignupInput {
     pub last_name: String,
     pub password: String,
     pub time_zone: String,
+    /// The user saw the "breached password" warning and chose to keep it.
+    #[serde(default)]
+    pub accept_breached_password: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -136,7 +139,7 @@ pub async fn signup(ctx: &Ctx, input: SignupInput, client: &ClientInfo) -> AppRe
     errors.merge(rules::validate_name("firstName", &input.first_name));
     errors.merge(rules::validate_name("lastName", &input.last_name));
     errors.merge(rules::validate_time_zone(&input.time_zone));
-    errors.merge(rules::validate_password(&input.password, &ctx.breached_passwords));
+    errors.merge(rules::validate_password(&input.password, &ctx.breached_passwords, input.accept_breached_password));
     errors.into_result()?;
 
     let hash = password::hash_blocking(input.password.clone()).await?;
@@ -324,8 +327,8 @@ pub async fn forgot_password(ctx: &Ctx, email: &str, client: &ClientInfo) -> App
 }
 
 /// `POST /auth/password/reset {token, password}`: sets the password and signs out every session.
-pub async fn reset_password(ctx: &Ctx, token: &str, new_password: &str) -> AppResult<()> {
-    rules::validate_password(new_password, &ctx.breached_passwords).into_result()?;
+pub async fn reset_password(ctx: &Ctx, token: &str, new_password: &str, accept_breached: bool) -> AppResult<()> {
+    rules::validate_password(new_password, &ctx.breached_passwords, accept_breached).into_result()?;
     let hash = password::hash_blocking(new_password.to_string()).await?;
     let now = ctx.clock.now();
     let mut tx = crux_repo::begin(&ctx.pool).await?;

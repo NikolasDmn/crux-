@@ -137,15 +137,19 @@ pub async fn forgot_password(
 }
 
 #[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ResetInput {
     pub token: String,
     pub password: String,
+    /// The user saw the "breached password" warning and chose to keep it.
+    #[serde(default)]
+    pub accept_breached_password: bool,
 }
 
 /// Set a new password with the token from the link. Signs out every session.
 #[utoipa::path(post, path = "/auth/password/reset", tag = "auth", request_body = ResetInput,
     responses((status = 204), (status = 422, body = ErrorBody)))]
 pub async fn reset_password(State(state): State<AppState>, JsonBody(input): JsonBody<ResetInput>) -> ApiResult<StatusCode> {
-    auth::reset_password(&state.ctx, &input.token, &input.password).await?;
+    auth::reset_password(&state.ctx, &input.token, &input.password, input.accept_breached_password).await?;
     Ok(StatusCode::NO_CONTENT)
 }

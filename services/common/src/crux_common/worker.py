@@ -8,6 +8,7 @@ from collections.abc import Callable, Coroutine, Sequence
 from typing import Any
 
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from crux_common import db
 from crux_common import logging as crux_logging
@@ -20,7 +21,8 @@ from crux_common.settings import REDIS_SOCKET_TIMEOUT, CommonSettings
 
 log = logging.getLogger("crux.worker")
 
-ExtraTask = Callable[[asyncio.Event], Coroutine[Any, Any, None]]
+#: Extra loops a service runs in its worker (e.g. notify's dispatcher): get sessions + the stop event.
+ExtraTask = Callable[[async_sessionmaker[AsyncSession], asyncio.Event], Coroutine[Any, Any, None]]
 
 
 async def run_worker(settings: CommonSettings, handlers: Sequence[Handler], extra: Sequence[ExtraTask] = ()) -> None:
@@ -47,7 +49,7 @@ async def run_worker(settings: CommonSettings, handlers: Sequence[Handler], extr
     tasks += [
         asyncio.create_task(run_consumer(sessions, bus, contracts, group, consumer_name, h, stop)) for h in handlers
     ]
-    tasks += [asyncio.create_task(t(stop)) for t in extra]
+    tasks += [asyncio.create_task(t(sessions, stop)) for t in extra]
     log.info("worker started", extra={"handlers": [type(h).__name__ for h in handlers]})
     await asyncio.gather(*tasks)
     await redis.aclose()

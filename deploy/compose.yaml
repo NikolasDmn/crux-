@@ -22,7 +22,8 @@ services:
     ports: ["${CRUX_HTTP_PORT:-8000}:80"]
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ../web/dist:/srv/web:ro
+      # The SPA build. Until the frontend exists, .env points this at ../demo (the M1 demo console).
+      - ${CRUX_WEB_DIR:-../web/dist}:/srv/web:ro
     environment:
       CRUX_SITE_ADDRESS: ${CRUX_SITE_ADDRESS:-:80}
     depends_on: [core, files, notify]
@@ -135,7 +136,8 @@ services:
       <<: *python-env
       CRUX_DATABASE_URL: mysql+aiomysql://crux_notify:${CRUX_NOTIFY_DB_PASSWORD:-crux-notify}@mysql:3306/crux_notify
       CRUX_SERVICE_NAME: notify
-      CRUX_SMTP_URL: smtp://mailpit:1025
+      CRUX_SMTP_URL: ${CRUX_SMTP_URL:-smtp://mailpit:1025}
+      CRUX_DISPATCH_INTERVAL_SECONDS: ${CRUX_DISPATCH_INTERVAL_SECONDS:-30}
     depends_on: [notify]
 
   ai:

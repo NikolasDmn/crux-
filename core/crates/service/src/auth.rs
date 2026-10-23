@@ -120,7 +120,7 @@ async fn issue_verify_token(conn: &mut crux_repo::MySqlConnection, ctx: &Ctx, u:
         &u.public_id,
         "auth.verify_email",
         &format!("auth.verify_email:{}", &rules::token_hash(&token)[..16]),
-        json!({ "firstName": u.first_name, "link": verify_link(ctx, &token) }),
+        json!({ "to": u.email, "firstName": u.first_name, "link": verify_link(ctx, &token) }),
     )
     .await
 }
@@ -312,7 +312,7 @@ pub async fn forgot_password(ctx: &Ctx, email: &str, client: &ClientInfo) -> App
         &u.public_id,
         "auth.password_reset",
         &format!("auth.password_reset:{}", &rules::token_hash(&token)[..16]),
-        json!({ "firstName": u.first_name, "link": reset_link(ctx, &token) }),
+        json!({ "to": u.email, "firstName": u.first_name, "link": reset_link(ctx, &token) }),
     )
     .await?;
     tx.commit().await?;

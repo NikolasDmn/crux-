@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crux · M1 demo console</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="dot"></span> Crux <span class="tag">milestone 1 demo console</span></div>
+    <div id="who" class="who"></div>
+  </header>
+  <p class="note">A throwaway console over the real API (<code>/api/v1</code>) to try milestone 1. The real app is the
+    React SPA from <code>frontend-spec.md</code>. Emails go to <a href="http://localhost:8025" target="_blank" rel="noopener">Mailpit on :8025</a>.</p>
+
+  <main class="grid">
+    <section id="banner" class="card wide hidden"></section>
+
+    <section id="signed-out" class="card">
+      <h2>Sign up <small>invite only</small></h2>
+      <form id="f-signup" class="form">
+        <label>Invite code <input name="inviteCode" required autocomplete="off"></label>
+        <label>Email <input name="email" type="email" required></label>
+        <label>Username <input name="username" required minlength="3" maxlength="32"></label>
+        <div class="row">
+          <label>First name <input name="firstName" required></label>
+          <label>Last name <input name="lastName" required></label>
+        </div>
+        <label>Password <input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
+        <label>Time zone <input name="timeZone" required></label>
+        <button>Create account</button>
+      </form>
+      <h2>Log in</h2>
+      <form id="f-login" class="form">
+        <label>Email or username <input name="login" required autocomplete="username"></label>
+        <label>Password <input name="password" type="password" required autocomplete="current-password"></label>
+        <button>Log in</button>
+      </form>
+      <h2>Forgot password</h2>
+      <form id="f-forgot" class="form inline">
+        <input name="email" type="email" placeholder="you@example.com" required>
+        <button class="secondary">Email me a link</button>
+      </form>
+    </section>
+
+    <section id="reset" class="card hidden">
+      <h2>Set a new password</h2>
+      <form id="f-reset" class="form">
+        <label>New password <input name="password" type="password" required minlength="10" autocomplete="new-password"></label>
+        <button>Save password</button>
+      </form>
+    </section>
+
+    <section id="profile" class="card hidden">
+      <h2>Profile <small id="profile-version"></small></h2>
+      <form id="f-profile" class="form">
+        <label>Username <input name="username"></label>
+        <div class="row">
+          <label>First name <input name="firstName"></label>
+          <label>Last name <input name="lastName"></label>
+        </div>
+        <label>Time zone <input name="timeZone"></label>
+        <button>Save (If-Match)</button>
+      </form>
+      <h2>Tier</h2>
+      <div id="tier" class="kv"></div>
+    </section>
+
+    <section id="settings" class="card hidden">
+      <h2>Study settings <small id="settings-version"></small></h2>
+      <form id="f-settings" class="form">
+        <div class="row">
+          <label>New cards / day <input name="flashNewPerDay" type="number" min="0" max="1000"></label>
+          <label>Review limit <input name="flashReviewLimit" type="number" min="0" max="10000"></label>
+        </div>
+        <div class="row">
+          <label>Retention <input name="flashRetention" type="number" step="0.01" min="0.7" max="0.99"></label>
+          <label>Daily hours <input name="dailyHours" type="number" step="0.5" min="0.5" max="16"></label>
+        </div>
+        <label class="check"><input name="mockGoEasy" type="checkbox"> Mocks: go easy</label>
+        <label class="check"><input name="mockRealLayout" type="checkbox"> Mocks: real exam layout</label>
+        <button>Save (If-Match)</button>
+      </form>
+    </section>
+
+    <section id="invites" class="card hidden">
+      <h2>Invites <small>needs a verified email</small></h2>
+      <form id="f-invite" class="form">
+        <div class="row">
+          <label>Only for email <input name="email" type="email" placeholder="optional"></label>
+          <label>Uses <input name="maxUses" type="number" min="1" max="5" value="1"></label>
+          <label>Days <input name="expiresInDays" type="number" min="1" max="30" value="14"></label>
+        </div>
+        <button>Create invite</button>
+      </form>
+      <div id="invite-created"></div>
+      <table id="invite-list" class="table"></table>
+    </section>
+
+    <section id="admin" class="card wide hidden">
+      <h2>Admin <small>every read and change is audited</small></h2>
+      <div class="cols">
+        <div>
+          <h3>Users</h3>
+          <form id="f-user-search" class="form inline">
+            <input name="q" placeholder="email or username">
+            <button class="secondary">Search</button>
+          </form>
+          <table id="user-list" class="table"></table>
+        </div>
+        <div>
+          <h3>Tiers</h3>
+          <table id="tier-list" class="table"></table>
+          <form id="f-tier" class="form">
+            <div class="row">
+              <label>Code <input name="code" required pattern="[a-z0-9-]{1,32}"></label>
+              <label>Name <input name="name" required></label>
+            </div>
+            <div class="row">
+              <label>Storage (GiB) <input name="gib" type="number" min="0" step="0.5" value="5" required></label>
+              <label>Max courses <input name="maxCourses" type="number" min="0" placeholder="unlimited"></label>
+            </div>
+            <button class="secondary">Add tier</button>
+          </form>
+          <h3>Admin invite</h3>
+          <form id="f-admin-invite" class="form">
+            <div class="row">
+              <label>Tier code <input name="tierCode" placeholder="default"></label>
+              <label>Uses <input name="maxUses" type="number" min="1" value="10"></label>
+              <label>Days <input name="expiresInDays" type="number" min="1" max="365" value="30"></label>
+            </div>
+            <button class="secondary">Create admin invite</button>
+          </form>
+          <div id="admin-invite-created"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>API log <small>newest first · raw responses, request ids, error format</small>
+        <button id="clear-log" class="link">clear</button></h2>
+      <ol id="log" class="log"></ol>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

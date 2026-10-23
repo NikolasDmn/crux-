@@ -15,8 +15,11 @@
 
 	# The gateway is not a trust boundary: every service validates the access token itself (spec 1).
 	# Internal routes are never exposed.
-	@internal path /internal/*
-	respond @internal 404
+	# A `handle` block, not a bare `respond`: Caddy runs `handle` before `respond`, so the SPA
+	# catch-all below would otherwise answer /internal/* with index.html.
+	handle /internal/* {
+		respond 404
+	}
 
 	handle /api/v1/files/* {
 		uri strip_prefix /api/v1/files

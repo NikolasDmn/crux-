@@ -30,6 +30,11 @@ make verify        # cold start from an EMPTY database (drops volumes), smoke, l
 make up-ai         # same, plus the ai service (the product works without it)
 ```
 
+Until the React SPA exists, the gateway serves a small **demo console** (`demo/`, selected by
+`CRUX_WEB_DIR=../demo` in `.env`) at `/`: sign up, log in, verify email, reset password, edit
+profile/settings, invites, and the admin tools, with a log of every API call. Emails land in
+Mailpit at <http://localhost:8025>.
+
 The first admin: sign up with an invite, then
 `docker compose -f deploy/compose.yaml exec core crux-core make-admin you@example.com`.
 

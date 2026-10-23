@@ -38,6 +38,27 @@ where
     }
 }
 
+/// A signed-in admin. Anyone else gets 404 here, before the body is parsed, so a malformed body
+/// can't reveal that an admin route exists (spec 4.2). Services check again.
+pub struct Admin(pub Actor);
+
+impl<S> FromRequestParts<S> for Admin
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Auth(actor) = Auth::from_request_parts(parts, state).await?;
+        if actor.is_admin() {
+            Ok(Admin(actor))
+        } else {
+            Err(AppError::NotFound.into())
+        }
+    }
+}
+
 /// `If-Match: <version>` (spec 3.1). Quotes (ETag style) are accepted.
 pub struct IfMatch(pub i32);
 

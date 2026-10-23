@@ -32,3 +32,25 @@ def test_real_schemas_split_into_whole_statements() -> None:
     ai = split_sql((SCHEMAS / "schema-v5-ai.sql").read_text(encoding="utf-8"))
     seed = next(s for s in ai if s.startswith("INSERT INTO AiTutorTemplate"))
     assert "real exam''s style" in seed, "doubled quotes survive"
+
+
+async def test_second_upgrade_is_a_no_op() -> None:
+    """Regression: the alembic_version row must be committed, or a second container re-runs 0001."""
+    import asyncio
+    import os
+    import sys
+
+    from sqlalchemy import text
+
+    from crux_common.testing import migrated_db
+
+    service_dir = SCHEMAS.parents[2] / "services" / "notify"
+    async with migrated_db(service_dir, "common") as sessions:
+        async with sessions() as s:
+            assert (await s.execute(text("SELECT version_num FROM alembic_version"))).scalar() == "0001"
+            url = str(s.bind.url.render_as_string(hide_password=False))
+        env = {**os.environ, "CRUX_DATABASE_URL": url}
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "alembic", "upgrade", "head", cwd=service_dir, env=env
+        )
+        assert await proc.wait() == 0

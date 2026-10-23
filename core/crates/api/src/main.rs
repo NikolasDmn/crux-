@@ -103,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
 
     match &cli.cmd {
         Cmd::Migrate => {
-            crux_repo::db::migrate(&pool).await?;
+            crux_repo::db::migrate_url(&db_url).await?;
             println!("migrations applied");
             return Ok(());
         }
@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
     match cli.cmd {
         Cmd::Serve { no_migrate } => {
             if !no_migrate {
-                crux_repo::db::migrate(&pool).await.context("migrations")?;
+                crux_repo::db::migrate_url(&db_url).await.context("migrations")?;
             }
             let peers = Peers {
                 openapi_sources: vec![
@@ -150,7 +150,12 @@ async fn main() -> anyhow::Result<()> {
                 })
                 .await?;
         }
-        Cmd::Jobs => run_jobs(&cli, ctx, shutdown_rx).await?,
+        Cmd::Jobs => {
+            // Jobs may start before `serve` has migrated an empty database; the migrator's lock
+            // makes this safe to run from both.
+            crux_repo::db::migrate_url(&db_url).await.context("migrations")?;
+            run_jobs(&cli, ctx, shutdown_rx).await?
+        }
         _ => unreachable!(),
     }
     Ok(())

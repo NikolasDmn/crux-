@@ -26,6 +26,7 @@ is a couple of plain commands in the [Makefile](Makefile).
 make up            # .env from .env.example, a JWT key in deploy/secrets, then docker compose up
 make seed          # prints an invite code; sign up at http://localhost:8000 (API: /api/v1/auth/signup)
 make smoke         # health, signup, /me, and user.created reaching files + notify
+make verify        # cold start from an EMPTY database (drops volumes), smoke, log scan
 make up-ai         # same, plus the ai service (the product works without it)
 ```
 

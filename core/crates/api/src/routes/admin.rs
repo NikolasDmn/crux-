@@ -10,7 +10,7 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::error::{ApiResult, ErrorBody};
-use crate::extract::{Auth, JsonBody};
+use crate::extract::{Admin, JsonBody};
 use crate::routes::PageQuery;
 use crate::AppState;
 
@@ -25,7 +25,7 @@ pub struct UserQuery {
 
 #[utoipa::path(get, path = "/admin/users", tag = "admin", security(("bearer" = [])), params(UserQuery),
     responses((status = 200, body = Page<UserView>), (status = 404, body = ErrorBody)))]
-pub async fn list_users(State(state): State<AppState>, Auth(actor): Auth, Query(q): Query<UserQuery>) -> ApiResult<Json<Page<UserView>>> {
+pub async fn list_users(State(state): State<AppState>, Admin(actor): Admin, Query(q): Query<UserQuery>) -> ApiResult<Json<Page<UserView>>> {
     Ok(Json(admin::list_users(&state.ctx, &actor, q.q.as_deref(), q.cursor.as_deref(), q.limit).await?))
 }
 
@@ -34,7 +34,7 @@ pub async fn list_users(State(state): State<AppState>, Auth(actor): Auth, Query(
     request_body = AdminUserPatch, responses((status = 200, body = UserView), (status = 404, body = ErrorBody), (status = 422, body = ErrorBody)))]
 pub async fn patch_user(
     State(state): State<AppState>,
-    Auth(actor): Auth,
+    Admin(actor): Admin,
     Path(id): Path<String>,
     JsonBody(patch): JsonBody<AdminUserPatch>,
 ) -> ApiResult<Json<UserView>> {
@@ -43,7 +43,7 @@ pub async fn patch_user(
 
 #[utoipa::path(get, path = "/admin/tiers", tag = "admin", security(("bearer" = [])),
     responses((status = 200, body = Vec<TierView>), (status = 404, body = ErrorBody)))]
-pub async fn list_tiers(State(state): State<AppState>, Auth(actor): Auth) -> ApiResult<Json<Vec<TierView>>> {
+pub async fn list_tiers(State(state): State<AppState>, Admin(actor): Admin) -> ApiResult<Json<Vec<TierView>>> {
     Ok(Json(admin::list_tiers(&state.ctx, &actor).await?))
 }
 
@@ -51,7 +51,7 @@ pub async fn list_tiers(State(state): State<AppState>, Auth(actor): Auth) -> Api
     responses((status = 201, body = TierView), (status = 404, body = ErrorBody), (status = 422, body = ErrorBody)))]
 pub async fn create_tier(
     State(state): State<AppState>,
-    Auth(actor): Auth,
+    Admin(actor): Admin,
     JsonBody(input): JsonBody<TierInput>,
 ) -> ApiResult<(StatusCode, Json<TierView>)> {
     Ok((StatusCode::CREATED, Json(admin::create_tier(&state.ctx, &actor, input).await?)))
@@ -62,7 +62,7 @@ pub async fn create_tier(
     request_body = TierInput, responses((status = 200, body = TierView), (status = 404, body = ErrorBody), (status = 422, body = ErrorBody)))]
 pub async fn update_tier(
     State(state): State<AppState>,
-    Auth(actor): Auth,
+    Admin(actor): Admin,
     Path(code): Path<String>,
     JsonBody(input): JsonBody<TierInput>,
 ) -> ApiResult<Json<TierView>> {
@@ -73,7 +73,7 @@ pub async fn update_tier(
     responses((status = 200, body = Page<InviteView>), (status = 404, body = ErrorBody)))]
 pub async fn list_invites(
     State(state): State<AppState>,
-    Auth(actor): Auth,
+    Admin(actor): Admin,
     Query(q): Query<PageQuery>,
 ) -> ApiResult<Json<Page<InviteView>>> {
     Ok(Json(invites::list(&state.ctx, &actor, q.cursor.as_deref(), q.limit, true).await?))
@@ -85,7 +85,7 @@ pub async fn list_invites(
     responses((status = 201, body = CreatedInvite), (status = 404, body = ErrorBody), (status = 422, body = ErrorBody)))]
 pub async fn create_invite(
     State(state): State<AppState>,
-    Auth(actor): Auth,
+    Admin(actor): Admin,
     JsonBody(input): JsonBody<CreateInviteInput>,
 ) -> ApiResult<(StatusCode, Json<CreatedInvite>)> {
     Ok((StatusCode::CREATED, Json(invites::create(&state.ctx, &actor, input, true).await?)))
@@ -93,7 +93,7 @@ pub async fn create_invite(
 
 #[utoipa::path(delete, path = "/admin/invites/{id}", tag = "admin", security(("bearer" = [])), params(("id" = String, Path)),
     responses((status = 204), (status = 404, body = ErrorBody)))]
-pub async fn revoke_invite(State(state): State<AppState>, Auth(actor): Auth, Path(id): Path<String>) -> ApiResult<StatusCode> {
+pub async fn revoke_invite(State(state): State<AppState>, Admin(actor): Admin, Path(id): Path<String>) -> ApiResult<StatusCode> {
     invites::revoke(&state.ctx, &actor, &id, true).await?;
     Ok(StatusCode::NO_CONTENT)
 }

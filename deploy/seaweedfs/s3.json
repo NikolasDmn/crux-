@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "crux",
+      "credentials": [{ "accessKey": "crux", "secretKey": "crux-dev-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

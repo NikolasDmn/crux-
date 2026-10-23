@@ -57,3 +57,34 @@ def split_sql(sql: str) -> list[str]:
 
 def read_statements(path: Path) -> list[str]:
     return split_sql(path.read_text(encoding="utf-8"))
+
+
+MIGRATION_LOCK_TIMEOUT_SECONDS = 300
+
+
+def run_online(database_url: str) -> None:
+    """Body of every service's Alembic env.py. API and worker containers both migrate at start;
+    a MySQL named lock makes the second wait for the first, then find nothing left to do."""
+    from alembic import context
+    from sqlalchemy import create_engine, text
+
+    engine = create_engine(database_url.replace("+aiomysql", "+pymysql"))
+    with engine.connect() as connection:
+        connection.execute(text("SET time_zone = '+00:00'"))
+        lock = f"crux_migrate:{connection.engine.url.database}"
+        got = connection.execute(
+            text("SELECT GET_LOCK(:n, :t)"), {"n": lock, "t": MIGRATION_LOCK_TIMEOUT_SECONDS}
+        ).scalar()
+        if got != 1:
+            raise RuntimeError(f"could not take migration lock {lock}")
+        # SQLAlchemy 2 autobegan a transaction on the statements above. End it, or Alembic runs
+        # inside it and its alembic_version row is rolled back on close (DDL itself autocommits).
+        connection.commit()
+        try:
+            context.configure(connection=connection, target_metadata=None, transaction_per_migration=True)
+            with context.begin_transaction():
+                context.run_migrations()
+        finally:
+            connection.execute(text("SELECT RELEASE_LOCK(:n)"), {"n": lock})
+            connection.commit()
+    engine.dispose()

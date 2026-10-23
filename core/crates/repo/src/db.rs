@@ -27,6 +27,19 @@ pub async fn migrate(pool: &MySqlPool) -> Result<(), sqlx::migrate::MigrateError
     MIGRATOR.run(pool).await
 }
 
+/// Migrates on a dedicated connection with slow-statement logging off (migration 0001 is ~1,000
+/// lines of DDL and would otherwise be dumped into the log). Safe to call from every process at
+/// start: sqlx takes a MySQL advisory lock and skips applied versions.
+pub async fn migrate_url(url: &str) -> Result<(), sqlx::migrate::MigrateError> {
+    use sqlx::{ConnectOptions, Connection};
+    let options: MySqlConnectOptions = url.parse().map_err(sqlx::migrate::MigrateError::from)?;
+    let options = options.timezone(Some("+00:00".into())).log_slow_statements(log::LevelFilter::Off, Duration::from_secs(60));
+    let mut conn = sqlx::MySqlConnection::connect_with(&options).await?;
+    MIGRATOR.run(&mut conn).await?;
+    conn.close().await?;
+    Ok(())
+}
+
 pub async fn ping(pool: &MySqlPool) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT 1").execute(pool).await.map(|_| ())
 }

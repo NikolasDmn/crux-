@@ -12,7 +12,7 @@ from crux_common import db, errors
 from crux_common import logging as crux_logging
 from crux_common.auth import Authenticator, Jwks
 from crux_common.messaging.contracts import Contracts
-from crux_common.settings import CommonSettings
+from crux_common.settings import REDIS_SOCKET_TIMEOUT, CommonSettings
 
 
 def create_app(
@@ -29,7 +29,7 @@ def create_app(
         app.state.settings = settings
         app.state.engine = engine
         app.state.sessions = db.make_sessionmaker(engine)
-        app.state.redis = Redis.from_url(settings.redis_url)
+        app.state.redis = Redis.from_url(settings.redis_url, socket_timeout=REDIS_SOCKET_TIMEOUT)
         app.state.auth = Authenticator(Jwks(settings.jwks_url), settings.service_name)
         app.state.contracts = Contracts(settings.contracts_dir)
         if on_startup:

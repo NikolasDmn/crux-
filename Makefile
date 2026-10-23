@@ -4,7 +4,7 @@
 COMPOSE := docker compose -f deploy/compose.yaml --env-file .env
 export CRUX_TEST_MYSQL_URL ?= mysql://crux_test:crux-test@127.0.0.1:3306
 
-.PHONY: help env keys up up-ai down logs seed smoke test test-core test-py lint fmt invite
+.PHONY: help env keys up up-ai down logs seed smoke verify test test-core test-py lint fmt invite
 
 help:
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -38,6 +38,9 @@ seed: ## load the demo data (milestone 1: an admin invite; the demo course arriv
 
 smoke: ## smoke-test a running stack
 	./scripts/smoke.sh http://localhost:$${CRUX_HTTP_PORT:-8000}
+
+verify: env keys ## cold start from an EMPTY database (drops volumes), smoke, log scan
+	./scripts/verify-stack.sh http://localhost:$${CRUX_HTTP_PORT:-8000} --ai
 
 test: test-core test-py ## all tests (DB tests need `make up` for MySQL)
 

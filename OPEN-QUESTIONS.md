@@ -14,6 +14,7 @@ Answer inline (or tell the build agent) and the code follows.
 | S-4 | Built-in tutor PublicIds `01JBUILTIN000…` aren't valid ULIDs (Crockford base32 excludes I, L, O, U). | PublicId parsing is loose everywhere: 26 chars of `[0-9A-Z]`. |
 | S-5 | `Course.Color` comment says "owner/Editors change it"; spec 4.2 says Owner only. | Will follow the spec (Owner only) in milestone 2. |
 | S-6 | `WeekSummary` (5.11) and the `user.purged` ack tracking (9.4) have no tables. | Not needed in M1. Will be added as core migrations in milestones 5 and 9. |
+| S-7 | Spec 1 names MinIO for the object store. MinIO no longer publishes images (Docker Hub and quay.io both refuse pulls, checked 2026-10-23). | SeaweedFS (`chrislusf/seaweedfs`) with its S3 gateway. Services use plain S3 (`CRUX_S3_*`), so another S3 store (Garage, a hosted bucket) is a config change. |
 
 ## Product / behaviour
 

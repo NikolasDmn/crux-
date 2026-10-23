@@ -4,6 +4,10 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Longer than the 5 s blocking XREADGROUP in the consumers (redis-py 8 defaults to 5 s, which
+# turns every idle read into a timeout error).
+REDIS_SOCKET_TIMEOUT = 30.0
+
 
 def _default_contracts_dir() -> Path:
     # services/common/src/crux_common/settings.py -> repo root / contracts

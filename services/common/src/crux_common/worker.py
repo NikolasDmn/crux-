@@ -16,7 +16,7 @@ from crux_common.messaging.bus import RedisBus
 from crux_common.messaging.consumer import Handler
 from crux_common.messaging.consumer import run as run_consumer
 from crux_common.messaging.contracts import Contracts
-from crux_common.settings import CommonSettings
+from crux_common.settings import REDIS_SOCKET_TIMEOUT, CommonSettings
 
 log = logging.getLogger("crux.worker")
 
@@ -27,7 +27,7 @@ async def run_worker(settings: CommonSettings, handlers: Sequence[Handler], extr
     crux_logging.setup(settings.service_name)
     engine = db.make_engine(settings.database_url, pool_size=5)
     sessions = db.make_sessionmaker(engine)
-    redis = Redis.from_url(settings.redis_url)
+    redis = Redis.from_url(settings.redis_url, socket_timeout=REDIS_SOCKET_TIMEOUT)
     bus = RedisBus(redis)
     contracts = Contracts(settings.contracts_dir)
     group = settings.service_name

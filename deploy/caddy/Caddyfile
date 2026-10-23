@@ -9,7 +9,7 @@
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options nosniff
 		Referrer-Policy same-origin
-		Content-Security-Policy "default-src 'self'; img-src 'self' blob: data: {$CRUX_MINIO_PUBLIC_ORIGIN:}; connect-src 'self' {$CRUX_MINIO_PUBLIC_ORIGIN:}; script-src 'self'; style-src 'self' 'unsafe-inline'"
+		Content-Security-Policy "default-src 'self'; img-src 'self' blob: data: {$CRUX_S3_PUBLIC_ORIGIN:}; connect-src 'self' {$CRUX_S3_PUBLIC_ORIGIN:}; script-src 'self'; style-src 'self' 'unsafe-inline'"
 		-Server
 	}
 

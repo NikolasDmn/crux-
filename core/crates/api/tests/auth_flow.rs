@@ -34,7 +34,11 @@ async fn signup_login_me_and_events() {
     let bad = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "nick", "password": "wrong password!"})), &[]).await;
     assert_eq!(bad.status, StatusCode::UNAUTHORIZED);
     let nobody = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "ghost", "password": "wrong password!"})), &[]).await;
-    assert_eq!(nobody.json, bad.json, "unknown user and wrong password look the same");
+    let strip = |mut v: serde_json::Value| {
+        v["error"]["requestId"] = serde_json::Value::Null;
+        v
+    };
+    assert_eq!(strip(nobody.json), strip(bad.json), "unknown user and wrong password look the same");
 
     // Signup wrote user.created and the verify-email request in the same transaction.
     assert_eq!(outbox_topics(&h.db.pool).await, ["user.created", "notify.requested"]);
@@ -46,7 +50,7 @@ async fn signup_login_me_and_events() {
 #[tokio::test]
 async fn invite_rules() {
     let Some(h) = common::harness().await else { return };
-    let r = call(&h.app, "POST", "/auth/signup", None, Some(signup_body("NOPE-NOPE", "x1")), &[]).await;
+    let r = call(&h.app, "POST", "/auth/signup", None, Some(signup_body("NOPE-NOPE", "nobody")), &[]).await;
     assert_eq!((r.status, r.code()), (StatusCode::FORBIDDEN, "invite_invalid"));
 
     let code = seed_invite(&h.t.ctx, 1).await;
@@ -171,11 +175,12 @@ async fn patch_me_needs_if_match_and_detects_conflicts() {
 async fn verify_email_and_reset_password() {
     let Some(h) = common::harness().await else { return };
     let (token, user, _) = signup(&h.app, &h.t.ctx, "mail").await;
-    let link: String =
-        sqlx::query_scalar("SELECT JSON_UNQUOTE(JSON_EXTRACT(Payload, '$.payload.link')) FROM Outbox WHERE Topic = 'notify.requested'")
-            .fetch_one(&h.db.pool)
-            .await
-            .unwrap();
+    let link: String = sqlx::query_scalar(
+        "SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(Payload, '$.payload.link')) AS CHAR) FROM Outbox WHERE Topic = 'notify.requested'",
+    )
+    .fetch_one(&h.db.pool)
+    .await
+    .unwrap();
     let verify_token = link.split("token=").nth(1).unwrap();
     let r = call(&h.app, "POST", "/auth/verify-email/confirm", None, Some(json!({"token": verify_token})), &[]).await;
     assert_eq!(r.status, StatusCode::OK, "{}", r.json);
@@ -188,7 +193,7 @@ async fn verify_email_and_reset_password() {
     let f2 = call(&h.app, "POST", "/auth/password/forgot", None, Some(json!({"email": "ghost@example.com"})), &[]).await;
     assert_eq!(f2.status, StatusCode::ACCEPTED, "no account enumeration");
 
-    let link: String = sqlx::query_scalar("SELECT JSON_UNQUOTE(JSON_EXTRACT(Payload, '$.payload.link')) FROM Outbox WHERE Topic = 'notify.requested' AND JSON_EXTRACT(Payload, '$.kind') = 'auth.password_reset'")
+    let link: String = sqlx::query_scalar("SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(Payload, '$.payload.link')) AS CHAR) FROM Outbox WHERE Topic = 'notify.requested' AND JSON_EXTRACT(Payload, '$.kind') = 'auth.password_reset'")
         .fetch_one(&h.db.pool)
         .await
         .unwrap();

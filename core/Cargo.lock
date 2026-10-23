@@ -612,6 +612,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crux-domain",
+ "log",
  "serde",
  "serde_json",
  "sqlx",

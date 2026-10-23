@@ -14,7 +14,21 @@ Answer inline (or tell the build agent) and the code follows.
 | S-4 | Built-in tutor PublicIds `01JBUILTIN000…` aren't valid ULIDs (Crockford base32 excludes I, L, O, U). | PublicId parsing is loose everywhere: 26 chars of `[0-9A-Z]`. |
 | S-5 | `Course.Color` comment says "owner/Editors change it"; spec 4.2 says Owner only. | Will follow the spec (Owner only) in milestone 2. |
 | S-6 | `WeekSummary` (5.11) and the `user.purged` ack tracking (9.4) have no tables. | Not needed in M1. Will be added as core migrations in milestones 5 and 9. |
-| S-7 | Spec 1 names MinIO for the object store. MinIO no longer publishes images (Docker Hub and quay.io both refuse pulls, checked 2026-10-23). | SeaweedFS (`chrislusf/seaweedfs`) with its S3 gateway. Services use plain S3 (`CRUX_S3_*`), so another S3 store (Garage, a hosted bucket) is a config change. |
+| S-7 | Spec 1 names MinIO for the object store. MinIO no longer publishes images (Docker Hub and quay.io both refuse pulls, checked 2026-10-23). | SeaweedFS (`chrislusf/seaweedfs`) with its S3 gateway. Services use plain S3 (`CRUX_S3_*`), so another S3 store (Garage, a hosted bucket) is a config change. **Decided (Nick 2026-10-23): SeaweedFS on the VPS in production too.** |
+
+## Milestone 2 decisions (Nick 2026-10-23)
+
+| # | Topic | Decision | Built as |
+|---|---|---|---|
+| D2-1 | Sharing with an email that has no account | Pending share + invite | `CourseShareInvite` row tied to an `Invite`; Crux emails the signup link; signing up through it adds the member. Uses one invite. |
+| D2-2 | Shared course appears… | After the invitee **accepts** | `CourseMember.Status` Pending/Accepted (core migration 0004). Pending grants no access. Routes `GET /course-invitations`, `POST /course-invitations/{id}/accept`, `/decline` (not in spec 15). |
+| D2-3 | Signing up through a course-share link | Counts as accepting | Member is `Accepted` right after signup. |
+| D2-4 | Editor uploads to someone else's course | Counts against the **course owner's** quota | `StoredFile.OwnerUserRef` = course owner; uploader kept in `UploadedByUserRef` (files migration 0002). |
+| D2-5 | Delete course | Trash for 30 days, owner can restore | `Course.ArchivedAt` = trashed; hidden from everyone; `POST /courses/{id}/restore` (not in spec 15); purge job after 30 days. |
+| D2-6 | Default grade scale | Percent (0-100, pass 50) | Owner can change it. |
+| D2-7 | Virus scan in dev | Fake scanner, unless a test targets ClamAV | `CRUX_SCANNER=fake` in dev; `clamd` in CI/prod; ClamAV tests run in a dedicated job. |
+| D2-8 | OCR languages | English | Tesseract `eng`. |
+| D2-9 | Plain invite with an email typed in | *Asked; unclear.* Built: Crux emails the invite link to that address | Easy to switch off (`invite.created` email). |
 
 ## Product / behaviour
 
@@ -22,7 +36,7 @@ Answer inline (or tell the build agent) and the code follows.
 |---|---|---|
 | Q-auth-1 | Refresh-token lifetime? | **Decided (Nick 2026-10-23): 30 days, sliding.** Revoked rows kept 30 days so reuse is still detected. |
 | Q-auth-2 | Username rules? | 3-32 of letters, digits, `_ . -`, starting with a letter or digit; unique case-insensitively. |
-| Q-auth-3 | Breached passwords: block, or warn? And which list? | **Decided (Nick 2026-10-23): warn, don't block.** The API answers `validation_failed` with field code `breached` until the request carries `acceptBreachedPassword: true` (signup and reset); the client shows a strong warning with a deliberate "use it anyway". Length rules are never skippable. List source still open: placeholder of 30 entries in `core/data/breached-passwords.txt`. |
+| Q-auth-3 | Breached passwords: block, or warn? Which list? | **Decided (Nick 2026-10-23): warn, don't block; check via Have I Been Pwned's range API (k-anonymity: only the first 5 hex chars of the SHA-1 leave the server) with the SecLists top-100k list as the offline fallback.** The API answers field code `breached` until the request carries `acceptBreachedPassword: true` (signup and reset). Length rules are never skippable. |
 | Q-auth-4 | Verify-email and reset-password emails go to *unverified* addresses and can't be opt-in. Spec 8 says email only to verified addresses and every kind opt-in. | `notify.requested` carries `transactional: true` for `auth.verify_email` / `auth.password_reset`; notify will send those regardless of preferences and verification. Sending lands with notify (milestone 6). Until then, links are in the core Outbox row. |
 | Q-auth-5 | Token TTLs for verify (48 h) and reset (1 h)? | As stated. Requesting a new link voids the older one. |
 | Q-auth-6 | Two tabs refreshing at once present a just-rotated token. | **Decided (Nick 2026-10-23): 10 s grace.** A token rotated ≤ 10 s ago gets a fresh session; after that, reuse revokes every session (spec 4.1). Build refinement: sessions ended on purpose (logout, password reset, admin) just answer 401 and don't cascade, so a stale tab after logout can't sign out other devices. Needs `UserSession.RevokeReason` (core migration 0003). |

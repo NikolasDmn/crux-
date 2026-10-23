@@ -50,7 +50,7 @@ mypy_path = "common/src"
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["aiomysql.*", "jsonschema.*", "ulid.*"]
+module = ["aiomysql.*", "jsonschema.*", "ulid.*", "boto3.*", "botocore.*", "fitz.*", "pymupdf.*", "pytesseract.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -3,7 +3,13 @@ name = "crux-files"
 version = "0.1.0"
 description = "Upload, scan, PDF text/OCR, thumbnails, crops, storage saver, quotas (backend-spec 6)."
 requires-python = ">=3.12,<3.13"
-dependencies = ["crux-common"]
+dependencies = [
+    "crux-common",
+    "boto3>=1.35",
+    "pymupdf>=1.24",
+    "pytesseract>=0.3.13",
+    "pillow>=10.4",
+]
 
 [tool.uv.sources]
 crux-common = { workspace = true }

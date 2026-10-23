@@ -4,6 +4,7 @@
 //! are arguments, so every rule is a deterministic unit test (backend-spec 2.1).
 
 pub mod auth;
+pub mod catalog;
 pub mod ids;
 pub mod page;
 pub mod policy;

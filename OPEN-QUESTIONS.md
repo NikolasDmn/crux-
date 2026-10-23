@@ -28,7 +28,7 @@ Answer inline (or tell the build agent) and the code follows.
 | D2-6 | Default grade scale | Percent (0-100, pass 50) | Owner can change it. |
 | D2-7 | Virus scan in dev | Fake scanner, unless a test targets ClamAV | `CRUX_SCANNER=fake` in dev; `clamd` in CI/prod; ClamAV tests run in a dedicated job. |
 | D2-8 | OCR languages | English | Tesseract `eng`. |
-| D2-9 | Plain invite with an email typed in | *Asked; unclear.* Built: Crux emails the invite link to that address | Easy to switch off (`invite.created` email). |
+| D2-9 | Plain invite with an email typed in | **Crux emails the invite link to that address** (the link can still be copied). Only that address can use it. | `invite.created` account email via notify. |
 
 ## Product / behaviour
 

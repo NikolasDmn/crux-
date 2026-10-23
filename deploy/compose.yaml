@@ -69,7 +69,7 @@ services:
     ports: ["8025:8025"]
 
   core:
-    build: ../core
+    build: {context: .., dockerfile: core/Dockerfile}
     environment:
       CRUX_ENV: ${CRUX_ENV:-dev}
       CRUX_DATABASE_URL: mysql://crux_core:${CRUX_CORE_DB_PASSWORD:-crux-core}@mysql:3306/crux_core
@@ -78,6 +78,7 @@ services:
       CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET:-dev-service-secret-change-me}
       CRUX_COOKIE_SECURE: ${CRUX_COOKIE_SECURE:-false}
       CRUX_AI_INTERNAL_URL: http://ai:8080
+      CRUX_APP_BASE_URL: ${CRUX_APP_BASE_URL:-http://localhost:8000}
     volumes:
       - ./secrets:/run/secrets:ro
     depends_on:
@@ -85,7 +86,7 @@ services:
       redis: {condition: service_healthy}
 
   core-jobs:
-    build: ../core
+    build: {context: .., dockerfile: core/Dockerfile}
     command: ["crux-core", "jobs"]
     environment:
       CRUX_DATABASE_URL: mysql://crux_core:${CRUX_CORE_DB_PASSWORD:-crux-core}@mysql:3306/crux_core
@@ -97,7 +98,7 @@ services:
     depends_on: [core]
 
   files:
-    build: {context: ../services, args: {SERVICE: files}}
+    build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: files}}
     environment:
       <<: *python-env
       CRUX_DATABASE_URL: mysql+aiomysql://crux_files:${CRUX_FILES_DB_PASSWORD:-crux-files}@mysql:3306/crux_files
@@ -107,7 +108,7 @@ services:
       redis: {condition: service_healthy}
 
   files-worker:
-    build: {context: ../services, args: {SERVICE: files}}
+    build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: files}}
     command: ["python", "-m", "app.jobs"]
     environment:
       <<: *python-env
@@ -116,7 +117,7 @@ services:
     depends_on: [files]
 
   notify:
-    build: {context: ../services, args: {SERVICE: notify}}
+    build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: notify}}
     environment:
       <<: *python-env
       CRUX_DATABASE_URL: mysql+aiomysql://crux_notify:${CRUX_NOTIFY_DB_PASSWORD:-crux-notify}@mysql:3306/crux_notify
@@ -127,7 +128,7 @@ services:
       redis: {condition: service_healthy}
 
   notify-worker:
-    build: {context: ../services, args: {SERVICE: notify}}
+    build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: notify}}
     command: ["python", "-m", "app.jobs"]
     environment:
       <<: *python-env
@@ -138,7 +139,7 @@ services:
 
   ai:
     profiles: ["ai"]
-    build: {context: ../services, args: {SERVICE: ai}}
+    build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: ai}}
     environment:
       <<: *python-env
       CRUX_DATABASE_URL: mysql+aiomysql://crux_ai:${CRUX_AI_DB_PASSWORD:-crux-ai}@mysql:3306/crux_ai
@@ -150,7 +151,7 @@ services:
 
   ai-worker:
     profiles: ["ai"]
-    build: {context: ../services, args: {SERVICE: ai}}
+    build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: ai}}
     command: ["python", "-m", "app.jobs"]
     environment:
       <<: *python-env

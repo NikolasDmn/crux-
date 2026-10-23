@@ -41,7 +41,7 @@ pub async fn layer(mut req: Request, next: Next) -> Response {
         .get(REQUEST_ID)
         .and_then(|v| v.to_str().ok())
         .and_then(sanitize)
-        .unwrap_or_else(|| ulid_like());
+        .unwrap_or_else(new_request_id);
     let route = req.extensions().get::<MatchedPath>().map(|p| p.as_str().to_string()).unwrap_or_else(|| "unmatched".into());
     let method = req.method().clone();
     let user = LogUser::default();
@@ -62,8 +62,8 @@ pub async fn layer(mut req: Request, next: Next) -> Response {
     resp
 }
 
-fn ulid_like() -> String {
-    // Request ids only need to be unique-ish and sortable; reuse the time-ordered ULID format.
+fn new_request_id() -> String {
+    // Unique per process and roughly time-ordered: millisecond timestamp + counter, as hex.
     use std::sync::atomic::{AtomicU64, Ordering};
     static N: AtomicU64 = AtomicU64::new(0);
     let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);

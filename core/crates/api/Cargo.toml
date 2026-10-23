@@ -35,4 +35,6 @@ utoipa-axum.workspace = true
 
 [dev-dependencies]
 crux-testkit.workspace = true
+async-trait.workspace = true
+sqlx.workspace = true
 http-body-util = "0.1"

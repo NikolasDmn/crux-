@@ -529,6 +529,7 @@ name = "crux-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "axum-extra",
  "chrono",
@@ -546,6 +547,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "tower",
  "tower-http",
@@ -644,6 +646,20 @@ dependencies = [
 [[package]]
 name = "crux-testkit"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "crux-clients",
+ "crux-domain",
+ "crux-repo",
+ "crux-service",
+ "http-body-util",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tower",
+]
 
 [[package]]
 name = "crypto-common"

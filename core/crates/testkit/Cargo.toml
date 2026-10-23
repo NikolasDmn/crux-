@@ -4,4 +4,17 @@ version.workspace = true
 edition.workspace = true
 publish = false
 
+# Shared test helpers: throwaway MySQL databases, a test Ctx with doubles, HTTP helpers.
 [dependencies]
+crux-domain.workspace = true
+crux-repo.workspace = true
+crux-clients.workspace = true
+crux-service.workspace = true
+anyhow.workspace = true
+axum.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+tokio.workspace = true
+tower.workspace = true
+http-body-util = "0.1"

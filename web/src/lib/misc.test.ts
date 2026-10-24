@@ -49,5 +49,5 @@ it("unwraps results and throws typed errors", async () => {
   expect(e).toBeInstanceOf(ApiError);
   expect((e as ApiError).code).toBe("conflict");
   expect(idempotencyKey()).toMatch(/^[0-9A-Z]{26}$/);
-  expect(ifMatch(3)).toEqual({ "If-Match": "3" });
+  expect(ifMatch(3)).toEqual({ "If-Match": 3 });
 });

@@ -9,6 +9,7 @@ import { TopBar } from "@/components/shell/top-bar";
 import { Kbd } from "@/components/ui/misc";
 import { Dialog } from "@/components/ui/overlays";
 import { useNotifyStream } from "@/features/notify/api";
+import { startActivity } from "@/lib/activity";
 import { typingIn } from "@/lib/keyboard";
 import { t } from "@/lib/t";
 
@@ -31,6 +32,7 @@ export function AppShell() {
   const [help, setHelp] = useState(false);
   const navigate = useNavigate();
   useNotifyStream(true);
+  useEffect(startActivity, []);
 
   useEffect(() => {
     let g = 0;

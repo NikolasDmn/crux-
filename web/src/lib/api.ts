@@ -121,6 +121,6 @@ export function idempotencyKey(): string {
 }
 
 /** `If-Match` for an edit of a resource at `version` (spec 2.2). */
-export function ifMatch(version: number): { "If-Match": string } {
-  return { "If-Match": String(version) };
+export function ifMatch(version: number): { "If-Match": number } {
+  return { "If-Match": version };
 }

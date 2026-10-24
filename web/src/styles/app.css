@@ -97,3 +97,87 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Rendered markdown (notes, prompts, cards, AI replies): readable measure, quiet hierarchy. */
+@layer components {
+  .crux-prose {
+    max-width: 72ch;
+    line-height: 1.6;
+  }
+  .crux-prose > :first-child {
+    margin-top: 0;
+  }
+  .crux-prose h1,
+  .crux-prose h2,
+  .crux-prose h3 {
+    margin: 1.4em 0 0.5em;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .crux-prose h1 {
+    font-size: var(--text-xl);
+  }
+  .crux-prose h2 {
+    font-size: var(--text-lg);
+  }
+  .crux-prose h3 {
+    font-size: var(--text-md);
+  }
+  .crux-prose p,
+  .crux-prose ul,
+  .crux-prose ol,
+  .crux-prose pre,
+  .crux-prose table,
+  .crux-prose blockquote {
+    margin: 0 0 0.9em;
+  }
+  .crux-prose ul,
+  .crux-prose ol {
+    padding-left: 1.4em;
+  }
+  .crux-prose a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .crux-prose code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
+    background: var(--surface-sunken);
+    border-radius: var(--radius-sm);
+    padding: 0.1em 0.3em;
+  }
+  .crux-prose pre {
+    overflow-x: auto;
+    background: var(--surface-sunken);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+  }
+  .crux-prose pre code {
+    background: none;
+    padding: 0;
+  }
+  .crux-prose blockquote {
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    color: var(--text-muted);
+  }
+  .crux-prose table {
+    border-collapse: collapse;
+    display: block;
+    overflow-x: auto;
+  }
+  .crux-prose th,
+  .crux-prose td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+  }
+  .crux-prose .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 4px 0;
+  }
+  .crux-prose .katex-error {
+    color: var(--danger-text) !important;
+  }
+}

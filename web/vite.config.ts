@@ -25,10 +25,12 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": { target: gateway, changeOrigin: false },
-      "/crux-files": { target: gateway, changeOrigin: false },
+      // Signed for the gateway's host: forward with its Host header so the signature matches.
+      "/crux-files": { target: gateway, changeOrigin: true },
     },
   },
-  build: { outDir: "dist", sourcemap: true, target: "es2022" },
+  // No data: URLs: the CSP allows fonts and images from 'self' only.
+  build: { outDir: "dist", sourcemap: true, target: "es2022", assetsInlineLimit: 0 },
   test: {
     environment: "jsdom",
     globals: true,

@@ -14,6 +14,8 @@ pub const MATERIAL_CREATED: &str = "material.created";
 pub const MATERIAL_UPDATED: &str = "material.updated";
 pub const MATERIAL_PURGE_REQUESTED: &str = "material.purge_requested";
 pub const MATERIAL_PURGE_CANCELLED: &str = "material.purge_cancelled";
+pub const MOCK_SUBMITTED: &str = "mock.submitted";
+pub const MOCK_AI_GRADE_DECIDED: &str = "mock.ai_grade_decided";
 
 /// Topics core consumes from files (storage saver, spec 6.2).
 pub const FILE_PURGE_SCHEDULED: &str = "file.purge_scheduled";
@@ -36,4 +38,6 @@ pub const PRODUCED: &[&str] = &[
     MATERIAL_UPDATED,
     MATERIAL_PURGE_REQUESTED,
     MATERIAL_PURGE_CANCELLED,
+    MOCK_SUBMITTED,
+    MOCK_AI_GRADE_DECIDED,
 ];

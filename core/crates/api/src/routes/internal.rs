@@ -20,6 +20,7 @@ pub fn router() -> Router<AppState> {
         .route("/internal/v1/access/file-ref", get(file_ref_access))
         .route("/internal/v1/ai/materials", get(ai_materials))
         .route("/internal/v1/context/user", post(ai_context))
+        .route("/internal/v1/mocks/{id}/open", get(mock_open))
 }
 
 #[derive(Deserialize)]
@@ -77,6 +78,22 @@ async fn ai_context(
     JsonBody(req): JsonBody<crux_service::ai::ContextRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
     Ok(Json(crux_service::ai::context(&state.ctx, req).await?))
+}
+
+#[derive(Deserialize)]
+struct UserQuery {
+    user: String,
+}
+
+/// Spec 15 `open_mock`: may this user open the mock? (404 if not.)
+async fn mock_open(
+    State(state): State<AppState>,
+    _svc: Service,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Query(q): Query<UserQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let status = crux_service::mocks::open_for(&state.ctx, &q.user, &id).await?;
+    Ok(Json(serde_json::json!({ "status": status })))
 }
 
 /// Public keys for verifying access and service tokens. Public data; cache for a few minutes.

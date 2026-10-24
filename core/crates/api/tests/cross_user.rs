@@ -162,6 +162,9 @@ fn body_for_path(method: &str, path: &str) -> Option<Value> {
         ("PUT", "/deadlines/{id}/layout") => Some(json!({"components": []})),
         ("PATCH", "/courses/{id}/progress") => Some(json!({"componentId": "01AAAAAAAAAAAAAAAAAAAAAAAA"})),
         ("POST", "/mocks/{id}/questions/{order}/grade") => Some(json!({"outcome": "Right"})),
+        ("POST", "/mocks/{id}/questions/{order}/ai-grade/accept")
+        | ("POST", "/mocks/{id}/questions/{order}/ai-grade/reject")
+        | ("POST", "/mocks/{id}/questions/{order}/ai-grade/override") => Some(json!({"gradeId": "01AAAAAAAAAAAAAAAAAAAAAAAA"})),
         ("POST", "/questions/{id}/image-crop") => {
             Some(json!({"fileId": "01AAAAAAAAAAAAAAAAAAAAAAAA", "page": 1, "box": {"x": 0, "y": 0, "w": 1, "h": 1}}))
         }

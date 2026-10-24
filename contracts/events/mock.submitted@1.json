@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/mock.submitted@1",
+  "title": "mock.submitted v1 payload",
+  "description": "core -> ai: an AI-graded mock was submitted; these open answers wait for grading suggestions (spec 7.5).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "mockRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "userRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "courseRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "gradingMode": {
+      "type": "string",
+      "enum": [
+        "AI",
+        "Self"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "order": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "questionRef": {
+            "type": "string",
+            "pattern": "^[0-9A-Z]{26}$"
+          },
+          "versionRef": {
+            "type": "string",
+            "pattern": "^[0-9A-Z]{26}$"
+          },
+          "componentRef": {
+            "type": "string",
+            "pattern": "^[0-9A-Z]{26}$"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "modelAnswer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rubricNote": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rubric": {},
+          "maxGrade": {
+            "type": "number",
+            "minimum": 0
+          },
+          "answerText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "order",
+          "questionRef",
+          "prompt",
+          "maxGrade"
+        ]
+      }
+    }
+  },
+  "required": [
+    "mockRef",
+    "userRef",
+    "courseRef",
+    "gradingMode",
+    "items"
+  ]
+}

@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use crux_service::attempts::{self, AttemptInput, AttemptResult};
-use crux_service::mocks::{self, AnswerInput, ItemView, MockInput, MockSummary, MockView, SelfGradeInput};
+use crux_service::mocks::{self, AiDecisionInput, AnswerInput, ItemView, MockInput, MockSummary, MockView, SelfGradeInput};
 
 use crate::error::{ApiResult, ErrorBody};
 use crate::extract::{Auth, JsonBody};
@@ -103,4 +103,50 @@ pub async fn result(State(s): State<AppState>, Auth(a): Auth, Path(id): Path<Str
     responses((status = 200, body = AttemptResult), (status = 404, body = ErrorBody), (status = 422, body = ErrorBody)))]
 pub async fn attempt(State(s): State<AppState>, Auth(a): Auth, JsonBody(i): JsonBody<AttemptInput>) -> ApiResult<Json<AttemptResult>> {
     Ok(Json(attempts::record(&s.ctx, &a, i).await?))
+}
+
+/// Accept the AI's suggested grade for this answer.
+#[utoipa::path(post, path = "/mocks/{id}/questions/{order}/ai-grade/accept", tag = "mocks", security(("bearer" = [])),
+    request_body = AiDecisionInput, params(("id" = String, Path), ("order" = i32, Path)),
+    responses((status = 200, body = MockView), (status = 404, body = ErrorBody), (status = 409, body = ErrorBody)))]
+pub async fn ai_accept(
+    State(s): State<AppState>,
+    Auth(a): Auth,
+    Path((id, order)): Path<(String, i32)>,
+    JsonBody(i): JsonBody<AiDecisionInput>,
+) -> ApiResult<Json<MockView>> {
+    Ok(Json(mocks::ai_decision(&s.ctx, &a, &id, order, "Accepted", i).await?))
+}
+
+/// Grade it yourself instead of the AI's suggestion (`outcome`).
+#[utoipa::path(post, path = "/mocks/{id}/questions/{order}/ai-grade/override", tag = "mocks", security(("bearer" = [])),
+    request_body = AiDecisionInput, params(("id" = String, Path), ("order" = i32, Path)),
+    responses((status = 200, body = MockView), (status = 404, body = ErrorBody), (status = 409, body = ErrorBody), (status = 422, body = ErrorBody)))]
+pub async fn ai_override(
+    State(s): State<AppState>,
+    Auth(a): Auth,
+    Path((id, order)): Path<(String, i32)>,
+    JsonBody(i): JsonBody<AiDecisionInput>,
+) -> ApiResult<Json<MockView>> {
+    Ok(Json(mocks::ai_decision(&s.ctx, &a, &id, order, "Overridden", i).await?))
+}
+
+/// Dismiss the suggestion; the answer waits for your own grade.
+#[utoipa::path(post, path = "/mocks/{id}/questions/{order}/ai-grade/reject", tag = "mocks", security(("bearer" = [])),
+    request_body = AiDecisionInput, params(("id" = String, Path), ("order" = i32, Path)),
+    responses((status = 200, body = MockView), (status = 404, body = ErrorBody), (status = 409, body = ErrorBody)))]
+pub async fn ai_reject(
+    State(s): State<AppState>,
+    Auth(a): Auth,
+    Path((id, order)): Path<(String, i32)>,
+    JsonBody(i): JsonBody<AiDecisionInput>,
+) -> ApiResult<Json<MockView>> {
+    Ok(Json(mocks::ai_decision(&s.ctx, &a, &id, order, "Rejected", i).await?))
+}
+
+/// Accept every pending AI suggestion of this mock.
+#[utoipa::path(post, path = "/mocks/{id}/ai-grades/accept-all", tag = "mocks", security(("bearer" = [])), params(("id" = String, Path)),
+    responses((status = 200, body = MockView), (status = 404, body = ErrorBody), (status = 409, body = ErrorBody)))]
+pub async fn ai_accept_all(State(s): State<AppState>, Auth(a): Auth, Path(id): Path<String>) -> ApiResult<Json<MockView>> {
+    Ok(Json(mocks::accept_all_ai(&s.ctx, &a, &id).await?))
 }

@@ -1,19 +1,27 @@
-"""ai-worker: outbox relay, consumers, and the ai jobs (spec 10)."""
+"""ai-worker: outbox relay, consumers (AI grading, grade decisions) and the ai jobs (spec 10)."""
 
 import asyncio
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.service import chat
+from app.service import chat, grading
+from app.service.deps import Deps
 from app.service.wiring import build_deps
-from app.settings import get_settings
+from app.settings import Settings, get_settings
+from crux_common import db
 from crux_common.messaging.consumer import Handler
 from crux_common.messaging.contracts import Contracts
 from crux_common.worker import run_worker
 
 log = logging.getLogger("crux.ai.worker")
 DAY = 24 * 3600.0
+
+
+def worker_deps(settings: Settings) -> Deps:
+    """The handlers' own engine: they're built before run_worker opens its sessions."""
+    sessions = db.make_sessionmaker(db.make_engine(settings.database_url, pool_size=5))
+    return build_deps(settings, sessions, Contracts(settings.contracts_dir))
 
 
 async def daily_jobs(sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event) -> None:
@@ -33,5 +41,7 @@ async def daily_jobs(sessions: async_sessionmaker[AsyncSession], stop: asyncio.E
 
 
 if __name__ == "__main__":
-    handlers: list[Handler] = []
-    asyncio.run(run_worker(get_settings(), handlers, extra=[daily_jobs]))
+    settings = get_settings()
+    deps = worker_deps(settings)
+    handlers: list[Handler] = [grading.MockSubmittedHandler(deps), grading.GradeDecidedHandler()]
+    asyncio.run(run_worker(settings, handlers, extra=[daily_jobs]))

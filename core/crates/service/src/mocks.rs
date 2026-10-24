@@ -621,6 +621,9 @@ pub async fn submit(ctx: &Ctx, actor: &Actor, mock_ref: &str) -> AppResult<MockV
         repo::set_status(&mut tx, m.id, mock::transition(MockStatus::Submitted, next).map_err(wrong_state)?.as_db(), None, None).await?;
     }
     event(&mut tx, ctx, actor.user_id, "mock.submit", &m, json!({ "ungradedOpen": ungraded })).await?;
+    if next == MockStatus::Grading {
+        request_ai_grading(&mut tx, ctx, actor, &m).await?;
+    }
     if next == MockStatus::Graded {
         finalize(&mut tx, ctx, actor, m.id).await?;
     }
@@ -697,7 +700,8 @@ pub async fn self_grade(ctx: &Ctx, actor: &Actor, mock_ref: &str, order: i32, in
     };
     let mut tx = crux_repo::begin(&ctx.pool).await?;
     let m = openable(&mut tx, actor, mock_ref, true).await?;
-    if MockStatus::from_db(&m.status) != MockStatus::Submitted {
+    // Self grading also works while AI suggestions are pending (or when AI couldn't grade).
+    if !matches!(MockStatus::from_db(&m.status), MockStatus::Submitted | MockStatus::Grading) {
         return Err(wrong_state(MockError::WrongState));
     }
     let items = repo::items(&mut tx, m.id).await?;
@@ -716,18 +720,153 @@ pub async fn self_grade(ctx: &Ctx, actor: &Actor, mock_ref: &str, order: i32, in
         outcome == Outcome::Right,
     )
     .await?;
-    let remaining = repo::items(&mut tx, m.id).await?.iter().filter(|i| i.grade.is_none()).count();
+    graded_check(&mut tx, ctx, actor, &m).await?;
+    let view = view_after(&mut tx, actor, mock_ref).await?;
+    tx.commit().await?;
+    Ok(view)
+}
+
+/// When every item has a grade: Graded, and everything "after grading".
+async fn graded_check(conn: &mut MySqlConnection, ctx: &Ctx, actor: &Actor, m: &MockRow) -> AppResult<()> {
+    let remaining = repo::items(conn, m.id).await?.iter().filter(|i| i.grade.is_none()).count();
     if remaining == 0 {
-        repo::set_status(
-            &mut tx,
-            m.id,
-            mock::transition(MockStatus::Submitted, MockStatus::Graded).map_err(wrong_state)?.as_db(),
-            None,
-            None,
-        )
-        .await?;
-        finalize(&mut tx, ctx, actor, m.id).await?;
+        let from = MockStatus::from_db(&m.status);
+        repo::set_status(conn, m.id, mock::transition(from, MockStatus::Graded).map_err(wrong_state)?.as_db(), None, None).await?;
+        finalize(conn, ctx, actor, m.id).await?;
     }
+    Ok(())
+}
+
+/// `mock.submitted` (spec 7.5): the open answers ai should suggest grades for.
+async fn request_ai_grading(conn: &mut MySqlConnection, ctx: &Ctx, actor: &Actor, m: &MockRow) -> AppResult<()> {
+    let items: Vec<_> = repo::items(conn, m.id).await?.into_iter().filter(|i| i.grade.is_none()).collect();
+    let versions = crux_repo::bank::versions_by_ids(conn, &items.iter().map(|i| i.question_version_id).collect::<Vec<_>>()).await?;
+    let types: std::collections::HashMap<i64, String> = items.iter().map(|i| (i.question_id, i.qtype.clone())).collect();
+    let views = crate::bank::version_views(conn, &versions, &types).await?;
+    let course_ref = crux_repo::courses::public_id_of(conn, m.course_id).await?;
+    let mut out = Vec::new();
+    for it in &items {
+        let Some(v) = views.get(&it.question_version_id) else { continue };
+        let component_ref = crux_repo::catalog::component_ref(conn, it.component_id).await?;
+        out.push(json!({
+            "order": it.question_order,
+            "questionRef": it.question_ref,
+            "versionRef": v.id,
+            "componentRef": component_ref,
+            "prompt": v.prompt,
+            "modelAnswer": v.open.as_ref().and_then(|o| o.model_answer.clone()),
+            "rubricNote": v.open.as_ref().and_then(|o| o.rubric_note.clone()),
+            "rubric": v.open.as_ref().and_then(|o| o.rubric.clone()),
+            "maxGrade": it.max_grade,
+            "answerText": it.answer_text,
+        }));
+    }
+    crate::events::emit(
+        conn,
+        ctx,
+        crux_domain::topics::MOCK_SUBMITTED,
+        Some(&m.public_id),
+        json!({ "mockRef": m.public_id, "userRef": actor.public_id, "courseRef": course_ref, "gradingMode": "AI", "items": out }),
+    )
+    .await
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AiDecisionInput {
+    /// The suggestion (from GET /ai/grades?mockId=).
+    pub grade_id: String,
+    /// Override only: your own outcome (Right, Partial, Wrong).
+    pub outcome: Option<String>,
+}
+
+/// Accept, override or reject one AI suggestion (spec 15). Core owns the grade: the suggestion is
+/// fetched from ai and must match this mock, item and user.
+pub async fn ai_decision(
+    ctx: &Ctx,
+    actor: &Actor,
+    mock_ref: &str,
+    order: i32,
+    decision: &str,
+    input: AiDecisionInput,
+) -> AppResult<MockView> {
+    // Access first: a stranger gets 404, never an ai error.
+    openable(&mut *ctx.pool.acquire().await?, actor, mock_ref, false).await?;
+    let override_outcome = match (decision, input.outcome.as_deref().map(Outcome::from_db)) {
+        ("Overridden", Some(Some(o @ (Outcome::Right | Outcome::Partial | Outcome::Wrong)))) => Some(o),
+        ("Overridden", _) => return Err(ValidationErrors::single("outcome", "invalid", "Use Right, Partial or Wrong.").into()),
+        _ => None,
+    };
+    let token = ctx.keys.sign_service("core", "ai", ctx.clock.now().timestamp());
+    let suggestions =
+        ctx.ai.grades(&token, &actor.public_id, mock_ref).await.map_err(|_| AppError::AiDisabled { reason: "service_unavailable" })?;
+    let mut tx = crux_repo::begin(&ctx.pool).await?;
+    let m = openable(&mut tx, actor, mock_ref, true).await?;
+    if !matches!(MockStatus::from_db(&m.status), MockStatus::Submitted | MockStatus::Grading) {
+        return Err(wrong_state(MockError::WrongState));
+    }
+    let s = suggestions.iter().find(|s| s.id == input.grade_id && s.order == order && s.status == "Pending").ok_or(AppError::NotFound)?;
+    decide_one(&mut tx, ctx, actor, &m, s, decision, override_outcome).await?;
+    graded_check(&mut tx, ctx, actor, &m).await?;
+    let view = view_after(&mut tx, actor, mock_ref).await?;
+    tx.commit().await?;
+    Ok(view)
+}
+
+async fn decide_one(
+    conn: &mut MySqlConnection,
+    ctx: &Ctx,
+    actor: &Actor,
+    m: &MockRow,
+    s: &crux_clients::ai::GradeSuggestion,
+    decision: &str,
+    override_outcome: Option<Outcome>,
+) -> AppResult<()> {
+    let items = repo::items(conn, m.id).await?;
+    let item = items.iter().find(|i| i.question_order == s.order).ok_or(AppError::NotFound)?;
+    if item.grade.is_some() {
+        return Err(AppError::conflict("This answer already has a grade."));
+    }
+    match decision {
+        "Accepted" => {
+            let outcome = Outcome::from_db(&s.outcome).ok_or_else(|| anyhow::anyhow!("bad outcome from ai"))?;
+            let grade = s.grade.clamp(0.0, item.max_grade);
+            repo::set_grade(conn, m.id, s.order, outcome.as_db(), grade, "AI", Some(&s.id), outcome == Outcome::Right).await?;
+        }
+        "Overridden" => {
+            let o = override_outcome.expect("validated");
+            repo::set_grade(conn, m.id, s.order, o.as_db(), grading::self_grade(o, item.max_grade), "Self", None, o == Outcome::Right)
+                .await?;
+        }
+        _ => {}
+    }
+    crate::events::emit(
+        conn,
+        ctx,
+        crux_domain::topics::MOCK_AI_GRADE_DECIDED,
+        Some(&m.public_id),
+        json!({ "gradeRef": s.id, "mockRef": m.public_id, "userRef": actor.public_id, "order": s.order, "decision": decision }),
+    )
+    .await
+}
+
+/// Accept every pending suggestion for items still without a grade.
+pub async fn accept_all_ai(ctx: &Ctx, actor: &Actor, mock_ref: &str) -> AppResult<MockView> {
+    // Access first: a stranger gets 404, never an ai error.
+    openable(&mut *ctx.pool.acquire().await?, actor, mock_ref, false).await?;
+    let token = ctx.keys.sign_service("core", "ai", ctx.clock.now().timestamp());
+    let suggestions =
+        ctx.ai.grades(&token, &actor.public_id, mock_ref).await.map_err(|_| AppError::AiDisabled { reason: "service_unavailable" })?;
+    let mut tx = crux_repo::begin(&ctx.pool).await?;
+    let m = openable(&mut tx, actor, mock_ref, true).await?;
+    if !matches!(MockStatus::from_db(&m.status), MockStatus::Submitted | MockStatus::Grading) {
+        return Err(wrong_state(MockError::WrongState));
+    }
+    let ungraded: Vec<i32> = repo::items(&mut tx, m.id).await?.iter().filter(|i| i.grade.is_none()).map(|i| i.question_order).collect();
+    for s in suggestions.iter().filter(|s| s.status == "Pending" && ungraded.contains(&s.order)) {
+        decide_one(&mut tx, ctx, actor, &m, s, "Accepted", None).await?;
+    }
+    graded_check(&mut tx, ctx, actor, &m).await?;
     let view = view_after(&mut tx, actor, mock_ref).await?;
     tx.commit().await?;
     Ok(view)
@@ -777,4 +916,12 @@ pub async fn review_flag(ctx: &Ctx, actor: &Actor, mock_ref: &str, order: i32, s
 /// The last moment answers count (for the client's countdown; spec frontend 5.3 uses server time).
 pub fn ends_at(m: &MockRow) -> Option<DateTime<Utc>> {
     m.started_at.and_then(|s| mock::hard_deadline(s, m.time_limit_min))
+}
+
+/// `GET /internal/v1/mocks/{id}/open?user=` (spec 15 `open_mock`, asked by ai for /ai/grades).
+pub async fn open_for(ctx: &Ctx, user_ref: &str, mock_ref: &str) -> AppResult<String> {
+    let mut conn = ctx.pool.acquire().await?;
+    let actor = crate::ai::actor_of(&mut conn, user_ref).await?;
+    let m = openable(&mut conn, &actor, mock_ref, false).await?;
+    Ok(m.status)
 }

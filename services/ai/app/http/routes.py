@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 
-from app.service import account, chat, runtime, tutors
+from app.service import account, chat, grading, runtime, tutors
 from app.service.deps import Deps
 from crux_common.auth import Caller, User
 
@@ -134,6 +134,15 @@ async def message_feedback(message_id: int, body: chat.FeedbackInput, user: User
     return Response(status_code=204)
 
 
+# ---------- grading ----------
+
+
+@router.get("/grades", response_model=list[grading.GradeView], response_model_by_alias=True)
+async def grades(mockId: str, user: User, request: Request) -> list[grading.GradeView]:
+    """AI grading suggestions for the review screen; decide on them in core (ai-grade routes)."""
+    return await grading.grades_for(deps(request), user, mockId)
+
+
 # ---------- internal ----------
 
 
@@ -147,3 +156,9 @@ async def ai_allowed(
     refs = [m for m in materials.split(",") if m]
     reason, _ = await runtime.decide(deps(request), user, feature, course, refs)
     return {"allowed": reason is None, "reason": reason}
+
+
+@internal.get("/grades", response_model=list[grading.GradeView], response_model_by_alias=True)
+async def internal_grades(request: Request, caller: Caller, mock: str, user: str) -> list[grading.GradeView]:
+    """For core, which decides on a suggestion and must see exactly what ai suggested."""
+    return await grading.list_grades(deps(request), user, mock)

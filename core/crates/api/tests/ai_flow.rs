@@ -91,3 +91,114 @@ async fn gate_materials_and_context() {
     assert_eq!(r.status, StatusCode::NOT_FOUND);
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn ai_grading_decisions() {
+    use crux_clients::ai::GradeSuggestion;
+    let Some(h) = common::harness().await else { return };
+    let (t, me, _) = signup(&h.app, &h.t.ctx, "gus").await;
+    let me = me["id"].as_str().unwrap().to_string();
+    let course = call(&h.app, "POST", "/courses", Some(&t), Some(json!({"name": "Stats", "code": "ST"})), &[]).await.json["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let l1 = call(&h.app, "POST", &format!("/courses/{course}/components"), Some(&t), Some(json!({"code": "L1", "name": "Intro"})), &[])
+        .await
+        .json["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    for p in ["Explain residuals.", "Define variance."] {
+        let r = call(
+            &h.app,
+            "POST",
+            &format!("/courses/{course}/questions"),
+            Some(&t),
+            Some(json!({
+                "componentId": l1, "type": "Open", "content": {"prompt": p, "open": {"modelAnswer": "Observed minus fitted."}}
+            })),
+            &[],
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::CREATED, "{}", r.json);
+    }
+    h.t.ai.set(&me, "Grading", None);
+    let mock = call(&h.app, "POST", &format!("/courses/{course}/mocks"), Some(&t), Some(json!({"gradingMode": "AI"})), &[]).await;
+    assert_eq!(mock.status, StatusCode::CREATED, "{}", mock.json);
+    let mid = mock.json["id"].as_str().unwrap().to_string();
+    call(&h.app, "POST", &format!("/mocks/{mid}/start"), Some(&t), None, &[]).await;
+    for o in [1, 2] {
+        call(
+            &h.app,
+            "PUT",
+            &format!("/mocks/{mid}/questions/{o}/answer"),
+            Some(&t),
+            Some(json!({"text": "Observed minus predicted"})),
+            &[],
+        )
+        .await;
+    }
+    let sub = call(&h.app, "POST", &format!("/mocks/{mid}/submit"), Some(&t), None, &[]).await;
+    assert_eq!(sub.json["status"], "Grading", "{}", sub.json);
+    let topics = crux_testkit::outbox_topics(&h.db.pool).await;
+    assert!(topics.contains(&"mock.submitted".to_string()));
+
+    let g = |id: &str, order: i32| GradeSuggestion {
+        id: id.into(),
+        order,
+        outcome: "Partial".into(),
+        grade: 0.5,
+        max_grade: 1.0,
+        status: "Pending".into(),
+    };
+    h.t.ai.set_grades(&mid, vec![g("01AIGRADE00000000000000001", 1), g("01AIGRADE00000000000000002", 2)]);
+    let wrong = call(
+        &h.app,
+        "POST",
+        &format!("/mocks/{mid}/questions/2/ai-grade/accept"),
+        Some(&t),
+        Some(json!({"gradeId": "01AIGRADE00000000000000001"})),
+        &[],
+    )
+    .await;
+    assert_eq!(wrong.status, StatusCode::NOT_FOUND, "a suggestion for another item");
+    let r = call(
+        &h.app,
+        "POST",
+        &format!("/mocks/{mid}/questions/1/ai-grade/accept"),
+        Some(&t),
+        Some(json!({"gradeId": "01AIGRADE00000000000000001"})),
+        &[],
+    )
+    .await;
+    assert_eq!((r.status, r.json["items"][0]["gradedBy"].as_str()), (StatusCode::OK, Some("AI")), "{}", r.json);
+    let r = call(
+        &h.app,
+        "POST",
+        &format!("/mocks/{mid}/questions/2/ai-grade/override"),
+        Some(&t),
+        Some(json!({"gradeId": "01AIGRADE00000000000000002"})),
+        &[],
+    )
+    .await;
+    assert_eq!(r.status, StatusCode::UNPROCESSABLE_ENTITY, "override needs an outcome");
+    let r = call(
+        &h.app,
+        "POST",
+        &format!("/mocks/{mid}/questions/2/ai-grade/override"),
+        Some(&t),
+        Some(json!({"gradeId": "01AIGRADE00000000000000002", "outcome": "Right"})),
+        &[],
+    )
+    .await;
+    assert_eq!((r.json["status"].as_str(), r.json["items"][1]["gradedBy"].as_str()), (Some("Graded"), Some("Self")), "{}", r.json);
+    let decided = crux_testkit::outbox_topics(&h.db.pool).await.iter().filter(|t| *t == "mock.ai_grade_decided").count();
+    assert_eq!(decided, 2);
+
+    // ai asks core whether the user may open the mock.
+    let svc = h.t.ctx.keys.sign_service("ai", "core", h.t.ctx.clock.now().timestamp());
+    let auth = format!("Bearer {svc}");
+    let r = call(&h.app, "GET", &format!("/internal/v1/mocks/{mid}/open?user={me}"), None, None, &[("authorization", auth.as_str())]).await;
+    assert_eq!(r.json["status"], "Graded");
+    h.db.drop_db().await;
+}

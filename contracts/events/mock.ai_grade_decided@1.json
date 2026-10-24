@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/mock.ai_grade_decided@1",
+  "title": "mock.ai_grade_decided v1 payload",
+  "description": "core -> ai: the user accepted, overrode or rejected a suggestion (spec 15 ai-grade routes).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "gradeRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "mockRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "userRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "Accepted",
+        "Overridden",
+        "Rejected"
+      ]
+    }
+  },
+  "required": [
+    "gradeRef",
+    "mockRef",
+    "userRef",
+    "order",
+    "decision"
+  ]
+}

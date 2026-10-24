@@ -16,8 +16,22 @@ pub struct Allowed {
     pub reason: Option<String>,
 }
 
+/// A grading suggestion as ai stores it (spec 7.5). Core owns the grade; this is only advice.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GradeSuggestion {
+    pub id: String,
+    pub order: i32,
+    pub outcome: String,
+    pub grade: f64,
+    pub max_grade: f64,
+    pub status: String,
+}
+
 #[async_trait]
 pub trait AiApi: Send + Sync {
+    /// The user's suggestions for a mock (`GET /internal/v1/grades?mock=&user=`).
+    async fn grades(&self, service_token: &str, user_ref: &str, mock_ref: &str) -> Result<Vec<GradeSuggestion>, ClientError>;
     async fn allowed(
         &self,
         service_token: &str,
@@ -46,6 +60,19 @@ impl HttpAi {
 
 #[async_trait]
 impl AiApi for HttpAi {
+    async fn grades(&self, service_token: &str, user_ref: &str, mock_ref: &str) -> Result<Vec<GradeSuggestion>, ClientError> {
+        let resp = self
+            .http
+            .get(format!("{}/internal/v1/grades", self.base))
+            .bearer_auth(service_token)
+            .header("x-on-behalf-of", user_ref)
+            .query(&[("mock", mock_ref), ("user", user_ref)])
+            .send()
+            .await?
+            .error_for_status()?;
+        Ok(resp.json().await?)
+    }
+
     async fn allowed(
         &self,
         service_token: &str,
@@ -75,9 +102,14 @@ impl AiApi for HttpAi {
 #[derive(Default)]
 pub struct MemoryAi {
     answers: Mutex<HashMap<(String, String), Option<String>>>,
+    suggestions: Mutex<HashMap<String, Vec<GradeSuggestion>>>,
 }
 
 impl MemoryAi {
+    pub fn set_grades(&self, mock_ref: &str, grades: Vec<GradeSuggestion>) {
+        self.suggestions.lock().unwrap().insert(mock_ref.into(), grades);
+    }
+
     pub fn set(&self, user_ref: &str, feature: &str, reason: Option<&str>) {
         self.answers.lock().unwrap().insert((user_ref.into(), feature.into()), reason.map(String::from));
     }
@@ -85,6 +117,10 @@ impl MemoryAi {
 
 #[async_trait]
 impl AiApi for MemoryAi {
+    async fn grades(&self, _service_token: &str, _user_ref: &str, mock_ref: &str) -> Result<Vec<GradeSuggestion>, ClientError> {
+        Ok(self.suggestions.lock().unwrap().get(mock_ref).cloned().unwrap_or_default())
+    }
+
     async fn allowed(
         &self,
         _service_token: &str,

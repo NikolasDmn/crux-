@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/ai.grade_suggested@1",
+  "title": "ai.grade_suggested v1 payload",
+  "description": "ai -> anyone: a grading suggestion is ready (Pending until the user decides in core).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "gradeRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "mockRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "userRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "order": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "Right",
+        "Partial",
+        "Wrong",
+        "Blank"
+      ]
+    },
+    "grade": {
+      "type": "number",
+      "minimum": 0
+    },
+    "maxGrade": {
+      "type": "number",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "gradeRef",
+    "mockRef",
+    "userRef",
+    "order",
+    "outcome",
+    "grade",
+    "maxGrade"
+  ]
+}

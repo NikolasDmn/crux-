@@ -127,6 +127,12 @@ async def test_chat_with_context_citations_and_rules() -> None:
         full = await chat.get_conversation(deps, USER, conv.id)
         assert [m.role for m in full.messages or []] == ["User", "Assistant"]
         assert full.messages and full.messages[1].citations[0].page == 1
+        used = full.messages[1].context_used or {}
+        assert used == out[-1][1]["contextUsed"], "stored as streamed"
+        assert used["pages"][0]["fileId"] == FILE and used["weakSpots"] == [
+            {"id": "01WEAKSPOT0000000000000001", "label": "Variance"}
+        ]
+        assert "mistakes" in used["shared"] and full.messages[0].context_used is None
         async with deps.sessions() as s:
             r = (await s.execute(select(run))).one()
             logged = {(x.EntityType, x.EntityRef) for x in await s.execute(select(run_context))}

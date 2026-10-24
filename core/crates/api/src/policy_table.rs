@@ -146,6 +146,7 @@ pub const ROUTES: &[(&str, &str, Policy)] = &[
     ("PUT", "/deadlines/{id}/layout", Policy::Mine),
     ("GET", "/plan", Policy::Owns),
     ("POST", "/plan/rebuild", Policy::Owns),
+    ("GET", "/plan/short", Policy::Owns),
     ("POST", "/plan/entries", Policy::Owns),
     ("PATCH", "/plan/entries/{id}", Policy::Mine),
     ("DELETE", "/plan/entries/{id}", Policy::Mine),

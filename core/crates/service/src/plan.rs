@@ -66,8 +66,32 @@ impl From<&EntryRow> for PlanEntryView {
 pub struct RebuildView {
     /// One line, e.g. "14 sessions planned through Mon 16 Nov (3 new or moved); 1 pinned kept".
     pub change_summary: String,
+    /// Courses whose lectures don't all fit before their final week (also in the summary).
+    pub short: Vec<ShortView>,
     /// The plan from now on.
     pub entries: Vec<PlanEntryView>,
+}
+
+/// A course whose remaining lecture hours don't fit before its final week (spec 5.8).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ShortView {
+    pub course_id: String,
+    pub course_code: String,
+    /// Lecture hours that land in the final week or don't fit at all.
+    pub hours: f64,
+}
+
+async fn short_views(conn: &mut MySqlConnection, short: &[(i64, f64)], codes: &HashMap<i64, String>) -> AppResult<Vec<ShortView>> {
+    let mut out = Vec::new();
+    for (course_id, hours) in short {
+        out.push(ShortView {
+            course_id: crux_repo::courses::public_id_of(conn, *course_id).await?,
+            course_code: codes.get(course_id).cloned().unwrap_or_default(),
+            hours: (hours * 10.0).round() / 10.0,
+        });
+    }
+    Ok(out)
 }
 
 struct Prefs {
@@ -186,7 +210,18 @@ pub async fn rebuild_in(conn: &mut MySqlConnection, ctx: &Ctx, user_id: i64) -> 
     }
     let summary = plan::change_summary(&before, &built, input.busy.len(), p.tz, &codes);
     let entries = repo::between(conn, user_id, now, now + Duration::days(plan::MAX_HORIZON_DAYS)).await?;
-    Ok(RebuildView { change_summary: summary, entries: entries.iter().map(PlanEntryView::from).collect() })
+    let short = short_views(conn, &built.short, &codes).await?;
+    Ok(RebuildView { change_summary: summary, short, entries: entries.iter().map(PlanEntryView::from).collect() })
+}
+
+/// `GET /plan/short`: what a rebuild would report short right now, without changing the plan
+/// (Home and the plan screen show it as a warning).
+pub async fn short(ctx: &Ctx, actor: &Actor) -> AppResult<Vec<ShortView>> {
+    let mut conn = ctx.pool.acquire().await?;
+    let p = prefs(&mut conn, actor.user_id).await?;
+    let (input, codes) = input(&mut conn, actor.user_id, ctx.clock.now(), &p).await?;
+    let built = plan::build(&input);
+    short_views(&mut conn, &built.short, &codes).await
 }
 
 pub async fn rebuild(ctx: &Ctx, actor: &Actor) -> AppResult<RebuildView> {

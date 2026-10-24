@@ -60,6 +60,9 @@ class MessageView(Camel):
     feedback: str | None
     #: The model that wrote this reply when it wasn't the one picked (a refusal fallback, B8-2).
     served_by: str | None = None
+    #: Assistant replies: what the model saw — `{pages:[{fileId,page,quote}], weakSpots, slips,
+    #: traps:[{id,label}], questionId, shared:[progress|mistakes|answers]}` (frontend 5.5).
+    context_used: dict[str, Any] | None = None
     created_at: str
     citations: list[CitationView]
 
@@ -181,6 +184,7 @@ async def _messages(s: Any, conv_id: int) -> list[MessageView]:
             anchor=m.Anchor,
             feedback=m.Feedback,
             served_by=m.ServedByModel,
+            context_used=m.ContextUsed,
             created_at=iso(m.CreatedAt) if m.CreatedAt else "",
             citations=cites.get(m.Id, []),
         )
@@ -333,6 +337,7 @@ async def prepare(deps: Deps, user: Principal, conv_ref: str, inp: SendInput) ->
     if conv.QuestionRef and "answers" in user_data:
         context_log.append(("core.Question", conv.QuestionRef))
     return {
+        "context_used": context_used(chunks, user_data, conv.QuestionRef),
         "conv": conv,
         "gate": g,
         "run_id": run_id,
@@ -355,6 +360,20 @@ async def _complete(deps: Deps, g: runtime.Gate, system: str, messages: list[dic
         else:
             text += chunk
     return text, used
+
+
+def context_used(chunks: list[prompt.Chunk], user_data: dict[str, Any], question_ref: str | None) -> dict[str, Any]:
+    """What the model saw, for the panel's "Context used" list (frontend 5.5): the material pages
+    with a short quote, the mistakes it was given, and which of your data scopes were shared."""
+    mistakes = user_data.get("mistakes") or {}
+    return {
+        "pages": [{"fileId": c.file_ref, "page": c.page_no, "quote": c.text[:160]} for c in chunks],
+        "weakSpots": [{"id": x["id"], "label": x.get("topic")} for x in mistakes.get("weakSpots", []) if x.get("id")],
+        "slips": [{"id": x["id"], "label": x.get("description")} for x in mistakes.get("slips", []) if x.get("id")],
+        "traps": [{"id": x["id"], "label": x.get("text")} for x in mistakes.get("traps", []) if x.get("id")],
+        "questionId": question_ref if "answers" in user_data else None,
+        "shared": sorted(user_data),
+    }
 
 
 async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[str, Any]) -> AsyncIterator[str]:
@@ -421,6 +440,7 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
                     Content=reply,
                     AiRunId=run_id,
                     ServedByModel=total.served_by,
+                    ContextUsed=prep["context_used"],
                     CreatedAt=utcnow(),
                 )
             )
@@ -442,7 +462,15 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
         cost = await runtime.finish_run(
             deps, run_id, total, transcript_ref=transcript_ref, retain_days=deps.settings.transcript_days
         )
-        yield event("done", {"messageId": msg_id, "costMicroUsd": cost, "servedBy": total.served_by})
+        yield event(
+            "done",
+            {
+                "messageId": msg_id,
+                "costMicroUsd": cost,
+                "servedBy": total.served_by,
+                "contextUsed": prep["context_used"],
+            },
+        )
     except LlmError as e:
         await runtime.finish_run(deps, run_id, total, error=str(e))
         yield event("error", {"code": "provider_auth" if e.auth else "provider_error", "message": str(e)})

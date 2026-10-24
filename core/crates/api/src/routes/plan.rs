@@ -4,7 +4,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use crux_service::next::{self, AdvanceInput, NextView, WarmupItem};
-use crux_service::plan::{self, EntryInput, EntryPatch, PlanEntryView, PlanQuery, RebuildView};
+use crux_service::plan::{self, EntryInput, EntryPatch, PlanEntryView, PlanQuery, RebuildView, ShortView};
 
 use crate::error::{ApiResult, ErrorBody};
 use crate::extract::{Auth, IfMatch, JsonBody};
@@ -20,6 +20,12 @@ pub async fn list(State(s): State<AppState>, Auth(a): Auth, Query(q): Query<Plan
 #[utoipa::path(post, path = "/plan/rebuild", tag = "plan", security(("bearer" = [])), responses((status = 200, body = RebuildView)))]
 pub async fn rebuild(State(s): State<AppState>, Auth(a): Auth) -> ApiResult<Json<RebuildView>> {
     Ok(Json(plan::rebuild(&s.ctx, &a).await?))
+}
+
+/// Courses whose lectures don't fit before their final week, as a rebuild now would say (no change).
+#[utoipa::path(get, path = "/plan/short", tag = "plan", security(("bearer" = [])), responses((status = 200, body = Vec<ShortView>)))]
+pub async fn short(State(s): State<AppState>, Auth(a): Auth) -> ApiResult<Json<Vec<ShortView>>> {
+    Ok(Json(plan::short(&s.ctx, &a).await?))
 }
 
 /// Add your own entry (pinned).

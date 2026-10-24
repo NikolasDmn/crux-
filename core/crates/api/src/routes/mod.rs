@@ -116,6 +116,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(deadlines::layout))
         .routes(routes!(plan::list))
         .routes(routes!(plan::rebuild))
+        .routes(routes!(plan::short))
         .routes(routes!(plan::create_entry))
         .routes(routes!(plan::patch_entry, plan::delete_entry))
         .routes(routes!(plan::next))

@@ -411,3 +411,24 @@ async fn the_study_window_setting_re_lays_the_plan() {
     }
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn the_plan_reports_lecture_hours_that_dont_fit() {
+    let Some(h) = common::harness().await else { return };
+    let (t, _, _) = signup(&h.app, &h.t.ctx, "shorty").await;
+    let course =
+        ok(&h, "POST", "/courses", &t, Some(json!({"name": "Crammed", "code": "CRM"})), &[]).await["id"].as_str().unwrap().to_string();
+    ok(&h, "POST", &format!("/courses/{course}/components"), &t, Some(json!({"code": "L1", "name": "Everything", "estHours": 40.0})), &[])
+        .await;
+    assert_eq!(ok(&h, "GET", "/plan/short", &t, None, &[]).await, json!([]), "no exam: 14 days of 4 h fit 40 h");
+    // An exam in 9 days: 2 days before the final week at 4 h/day, so most of the 40 h is short.
+    ok(&h, "POST", &format!("/courses/{course}/deadlines"), &t, Some(json!({"type": "Exam", "startsAt": at(&h, Duration::days(9))})), &[])
+        .await;
+    let short = ok(&h, "GET", "/plan/short", &t, None, &[]).await;
+    assert_eq!((short[0]["courseId"].as_str(), short[0]["courseCode"].as_str()), (Some(course.as_str()), Some("CRM")), "{short}");
+    let hours = short[0]["hours"].as_f64().unwrap();
+    let rebuilt = ok(&h, "POST", "/plan/rebuild", &t, None, &[]).await;
+    assert_eq!(rebuilt["short"][0]["hours"].as_f64(), Some(hours), "the rebuild says the same: {rebuilt}");
+    assert!(hours > 20.0 && rebuilt["changeSummary"].as_str().unwrap().contains("h short"), "{rebuilt}");
+    h.db.drop_db().await;
+}

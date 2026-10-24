@@ -172,6 +172,7 @@ message = Table(
     Column("AiRunId", BigInteger),
     Column("Feedback", String(8)),
     Column("ServedByModel", String(64)),
+    Column("ContextUsed", JSON),
     Column("CreatedAt", DateTime),
 )
 

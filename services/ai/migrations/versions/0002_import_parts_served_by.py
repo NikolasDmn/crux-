@@ -1,5 +1,6 @@
 """Large imports are read in parts (B8-16): how many, and whether text was left out. A chat reply
-records the model that wrote it when a refusal fallback took over (B8-2).
+records the model that wrote it when a refusal fallback took over (B8-2), and what it was given
+("Context used" in the chat panel).
 
 Revision ID: 0002
 """
@@ -17,7 +18,10 @@ def upgrade() -> None:
         "ALTER TABLE CourseImport ADD COLUMN Parts SMALLINT NULL AFTER AiRunId, "
         "ADD COLUMN Truncated BOOLEAN NOT NULL DEFAULT FALSE AFTER Parts"
     )
-    op.get_bind().exec_driver_sql("ALTER TABLE AiMessage ADD COLUMN ServedByModel VARCHAR(64) NULL AFTER Feedback")
+    op.get_bind().exec_driver_sql(
+        "ALTER TABLE AiMessage ADD COLUMN ServedByModel VARCHAR(64) NULL AFTER Feedback, "
+        "ADD COLUMN ContextUsed JSON NULL AFTER ServedByModel"
+    )
 
 
 def downgrade() -> None:

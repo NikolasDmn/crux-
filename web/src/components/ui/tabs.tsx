@@ -8,7 +8,9 @@ export const Tabs = R.Root;
 export const TabPanel = R.Content;
 
 export function TabList({ className, ...p }: ComponentProps<typeof R.List>) {
-  return <R.List className={cn("flex gap-6 overflow-x-auto border-b border-border", className)} {...p} />;
+  return (
+    <R.List className={cn("flex gap-6 overflow-x-auto overflow-y-hidden border-b border-border", className)} {...p} />
+  );
 }
 
 export function Tab({ className, ...p }: ComponentProps<typeof R.Trigger>) {

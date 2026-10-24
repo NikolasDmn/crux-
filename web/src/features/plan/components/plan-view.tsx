@@ -11,6 +11,7 @@ import { useCourses, useDeadlines, useNextExams } from "@/features/courses/api";
 import { usePlan, useRebuild, useSettings, useShort, type PlanEntry } from "@/features/plan/api";
 import { EntryDialog, type Draft } from "@/features/plan/components/entry-dialog";
 import { WeekCalendar } from "@/features/plan/components/week-calendar";
+import { hours } from "@/features/week/lib/summary";
 import { dayKey, isoWeekOf, parseIsoWeek, shiftWeek, studyWindow, weekDays, weekStart } from "@/features/plan/lib/week";
 import { messageFor } from "@/lib/errors";
 import { formatInZone } from "@/lib/time";
@@ -94,8 +95,8 @@ export function PlanView({
       {rebuild.error ? <Banner tone="danger">{messageFor(rebuild.error)}</Banner> : null}
       {warnings.map((s) => (
         <Banner key={s.courseId} tone="warning">
-          {s.courseCode} is {Math.ceil(s.hours)} h short: some lectures land in the final week or don't fit before the
-          exam. Widen your study window or daily hours in Settings, or drop a lecture.
+          {s.courseCode} is {hours(s.hours)} short: some lectures land in the final week or don't fit before the exam.
+          Widen your study window or daily hours in Settings, or drop a lecture.
         </Banner>
       ))}
       {plan.isPending ? (

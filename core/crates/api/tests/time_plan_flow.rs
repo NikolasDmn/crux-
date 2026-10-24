@@ -432,3 +432,40 @@ async fn the_plan_reports_lecture_hours_that_dont_fit() {
     assert!(hours > 20.0 && rebuilt["changeSummary"].as_str().unwrap().contains("h short"), "{rebuilt}");
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn a_rebuild_works_around_the_session_under_way() {
+    let Some(h) = common::harness().await else { return };
+    let (t, _, _) = signup(&h.app, &h.t.ctx, "midway").await;
+    let course =
+        ok(&h, "POST", "/courses", &t, Some(json!({"name": "Midway", "code": "MID"})), &[]).await["id"].as_str().unwrap().to_string();
+    for (code, hours) in [("L1", 3.0), ("L2", 3.0)] {
+        ok(&h, "POST", &format!("/courses/{course}/components"), &t, Some(json!({"code": code, "name": code, "estHours": hours})), &[])
+            .await;
+    }
+    ok(&h, "POST", &format!("/courses/{course}/deadlines"), &t, Some(json!({"type": "Exam", "startsAt": at(&h, Duration::days(10))})), &[])
+        .await;
+    let window = |h: &common::Harness| format!("/plan?from={}&to={}", at(h, Duration::days(-1)), at(h, Duration::days(10)));
+    let plan = ok(&h, "GET", &window(&h), &t, None, &[]).await;
+    let first = plan.as_array().unwrap().iter().find(|e| e["status"] == "Planned").expect("a planned session").clone();
+    let start = chrono::DateTime::parse_from_rfc3339(first["startAt"].as_str().unwrap()).unwrap().with_timezone(&Utc);
+
+    // Half an hour into that session, rebuild: it is neither replaced (it started) nor planned over.
+    h.t.clock.set(start + Duration::minutes(30));
+    let t = login(&h, "midway").await;
+    ok(&h, "POST", "/plan/rebuild", &t, None, &[]).await;
+    let plan = ok(&h, "GET", &window(&h), &t, None, &[]).await;
+    let mut spans: Vec<(String, String, String)> = plan
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|e| e["status"] == "Planned")
+        .map(|e| (e["startAt"].as_str().unwrap().into(), e["endAt"].as_str().unwrap().into(), e["description"].as_str().unwrap().into()))
+        .collect();
+    spans.sort();
+    assert!(spans.iter().any(|s| s.0 == first["startAt"].as_str().unwrap()), "the session under way stays: {spans:?}");
+    for w in spans.windows(2) {
+        assert!(w[0].1 <= w[1].0, "{} overlaps {}", w[0].2, w[1].2);
+    }
+    h.db.drop_db().await;
+}

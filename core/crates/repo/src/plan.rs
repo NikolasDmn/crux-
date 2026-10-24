@@ -135,12 +135,14 @@ pub async fn replaceable_from(conn: &mut MySqlConnection, user_id: i64, from: Da
     .await?)
 }
 
-/// Pinned, still-planned time from `from` on: the planner works around it.
+/// Still-planned time from `from` on that a rebuild keeps, so the planner works around it: pinned and
+/// your own entries, and a planner session already under way (it started, so it isn't replaced).
 pub async fn busy_from(conn: &mut MySqlConnection, user_id: i64, from: DateTime<Utc>) -> RepoResult<Vec<(DateTime<Utc>, DateTime<Utc>)>> {
     Ok(sqlx::query_as(
-        "SELECT StartAt, EndAt FROM StudyPlanEntry WHERE UserId = ? AND EndAt > ? AND Status = 'Planned' AND (PinnedAt IS NOT NULL OR CreatedBy <> 'Planner')",
+        "SELECT StartAt, EndAt FROM StudyPlanEntry WHERE UserId = ? AND EndAt > ? AND Status = 'Planned' AND (PinnedAt IS NOT NULL OR CreatedBy <> 'Planner' OR StartAt < ?)",
     )
     .bind(user_id)
+    .bind(from)
     .bind(from)
     .fetch_all(conn)
     .await?)

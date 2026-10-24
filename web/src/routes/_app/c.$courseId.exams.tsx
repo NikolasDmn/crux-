@@ -134,7 +134,10 @@ function DeadlineRow({ d, onOpen, canAct }: { d: Deadline; onOpen: (o: Open) => 
         <Badge kind="status">{d.type}</Badge>
         <span className="font-medium">{deadlineName(d)}</span>
         {d.status !== "Upcoming" ? (
-          <Badge kind="status" tone={STATUS_TONE[d.status as keyof typeof STATUS_TONE] ?? "neutral"}>
+          <Badge
+            kind="status"
+            tone={d.passed === false ? "danger" : (STATUS_TONE[d.status as keyof typeof STATUS_TONE] ?? "neutral")}
+          >
             {d.status === "Done" && d.passed === true
               ? "Passed"
               : d.status === "Done" && d.passed === false

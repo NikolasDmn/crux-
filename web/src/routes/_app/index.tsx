@@ -162,7 +162,7 @@ function Dashboard({ live }: { live: Course[] }) {
             </Button>
           }
         >
-          {s.courseCode} is {Math.ceil(s.hours)} h short before the exam.
+          {s.courseCode} is {hours(s.hours)} short before the exam.
         </Banner>
       ))}
       <div className="grid gap-4 lg:grid-cols-2">

@@ -56,7 +56,10 @@ function CourseLayout() {
         ) : (
           <Skeleton className="h-7 w-72" />
         )}
-        <nav aria-label="Course" className="-mx-1 flex gap-5 overflow-x-auto border-b border-border px-1">
+        <nav
+          aria-label="Course"
+          className="-mx-1 flex gap-5 overflow-x-auto overflow-y-hidden border-b border-border px-1"
+        >
           {TABS.map((t) => (
             <Link
               key={t.to}

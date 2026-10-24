@@ -129,7 +129,15 @@ export function PdfViewer({
 
   useEffect(() => {
     let live = true;
-    const task = pdfjs.getDocument({ url, isEvalSupported: false, disableFontFace: true });
+    const task = pdfjs.getDocument({
+      url,
+      isEvalSupported: false,
+      disableFontFace: true,
+      // Same-origin copies (vite.config.ts): fonts a PDF doesn't embed, and CJK character maps.
+      standardFontDataUrl: "/pdfjs/standard_fonts/",
+      cMapUrl: "/pdfjs/cmaps/",
+      cMapPacked: true,
+    });
     task.promise.then(
       (d) => live && setDoc(d),
       () => live && setError("This PDF couldn't be opened."),

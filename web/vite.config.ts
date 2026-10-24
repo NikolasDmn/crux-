@@ -1,13 +1,49 @@
 /// <reference types="vitest/config" />
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 // Dev: `npm run dev` proxies the API to the gateway (the compose stack), so cookies and SSE work
 // same-origin, as in production where the gateway serves `dist/` (frontend-spec 0).
 const gateway = process.env.CRUX_GATEWAY ?? "http://localhost:8000";
+
+// pdf.js draws non-embedded fonts (Helvetica, Times…) from its standard font data, and CJK text
+// needs its character maps. With font faces off (CSP), a PDF without them renders blank. Served at
+// /pdfjs/ in dev and emitted into dist/pdfjs/ by the build.
+function pdfjsAssets(): Plugin {
+  const root = fileURLToPath(new URL("./node_modules/pdfjs-dist/", import.meta.url));
+  const dirs = ["standard_fonts", "cmaps"];
+  return {
+    name: "crux-pdfjs-assets",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const m = /^\/pdfjs\/(standard_fonts|cmaps)\/([\w.-]+)$/.exec(req.url ?? "");
+        if (!m) return next();
+        try {
+          res.end(readFileSync(join(root, m[1]!, m[2]!)));
+        } catch {
+          next();
+        }
+      });
+    },
+    generateBundle() {
+      for (const dir of dirs) {
+        for (const name of readdirSync(join(root, dir))) {
+          if (name.startsWith("LICENSE")) continue;
+          this.emitFile({
+            type: "asset",
+            fileName: `pdfjs/${dir}/${name}`,
+            source: readFileSync(join(root, dir, name)),
+          });
+        }
+      }
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
@@ -19,6 +55,7 @@ export default defineConfig({
     }),
     react(),
     tailwindcss(),
+    pdfjsAssets(),
   ],
   resolve: {
     alias: [

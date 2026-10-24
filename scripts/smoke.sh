@@ -2,7 +2,7 @@
 # Smoke test against a running stack: health of every service through the gateway, signup with an
 # invite, /me, user.created reaching files and notify (M1); then a course with a lecture, a PDF
 # uploaded to its pre-signed URL through the gateway, scanned, extracted, attached as a material,
-# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5).
+# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5); a live inbox notification (M6).
 # Usage: scripts/smoke.sh [base-url]   (default http://localhost:8000)
 set -euo pipefail
 
@@ -112,3 +112,27 @@ reason=$(api GET /next | j '["reason"]')
 case "$reason" in SMK*) ;; *) fail "/next reason: $reason" ;; esac
 api GET /week | grep -q '"isoWeek"' || fail "/week"
 echo "ok   exam planned ($planned entries), event accepted, /next: $reason"
+
+# ---------- milestone 6 ----------
+# A second user listens on the inbox stream; sharing the course with them arrives as a live
+# `notification` (course.shared is always in-app) and lands in their inbox.
+code2=$($COMPOSE exec -T core crux-core create-invite | tr -d '\r')
+user2="${user}b"
+body2=$(printf '{"inviteCode":"%s","email":"%s@example.com","username":"%s","firstName":"Smoke","lastName":"Two","password":"correct horse battery","timeZone":"Europe/Amsterdam"}' "$code2" "$user2" "$user2")
+token2=$(curl -fsS -X POST "$BASE/api/v1/auth/signup" -H 'content-type: application/json' -d "$body2" | j '["accessToken"]')
+ticket=$(curl -fsS -X POST "$BASE/api/v1/sse-ticket" -H "authorization: Bearer $token2" | j '["ticket"]')
+stream_out=$(mktemp)
+curl -sN --max-time 20 "$BASE/api/v1/notify/stream?ticket=$ticket" > "$stream_out" &
+stream_pid=$!
+for _ in $(seq 1 20); do grep -q '^event: ready' "$stream_out" && break; sleep 0.5; done
+grep -q '^event: ready' "$stream_out" || fail "inbox stream did not open through the gateway"
+api POST "/courses/$course/members" "{\"usernameOrEmail\":\"$user2\",\"role\":\"Viewer\"}" >/dev/null || fail "share"
+for _ in $(seq 1 30); do grep -q '^event: notification' "$stream_out" && break; sleep 0.5; done
+grep -q '^event: notification' "$stream_out" || fail "no live notification within 15 s"
+kill "$stream_pid" 2>/dev/null || true
+kind=$(curl -fsS "$BASE/api/v1/notify/inbox" -H "authorization: Bearer $token2" | j '["items"][0]["kind"]')
+[ "$kind" = course.shared ] || fail "inbox: $kind"
+prefs=$(curl -fsS -X PUT "$BASE/api/v1/notify/preferences" -H "authorization: Bearer $token2" -H 'content-type: application/json' \
+    -d '{"preferences":[{"kind":"flash.due","channel":"Email","enabled":true}]}' | python3 -c "import json,sys; print([k['email'] for k in json.load(sys.stdin)['kinds'] if k['kind']=='flash.due'][0])")
+[ "$prefs" = True ] || fail "preferences: $prefs"
+echo "ok   live inbox notification through the gateway, inbox, preferences"

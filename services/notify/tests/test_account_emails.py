@@ -21,6 +21,14 @@ USER = "01TEST00000000000000000001"
 NOW = datetime(2026, 10, 23, 12, 0, 0)
 
 
+class Config:
+    app_base_url = "http://crux.test"
+    unsubscribe_secret = "test-secret"
+
+
+CONFIG = Config()
+
+
 def test_backoff_is_1m_10m_1h_then_failed() -> None:
     assert rules.next_attempt(1, NOW) == NOW + timedelta(minutes=1)
     assert rules.next_attempt(2, NOW) == NOW + timedelta(minutes=10)
@@ -89,27 +97,27 @@ async def test_verify_email_is_sent_once_and_retried_on_failure() -> None:
         )
 
         flaky = FakeMailer(fail_times=1)
-        assert await dispatch_once(sessions, flaky) == 0
+        assert await dispatch_once(sessions, flaky, CONFIG) == 0
         async with sessions() as s:
             row = (await s.execute(select(delivery))).one()
         assert (row.Status, row.Attempts) == ("Pending", 1)
         assert row.NextAttemptAt is not None and "smtp down" in row.LastError
 
         # Not due yet: nothing happens until the backoff passes.
-        assert await dispatch_once(sessions, flaky) == 0
+        assert await dispatch_once(sessions, flaky, CONFIG) == 0
         async with sessions() as s, s.begin():
             await s.execute(delivery.update().values(NextAttemptAt=datetime(2020, 1, 1)))
-        assert await dispatch_once(sessions, flaky) == 1
+        assert await dispatch_once(sessions, flaky, CONFIG) == 1
         assert flaky.sent[0][0] == "a@b.nl" and "token=abc" in flaky.sent[0][2]
-        assert await dispatch_once(sessions, flaky) == 0, "sent once"
+        assert await dispatch_once(sessions, flaky, CONFIG) == 0, "sent once"
 
 
-async def test_non_transactional_kinds_are_recorded_not_sent() -> None:
+async def test_account_kinds_without_the_flag_are_not_sent() -> None:
     async with migrated_db(SERVICE_DIR, "notify") as sessions:
         h, c = NotifyRequestedHandler(), Contracts(CONTRACTS)
         await process(
             sessions, c, h, request("01TEST0000000000000000000C", "auth.verify_email", "k2", transactional=False)
         )
         mailer = FakeMailer()
-        assert await dispatch_once(sessions, mailer) == 0
+        assert await dispatch_once(sessions, mailer, CONFIG) == 0
         assert mailer.sent == []

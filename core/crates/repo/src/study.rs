@@ -305,3 +305,13 @@ pub async fn due_cards(conn: &mut MySqlConnection, user_id: i64, course_id: i64,
     .fetch_one(conn)
     .await?)
 }
+
+/// Users with at least one Active subscription to a live course (daily digests).
+pub async fn users_with_active_courses(conn: &mut MySqlConnection) -> RepoResult<Vec<(i64, String, String)>> {
+    Ok(sqlx::query_as(
+        "SELECT DISTINCT u.Id, u.PublicId, u.TimeZone FROM Users u JOIN CourseSubscription s ON s.UserId = u.Id JOIN Course c ON c.Id = s.CourseId \
+         WHERE s.Status = 'Active' AND c.ArchivedAt IS NULL",
+    )
+    .fetch_all(conn)
+    .await?)
+}

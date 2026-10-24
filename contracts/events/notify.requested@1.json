@@ -27,6 +27,10 @@
     },
     "payload": {
       "type": "object"
+    },
+    "cancel": {
+      "type": "boolean",
+      "description": "Cancel the pending notification with this dedupe key (optional: older consumers ignore it)."
     }
   },
   "required": [

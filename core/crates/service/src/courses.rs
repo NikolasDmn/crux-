@@ -459,7 +459,7 @@ pub async fn share(ctx: &Ctx, actor: &Actor, course_ref: &str, input: ShareInput
                 }
                 Some(_) => {}
                 None => {
-                    // In-app "course shared with you" (always shown in-app, spec 8; inbox arrives in milestone 6).
+                    // "Course shared with you": always shown in-app (spec 8), email if enabled.
                     emit(
                         &mut tx,
                         ctx,
@@ -470,7 +470,10 @@ pub async fn share(ctx: &Ctx, actor: &Actor, course_ref: &str, input: ShareInput
                             "kind": "course.shared",
                             "dedupeKey": format!("course.shared:{}:{}", c.public_id, u.public_id),
                             "dueAt": iso(ctx.clock.now()),
-                            "payload": { "courseRef": c.public_id, "courseName": c.name, "role": input.role, "byUsername": me.username },
+                            "payload": {
+                                "courseId": c.public_id, "courseName": c.name, "role": input.role,
+                                "inviterName": me.username, "byUsername": me.username,
+                            },
                         }),
                     )
                     .await?;

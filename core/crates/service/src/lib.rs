@@ -11,6 +11,7 @@ pub mod contracts;
 pub mod courses;
 pub mod ctx;
 pub mod deadlines;
+pub mod digests;
 pub mod error;
 pub mod events;
 pub mod flash;

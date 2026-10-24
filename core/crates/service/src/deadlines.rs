@@ -311,6 +311,7 @@ pub async fn patch(ctx: &Ctx, actor: &Actor, deadline_ref: &str, version: i32, i
     }
     repo::update(&mut tx, d.id, version, &m.write()).await?;
     let row = repo::by_id(&mut tx, d.id).await?.ok_or(AppError::NotFound)?;
+    reminders_after_edit(&mut tx, ctx, actor, &d, &row).await?;
     if row.status == "Done" && d.status != "Done" || row.grade_value != d.grade_value || row.grade_text != d.grade_text {
         record_result(&mut tx, actor, &row).await?;
     }
@@ -339,6 +340,55 @@ async fn record_result(conn: &mut MySqlConnection, actor: &Actor, d: &DeadlineRo
         None => {}
     }
     Ok(())
+}
+
+/// Spec 8 "a changed deadline sends a new request; the old one is cancelled by key": a moved exam
+/// re-requests the reminders already requested (notify moves the pending ones); an exam that is no
+/// longer Upcoming cancels them.
+async fn reminders_after_edit(
+    conn: &mut MySqlConnection,
+    ctx: &Ctx,
+    actor: &Actor,
+    before: &DeadlineRow,
+    after: &DeadlineRow,
+) -> AppResult<()> {
+    let dref = after.public_id.clone().unwrap_or_default();
+    let keys = [("exam.eve", format!("exam.eve:{dref}")), ("exam.checkin", format!("exam.checkin:{dref}"))];
+    if after.status != "Upcoming" && before.status == "Upcoming" {
+        for (kind, key) in &keys {
+            crate::events::emit(
+                conn,
+                ctx,
+                crux_domain::topics::NOTIFY_REQUESTED,
+                Some(&actor.public_id),
+                json!({ "userRef": actor.public_id, "kind": kind, "dedupeKey": key, "dueAt": iso(ctx.clock.now()), "payload": {}, "cancel": true }),
+            )
+            .await?;
+        }
+        return Ok(());
+    }
+    if after.starts_at != before.starts_at && after.status == "Upcoming" {
+        let tz: Tz = crux_repo::users::by_id(conn, actor.user_id)
+            .await?
+            .and_then(|u| u.time_zone.parse().ok())
+            .unwrap_or(chrono_tz::Europe::Amsterdam);
+        let (eve, check_in) = reminder_times(after.starts_at, tz);
+        let payload = reminder_payload(after);
+        if before.eve_requested_at.is_some() {
+            notify(conn, ctx, &actor.public_id, "exam.eve", &keys[0].1, eve, payload.clone()).await?;
+        }
+        if before.check_in_requested_at.is_some() {
+            notify(conn, ctx, &actor.public_id, "exam.checkin", &keys[1].1, check_in, payload).await?;
+        }
+    }
+    Ok(())
+}
+
+fn reminder_payload(d: &DeadlineRow) -> serde_json::Value {
+    json!({
+        "deadlineId": d.public_id.clone().unwrap_or_default(), "courseId": d.course_ref, "courseCode": d.course_code,
+        "title": d.title, "type": d.dtype, "startsAt": iso(d.starts_at), "durationMin": d.duration_min, "format": d.format,
+    })
 }
 
 /// Plan rebuild on any deadline change (spec 5.8).
@@ -426,10 +476,7 @@ pub async fn tick(ctx: &Ctx) -> anyhow::Result<u64> {
         let tz: Tz = user.time_zone.parse().unwrap_or(chrono_tz::Europe::Amsterdam);
         let (eve, check_in) = reminder_times(d.starts_at, tz);
         let dref = d.public_id.clone().unwrap_or_default();
-        let base = json!({
-            "deadlineId": dref, "courseId": d.course_ref, "courseCode": d.course_code,
-            "title": d.title, "type": d.dtype, "startsAt": iso(d.starts_at), "durationMin": d.duration_min, "format": d.format,
-        });
+        let base = reminder_payload(&d);
         if d.eve_requested_at.is_none() && now >= eve && now < d.starts_at {
             notify(&mut tx, ctx, &user.public_id, "exam.eve", &format!("exam.eve:{dref}"), eve, base.clone()).await?;
             repo::mark_eve(&mut tx, d.id, now).await?;
@@ -443,6 +490,7 @@ pub async fn tick(ctx: &Ctx) -> anyhow::Result<u64> {
     }
     tx.commit().await?;
     n += crate::plan::behind_check(ctx).await?;
+    n += crate::digests::tick(ctx).await.map_err(|e| anyhow::anyhow!("digests: {e}"))?;
     Ok(n)
 }
 

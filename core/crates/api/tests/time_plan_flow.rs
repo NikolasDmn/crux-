@@ -304,3 +304,72 @@ async fn plan_next_sessions_week_and_check_ins() {
     assert_eq!(crux_service::courses::purge_trashed(&h.t.ctx).await.unwrap(), 1);
     h.db.drop_db().await;
 }
+
+/// (kind, dedupeKey, cancel) of every notify.requested in the outbox, in order.
+async fn notify_requests(pool: &sqlx::MySqlPool) -> Vec<(String, String, bool)> {
+    sqlx::query_as(
+        "SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(Payload, '$.kind')) AS CHAR), CAST(JSON_UNQUOTE(JSON_EXTRACT(Payload, '$.dedupeKey')) AS CHAR), \
+         COALESCE(JSON_EXTRACT(Payload, '$.cancel') = TRUE, FALSE) FROM Outbox WHERE Topic = 'notify.requested' \
+         AND JSON_UNQUOTE(JSON_EXTRACT(Payload, '$.kind')) NOT LIKE 'auth.%' ORDER BY Id",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+#[tokio::test]
+async fn digests_and_reminder_changes() {
+    let Some(h) = common::harness().await else { return };
+    // Fri 23 Oct 2026 05:00 UTC = 07:00 Amsterdam.
+    h.t.clock.set(Utc.with_ymd_and_hms(2026, 10, 23, 5, 0, 0).unwrap());
+    let (t, _, _) = signup(&h.app, &h.t.ctx, "dora").await;
+    let course =
+        ok(&h, "POST", "/courses", &t, Some(json!({"name": "Stats", "code": "ST"})), &[]).await["id"].as_str().unwrap().to_string();
+    let l1 = ok(&h, "POST", &format!("/courses/{course}/components"), &t, Some(json!({"code": "L1", "name": "Intro", "estHours": 1})), &[])
+        .await["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let card =
+        ok(&h, "POST", &format!("/courses/{course}/flashcards"), &t, Some(json!({"componentId": l1, "front": "F", "back": "B"})), &[])
+            .await;
+    let review = json!({"reviews": [{"clientId": "01REVIEW000000000000000001", "flashcardId": card["id"], "rating": 3, "reviewedAt": "2026-10-20T08:00:00Z"}]});
+    ok(&h, "POST", "/flash/reviews", &t, Some(review), &[]).await;
+    let exam =
+        ok(&h, "POST", &format!("/courses/{course}/deadlines"), &t, Some(json!({"type": "Exam", "startsAt": "2026-10-24T08:00:00Z"})), &[])
+            .await;
+
+    let kinds = |v: &[(String, String, bool)]| v.iter().map(|r| r.0.clone()).collect::<Vec<_>>();
+    crux_service::deadlines::tick(&h.t.ctx).await.unwrap();
+    assert!(kinds(&notify_requests(&h.db.pool).await).is_empty(), "07:00: nothing yet");
+    h.t.clock.set(Utc.with_ymd_and_hms(2026, 10, 23, 6, 5, 0).unwrap()); // 08:05
+    crux_service::deadlines::tick(&h.t.ctx).await.unwrap();
+    crux_service::deadlines::tick(&h.t.ctx).await.unwrap();
+    let got = notify_requests(&h.db.pool).await;
+    assert_eq!(kinds(&got), ["plan.today", "flash.due"], "once each: {got:?}");
+    assert_eq!(got[1].1, "flash.due:2026-10-23");
+
+    // 18:05: the eve reminder; then the exam moves: the reminder is re-requested with the same key.
+    h.t.clock.set(Utc.with_ymd_and_hms(2026, 10, 23, 16, 5, 0).unwrap());
+    crux_service::deadlines::tick(&h.t.ctx).await.unwrap();
+    let t = login(&h, "dora").await;
+    let eid = exam["id"].as_str().unwrap();
+    let moved = ok(
+        &h,
+        "PATCH",
+        &format!("/deadlines/{eid}"),
+        &t,
+        Some(json!({"startsAt": "2026-10-26T08:00:00Z"})),
+        &[("if-match", &exam["version"].to_string())],
+    )
+    .await;
+    let got = notify_requests(&h.db.pool).await;
+    let eve_key = format!("exam.eve:{eid}");
+    assert_eq!(got.iter().filter(|r| r.1 == eve_key && !r.2).count(), 2, "requested, then re-requested: {got:?}");
+    // Cancelled: both reminders are cancelled by key.
+    ok(&h, "PATCH", &format!("/deadlines/{eid}"), &t, Some(json!({"status": "Cancelled"})), &[("if-match", &moved["version"].to_string())])
+        .await;
+    let got = notify_requests(&h.db.pool).await;
+    assert_eq!(got.iter().filter(|r| r.2).map(|r| r.0.as_str()).collect::<Vec<_>>(), ["exam.eve", "exam.checkin"]);
+    h.db.drop_db().await;
+}

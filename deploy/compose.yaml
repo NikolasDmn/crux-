@@ -15,6 +15,7 @@ x-python-env: &python-env
   CRUX_S3_SECRET_KEY: ${CRUX_S3_SECRET_KEY:-crux-dev-secret}
   CRUX_S3_BUCKET: crux-files
   CRUX_S3_PUBLIC_ENDPOINT: ${CRUX_APP_BASE_URL:-http://localhost:8000}
+  CRUX_APP_BASE_URL: ${CRUX_APP_BASE_URL:-http://localhost:8000}
   # D2-7: fake (EICAR-aware) scanner in dev; set clamd and start the "full" profile for ClamAV.
   CRUX_SCANNER: ${CRUX_SCANNER:-fake}
   CRUX_CLAMD_HOST: clamav
@@ -140,6 +141,8 @@ services:
       <<: *python-env
       CRUX_DATABASE_URL: mysql+aiomysql://crux_notify:${CRUX_NOTIFY_DB_PASSWORD:-crux-notify}@mysql:3306/crux_notify
       CRUX_SERVICE_NAME: notify
+      CRUX_UNSUBSCRIBE_SECRET: ${CRUX_UNSUBSCRIBE_SECRET:-dev-unsubscribe-secret-change-me}
+      CRUX_EMAIL_WEBHOOK_SECRET: ${CRUX_EMAIL_WEBHOOK_SECRET:-}
       CRUX_SMTP_URL: smtp://mailpit:1025
     depends_on:
       mysql: {condition: service_healthy}
@@ -153,6 +156,8 @@ services:
       <<: *python-env
       CRUX_DATABASE_URL: mysql+aiomysql://crux_notify:${CRUX_NOTIFY_DB_PASSWORD:-crux-notify}@mysql:3306/crux_notify
       CRUX_SERVICE_NAME: notify
+      CRUX_UNSUBSCRIBE_SECRET: ${CRUX_UNSUBSCRIBE_SECRET:-dev-unsubscribe-secret-change-me}
+      CRUX_EMAIL_WEBHOOK_SECRET: ${CRUX_EMAIL_WEBHOOK_SECRET:-}
       CRUX_SMTP_URL: ${CRUX_SMTP_URL:-smtp://mailpit:1025}
       CRUX_DISPATCH_INTERVAL_SECONDS: ${CRUX_DISPATCH_INTERVAL_SECONDS:-30}
     depends_on: [notify]

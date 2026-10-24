@@ -157,19 +157,16 @@ pub async fn insert(conn: &mut MySqlConnection, public_id: &str, subscription_id
     Ok(res.last_insert_id() as i64)
 }
 
-/// A moved exam asks for its reminders again.
+/// Reminders of a moved exam are re-requested by the service (notify reschedules by dedupe key).
 pub async fn update(conn: &mut MySqlConnection, id: i64, expected: i32, d: &DeadlineWrite<'_>) -> RepoResult<()> {
     let res = sqlx::query(
         "UPDATE Deadline SET Type = ?, Title = ?, ResitOfDeadlineId = ?, \
-         EveRequestedAt = IF(StartsAt = ?, EveRequestedAt, NULL), CheckInRequestedAt = IF(StartsAt = ?, CheckInRequestedAt, NULL), \
          StartsAt = ?, DurationMin = ?, Format = ?, PassMark = ?, Status = ?, GradeValue = ?, GradeText = ?, GradeProvisional = ?, CheckInNote = ?, \
          RowVersion = RowVersion + 1 WHERE Id = ? AND RowVersion = ?",
     )
     .bind(d.dtype)
     .bind(d.title)
     .bind(d.resit_of)
-    .bind(d.starts_at)
-    .bind(d.starts_at)
     .bind(d.starts_at)
     .bind(d.duration_min)
     .bind(d.format)

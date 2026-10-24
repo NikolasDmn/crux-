@@ -121,6 +121,25 @@ files waits for the object store, and every compose service has `restart: unless
 | B5-20 | New route: `POST /plan/entries` (spec 15 lists only `/plan/entries/{id}`) | Users add their own entries |
 | B5-21 | Fix found while testing: purging a trashed course now deletes its slips, weak spots, plan, sessions, mocks, attempts, cards and questions first (they RESTRICT) | Purge would have failed for any course used since M3 |
 
+## Milestone 6 build choices (notify)
+
+| # | Choice | Why / where |
+|---|---|---|
+| B6-1 | A request for a kind the user has **no channel on** for is **not stored** at all (no Notification row); unknown kinds are dropped too | Opt-in by default would otherwise fill the table with daily digests nobody wants |
+| B6-2 | `PUT /notify/preferences` takes a list of `{kind, channel, enabled}` changes; `GET` returns the full matrix with labels, `inAppAlways` (course.shared, exam.checkin) and the email status (address, verified, suppressed) | Spec says "a matrix" without a shape |
+| B6-3 | Same dedupe key again: **before delivery it reschedules** (new dueAt and payload), after delivery it's ignored. `notify.requested@1` gains an optional `cancel: true` (an additive field) to cancel by key | Spec 8: "the old one is cancelled by key" |
+| B6-4 | Core: moving an exam re-requests the reminders it already requested (notify moves them); an exam that leaves Upcoming (Done, Missed, Cancelled) cancels both | Same |
+| B6-5 | In-app = a delivery row that becomes Sent at `dueAt`: the inbox only lists delivered items (a reminder for tomorrow isn't in today's inbox). Push: Redis pub/sub `crux:notify:<userRef>`; the stream sends `ready`, then `notification` per item, `ping` every 20 s | Spec 3.4/8 |
+| B6-6 | Email for non-account kinds is checked **at send time**: verified address, not suppressed, the kind still switched on; otherwise the delivery is Skipped with the reason | Preferences can change between request and send |
+| B6-7 | Unsubscribe link: `…/notify/unsubscribe?token=<HMAC(secret, userRef)>&kind=<kind>` (only the hash is stored). **GET shows a confirm page** (mail scanners open links); the button or the RFC 8058 one-click POST applies it. `kind=all` puts the address on EmailSuppression (Unsubscribe) | A GET that changes state gets triggered by link scanners |
+| B6-8 | Bounce/complaint webhook: `POST /notify/webhooks/email`, a generic `{events:[{type: bounce|complaint, email}]}` body, secret in `X-Crux-Webhook-Secret`; 404 while no secret is configured. Provider-specific adapters come with the provider choice | Spec names no provider |
+| B6-9 | `plan.today` (07:30 local) and `flash.due` (08:00 local, only with cards due) are produced by **core** in `deadlines.tick`, once per user per local day (Redis marker + dedupe key), and not after 12:00 local if the job was down | Core has the plan and the cards |
+| B6-10 | `mock.graded`, `import.ready`, `generation.done` have templates now; their producers come with AI grading/import/generation (M8). An auto-graded mock is graded at submit, so it sends nothing | |
+| B6-11 | Inbox paging: `?cursor=<id of the last item>`; every inbox/read response carries the unread count | |
+| B6-12 | Gateway: compression only for a list of text/JSON types (never `text/event-stream`), `flush_interval -1` on the files and notify proxies | Compressed SSE frames sit in a buffer |
+| B6-13 | New routes: `POST /notify/unsubscribe` (beside the GET in spec 15) and `POST /notify/webhooks/email` | B6-7, B6-8 |
+| B6-14 | notify depends on `tzdata` (zoneinfo has no time-zone database on Windows dev machines) | Email/inbox times are shown in the user's zone |
+
 ## Product / behaviour
 
 | # | Question | Built meanwhile |

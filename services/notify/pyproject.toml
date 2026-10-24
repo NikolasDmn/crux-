@@ -3,7 +3,8 @@ name = "crux-notify"
 version = "0.1.0"
 description = "Preferences, in-app inbox, email delivery, unsubscribe, suppression (backend-spec 8)."
 requires-python = ">=3.12,<3.13"
-dependencies = ["crux-common"]
+# tzdata: zoneinfo has no system database on Windows dev machines (and slim images).
+dependencies = ["crux-common", "tzdata>=2024.1"]
 
 [tool.uv.sources]
 crux-common = { workspace = true }

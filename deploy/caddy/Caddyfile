@@ -3,7 +3,21 @@
 }
 
 {$CRUX_SITE_ADDRESS::80} {
-	encode zstd gzip
+	# Compress these types only: never text/event-stream, where a compressor would hold frames
+	# back until its buffer fills (the inbox and upload streams).
+	encode {
+		zstd
+		gzip
+		match {
+			header Content-Type text/html*
+			header Content-Type text/css*
+			header Content-Type text/plain*
+			header Content-Type text/javascript*
+			header Content-Type application/json*
+			header Content-Type application/javascript*
+			header Content-Type image/svg+xml*
+		}
+	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -30,7 +44,10 @@
 
 	handle /api/v1/files/* {
 		uri strip_prefix /api/v1/files
-		reverse_proxy files:8080
+		# Server-sent events (scan/extract progress) must not sit in a buffer.
+		reverse_proxy files:8080 {
+			flush_interval -1
+		}
 	}
 	handle /api/v1/ai/* {
 		uri strip_prefix /api/v1/ai
@@ -41,7 +58,10 @@
 	}
 	handle /api/v1/notify/* {
 		uri strip_prefix /api/v1/notify
-		reverse_proxy notify:8080
+		# The inbox stream (SSE) must not sit in a buffer.
+		reverse_proxy notify:8080 {
+			flush_interval -1
+		}
 	}
 	handle /api/v1/openapi.json {
 		reverse_proxy core:8080

@@ -563,3 +563,81 @@ pub async fn untested_by_component(conn: &mut MySqlConnection, user_id: i64, cou
     .fetch_all(conn)
     .await?)
 }
+
+// ---------- check questions and quizzes ----------
+
+/// A material's check questions: (question id, position) in reading order. Position is the page
+/// (PDF) or section (notes) the check comes after; 0 means at the end.
+pub async fn material_checks(conn: &mut MySqlConnection, material_id: i64) -> RepoResult<Vec<(i64, i32)>> {
+    Ok(sqlx::query_as("SELECT QuestionId, Position FROM MaterialQuestion WHERE MaterialId = ? ORDER BY Position = 0, Position, QuestionId")
+        .bind(material_id)
+        .fetch_all(conn)
+        .await?)
+}
+
+/// Replaces a material's check questions.
+pub async fn set_material_checks(conn: &mut MySqlConnection, material_id: i64, checks: &[(i64, i32)]) -> RepoResult<()> {
+    sqlx::query("DELETE FROM MaterialQuestion WHERE MaterialId = ?").bind(material_id).execute(&mut *conn).await?;
+    for (question_id, position) in checks {
+        sqlx::query("INSERT INTO MaterialQuestion (MaterialId, QuestionId, Position) VALUES (?, ?, ?)")
+            .bind(material_id)
+            .bind(question_id)
+            .bind(position)
+            .execute(&mut *conn)
+            .await?;
+    }
+    Ok(())
+}
+
+/// The user's last outcome per question, for the ones given.
+pub async fn last_outcomes(conn: &mut MySqlConnection, user_id: i64, question_ids: &[i64]) -> RepoResult<Vec<(i64, Option<String>)>> {
+    if question_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let ids = question_ids.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(",");
+    Ok(sqlx::query_as(&format!(
+        "SELECT QuestionId, CAST(LastOutcome AS CHAR) FROM UserQuestionStat WHERE UserId = ? AND QuestionId IN ({ids})"
+    ))
+    .bind(user_id)
+    .fetch_all(conn)
+    .await?)
+}
+
+/// "Quiz me": questions you can answer in a course, optionally one lecture or one concept. Never
+/// tried first, then the ones you got wrong, then the longest unseen; random within a tie.
+#[allow(clippy::too_many_arguments)]
+pub async fn quiz_questions(
+    conn: &mut MySqlConnection,
+    user_id: i64,
+    course_id: i64,
+    component_id: Option<i64>,
+    concept_ref: Option<&str>,
+    exclude: &[i64],
+    limit: i64,
+) -> RepoResult<Vec<i64>> {
+    let not_in = if exclude.is_empty() {
+        String::new()
+    } else {
+        format!("AND q.Id NOT IN ({})", exclude.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(","))
+    };
+    Ok(sqlx::query_scalar(&format!(
+        "SELECT q.Id FROM Question q JOIN CourseComponent k ON k.Id = q.CourseComponentId \
+         LEFT JOIN UserQuestionStat s ON s.QuestionId = q.Id AND s.UserId = ? \
+         WHERE q.CourseId = ? AND q.ArchivedAt IS NULL AND k.ArchivedAt IS NULL AND q.CurrentVersionId IS NOT NULL \
+           AND (q.OwnerUserId IS NULL OR q.OwnerUserId = ?) AND q.ReviewState = 'Approved' \
+           AND (? IS NULL OR q.CourseComponentId = ?) \
+           AND (? IS NULL OR EXISTS (SELECT 1 FROM QuestionConcept qc JOIN Concept c ON c.Id = qc.ConceptId \
+                WHERE qc.QuestionId = q.Id AND c.PublicId = ?)) {not_in} \
+         ORDER BY s.LastAnsweredAt IS NOT NULL, s.LastOutcome = 'Right', s.LastAnsweredAt, RAND() LIMIT ?"
+    ))
+    .bind(user_id)
+    .bind(course_id)
+    .bind(user_id)
+    .bind(component_id)
+    .bind(component_id)
+    .bind(concept_ref)
+    .bind(concept_ref)
+    .bind(limit)
+    .fetch_all(conn)
+    .await?)
+}

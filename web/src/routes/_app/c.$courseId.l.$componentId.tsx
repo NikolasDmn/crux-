@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, HelpCircle } from "lucide-react";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { EmptyList } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/misc";
 import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs";
@@ -9,6 +11,7 @@ import { useLectures, useProgress } from "@/features/lectures/api";
 import { LectureQuestions, LectureSessions, LectureSlips } from "@/features/lectures/components/lecture-tabs";
 import { CardTable } from "@/features/flash/components/card-table";
 import { MaterialList } from "@/features/materials/material-list";
+import { QuizDialog } from "@/features/practice/components";
 
 // One lecture (frontend-spec 4): Materials, Questions, Flashcards, Slips, Sessions.
 export const Route = createFileRoute("/_app/c/$courseId/l/$componentId")({ component: LecturePage });
@@ -20,6 +23,7 @@ function LecturePage() {
   const progress = useProgress(courseId);
   const lecture = lectures.data?.find((l) => l.id === componentId);
   const p = progress.data?.find((x) => x.componentId === componentId);
+  const [quiz, setQuiz] = useState(false);
 
   if (lectures.isPending) return <Skeleton className="h-64" />;
   if (!lecture) return <EmptyList title="Not found, or you don't have access." />;
@@ -42,7 +46,19 @@ function LecturePage() {
           {lecture.estHours ?? 1.5} h
           {p ? ` · ${p.status === "InProgress" ? "in progress" : p.status === "Done" ? "done" : "to do"}` : ""}
         </span>
+        <Button size="sm" onClick={() => setQuiz(true)}>
+          <HelpCircle className="size-4" aria-hidden="true" />
+          Quiz me
+        </Button>
       </div>
+      {quiz ? (
+        <QuizDialog
+          courseId={courseId}
+          componentId={componentId}
+          title={`Quiz: ${lecture.code} ${lecture.name}`}
+          onClose={() => setQuiz(false)}
+        />
+      ) : null}
       {lecture.description ? <p className="m-0 max-w-[72ch] text-muted">{lecture.description}</p> : null}
       <Tabs defaultValue="materials">
         <TabList>

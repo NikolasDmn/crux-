@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
 import { useState } from "react";
 import { useUser } from "@/app/auth";
@@ -6,26 +6,33 @@ import { Card, SectionLabel } from "@/components/ui/card";
 import { EmptyList } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/misc";
 import { useQuestion, useVersions } from "@/features/bank/api";
+import { useCourse } from "@/features/courses/api";
+import { canEdit } from "@/features/courses/lib/roles";
 import { QuestionEditor } from "@/features/bank/components/question-editor";
 import { diffLines, versionText } from "@/features/bank/lib/editor";
 import { cn } from "@/lib/cn";
 import { formatInZone } from "@/lib/time";
 
-// One question: the editor, then its version history with a line diff against the version before.
-export const Route = createFileRoute("/_app/c/$courseId/q/$questionId")({ component: EditQuestion });
+// Editing a question (Owners and Editors; a private question's author): the editor, then its
+// version history with a line diff against the version before. Everyone else gets the read-only view.
+export const Route = createFileRoute("/_app/c/$courseId/q/$questionId/edit")({ component: EditQuestion });
 
 function EditQuestion() {
   const { courseId, questionId } = Route.useParams();
   const q = useQuestion(questionId);
+  const course = useCourse(courseId);
+  if (q.data && course.data && !canEdit(course.data.myRole) && !q.data.private) {
+    return <Navigate to="/c/$courseId/q/$questionId" params={{ courseId, questionId }} replace />;
+  }
   return (
     <div className="flex max-w-[960px] flex-col gap-4">
       <Link
-        to="/c/$courseId/bank"
-        params={{ courseId }}
+        to="/c/$courseId/q/$questionId"
+        params={{ courseId, questionId }}
         className="inline-flex items-center gap-1 self-start text-sm text-muted hover:text-text"
       >
         <ChevronLeft className="size-4" aria-hidden="true" />
-        Questions
+        Back to the question
       </Link>
       {q.isPending ? (
         <Skeleton className="h-96" />

@@ -9,6 +9,7 @@ pub mod attempts;
 pub mod auth;
 pub mod bank;
 pub mod catalog;
+pub mod checks;
 pub mod contracts;
 pub mod courses;
 pub mod ctx;

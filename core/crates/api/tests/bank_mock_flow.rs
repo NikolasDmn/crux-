@@ -447,3 +447,107 @@ async fn nightly_check_repairs_drifted_question_stats() {
     assert_eq!(stat().await, (4, 1, 2), "the nightly job put it back");
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn material_checks_and_quiz_me() {
+    let Some(h) = common::harness().await else { return };
+    let (owner, _, _) = signup(&h.app, &h.t.ctx, "checker").await;
+    let (viewer, _, _) = signup(&h.app, &h.t.ctx, "reader").await;
+    let c = setup(&h, &owner).await;
+    let (q1, q2, q3) = (mc(&h, &owner, &c, "First").await, mc(&h, &owner, &c, "Second").await, mc(&h, &owner, &c, "Third").await);
+    let id = |q: &Value| q["id"].as_str().unwrap().to_string();
+    let m = call(
+        &h.app,
+        "POST",
+        &format!("/components/{}/materials", c.l1),
+        Some(&owner),
+        Some(json!({"kind": "Notes", "title": "Week 1", "content": "## Mean\n\nAdd up.\n\n## Median\n\nThe middle."})),
+        &[],
+    )
+    .await;
+    assert_eq!(m.status, StatusCode::CREATED, "{}", m.json);
+    let mid = m.json["id"].as_str().unwrap().to_string();
+    let checks = format!("/materials/{mid}/checks");
+
+    // Q2 at the end, Q1 after section 1: listed in reading order, without keys.
+    let set = call(
+        &h.app,
+        "PUT",
+        &checks,
+        Some(&owner),
+        Some(json!({"checks": [{"questionId": id(&q2)}, {"questionId": id(&q1), "position": 1}]})),
+        &[],
+    )
+    .await;
+    assert_eq!(set.status, StatusCode::OK, "{}", set.json);
+    let order: Vec<(&str, i64)> =
+        set.json.as_array().unwrap().iter().map(|x| (x["question"]["prompt"].as_str().unwrap(), x["position"].as_i64().unwrap())).collect();
+    assert_eq!(order, vec![("First", 1), ("Second", 0)]);
+    assert!(set.json[0]["question"]["options"][0]["isCorrect"].is_null(), "no key in a check: {}", set.json);
+
+    // Only the course bank's questions: a private one is refused.
+    let private = call(
+        &h.app,
+        "POST",
+        &format!("/courses/{}/questions", c.id),
+        Some(&owner),
+        Some(json!({"componentId": c.l1, "type": "Open", "private": true, "content": {"prompt": "Mine"}})),
+        &[],
+    )
+    .await;
+    let bad = call(&h.app, "PUT", &checks, Some(&owner), Some(json!({"checks": [{"questionId": id(&private.json)}]})), &[]).await;
+    assert_eq!(bad.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", bad.json);
+
+    // A viewer reads the checks but can't change them.
+    call(
+        &h.app,
+        "POST",
+        &format!("/courses/{}/members", c.id),
+        Some(&owner),
+        Some(json!({"usernameOrEmail": "reader", "role": "Viewer"})),
+        &[],
+    )
+    .await;
+    call(&h.app, "POST", &format!("/course-invitations/{}/accept", c.id), Some(&viewer), None, &[]).await;
+    assert_eq!(call(&h.app, "GET", &checks, Some(&viewer), None, &[]).await.json.as_array().unwrap().len(), 2);
+    let denied = call(&h.app, "PUT", &checks, Some(&viewer), Some(json!({"checks": []})), &[]).await;
+    assert_eq!(denied.status, StatusCode::NOT_FOUND);
+
+    // Answering a check (context Notes, on the material) shows as its last outcome.
+    let a = call(
+        &h.app,
+        "POST",
+        "/attempts",
+        Some(&owner),
+        Some(json!({"clientId": "01CHECKAAAAAAAAAAAAAAAAAAA", "questionId": id(&q1), "context": "Notes", "materialId": mid,
+                    "choiceOptionId": option(&q1, true), "tryNo": 1})),
+        &[],
+    )
+    .await;
+    assert_eq!((a.status, a.json["outcome"].as_str()), (StatusCode::OK, Some("Right")), "{}", a.json);
+    let after = call(&h.app, "GET", &checks, Some(&owner), None, &[]).await.json;
+    assert_eq!(after[0]["lastOutcome"], "Right", "{after}");
+    assert!(after[1]["lastOutcome"].is_null());
+
+    // Quiz me on L1: never-tried questions first (Q1 was just answered), no keys.
+    let quiz = |q: String| {
+        let path = format!("/courses/{}/quiz?{q}", c.id);
+        let h = &h;
+        let owner = owner.clone();
+        async move { call(&h.app, "GET", &path, Some(&owner), None, &[]).await }
+    };
+    let two = quiz(format!("componentId={}&n=2", c.l1)).await;
+    assert_eq!(two.status, StatusCode::OK, "{}", two.json);
+    // (Your own private question counts too: Second, Third and Mine are all untried.)
+    let got: Vec<&str> = two.json.as_array().unwrap().iter().map(|x| x["prompt"].as_str().unwrap()).collect();
+    assert_eq!(got.len(), 2);
+    assert!(!got.contains(&"First"), "the answered question waits: {got:?}");
+    assert!(two.json[0]["options"][0]["isCorrect"].is_null());
+    // "One more", skipping what was shown: the answered one comes last.
+    let more = quiz(format!("componentId={}&n=1&exclude={},{},{}", c.l1, id(&q2), id(&q3), id(&private.json))).await;
+    assert_eq!(more.json[0]["prompt"], "First", "{}", more.json);
+    // By concept, and an unknown lecture.
+    assert_eq!(quiz(format!("conceptId={}&n=5", c.concept)).await.json.as_array().unwrap().len(), 3);
+    assert_eq!(quiz("componentId=01AAAAAAAAAAAAAAAAAAAAAAAA".into()).await.status, StatusCode::UNPROCESSABLE_ENTITY);
+    h.db.drop_db().await;
+}

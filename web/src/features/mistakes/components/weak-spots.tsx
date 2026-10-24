@@ -19,6 +19,7 @@ import {
   useWeakSpots,
   type WeakSpot,
 } from "@/features/mistakes/api";
+import { QuizDialog } from "@/features/practice/components";
 import { fieldErrors, messageFor } from "@/lib/errors";
 import { relativeDays } from "@/lib/time";
 
@@ -31,6 +32,7 @@ export function WeakSpotsPanel({ courseId }: { courseId: string }) {
   const toast = useToast();
   const [editing, setEditing] = useState<WeakSpot | "new" | null>(null);
   const [showResolved, setShowResolved] = useState(false);
+  const [quiz, setQuiz] = useState<{ conceptId: string; title: string } | null>(null);
   const data = spots.data;
 
   return (
@@ -83,6 +85,15 @@ export function WeakSpotsPanel({ courseId }: { courseId: string }) {
                     Reopened
                   </Badge>
                 ) : null}
+                {w.conceptId ? (
+                  <button
+                    type="button"
+                    className="ml-auto text-sm font-medium text-text hover:underline"
+                    onClick={() => setQuiz({ conceptId: w.conceptId!, title: `Quiz: ${w.topic}` })}
+                  >
+                    Quiz me
+                  </button>
+                ) : null}
               </div>
               {w.keyRule ? (
                 <div className="overflow-x-auto rounded-md bg-sunken px-3 py-1">
@@ -109,6 +120,9 @@ export function WeakSpotsPanel({ courseId }: { courseId: string }) {
             </ul>
           ) : null}
         </div>
+      ) : null}
+      {quiz ? (
+        <QuizDialog courseId={courseId} conceptId={quiz.conceptId} title={quiz.title} onClose={() => setQuiz(null)} />
       ) : null}
       {editing ? (
         <SpotDialog

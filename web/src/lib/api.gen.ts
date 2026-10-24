@@ -1128,6 +1128,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/courses/{id}/quiz": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A couple of questions on a lecture or concept: never tried first, then missed, then the longest
+         *     unseen (no keys: POST /attempts with context Practice returns it).
+         */
+        get: operations["getCoursesIdQuiz"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/courses/{id}/restore": {
         parameters: {
             query?: never;
@@ -1692,6 +1712,30 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["patchMaterialsId"];
+        trace?: never;
+    };
+    "/materials/{id}/checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The material's check questions you can answer, in reading order (no keys: POST /attempts with
+         *     context Notes and the material returns it).
+         */
+        get: operations["getMaterialsIdChecks"];
+        /**
+         * Replace the material's check questions (Owner or Editor): course-bank questions, each after a
+         *     page or section (0 = at the end).
+         */
+        put: operations["putMaterialsIdChecks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/materials/{id}/free-space": {
@@ -2740,6 +2784,18 @@ export interface components {
             /** Format: int32 */
             version: number;
         };
+        CheckInput: {
+            /**
+             * Format: int32
+             * @description After this page or section; 0 (default) = at the end.
+             */
+            position?: number;
+            questionId: string;
+        };
+        ChecksInput: {
+            /** @description The material's full list; replaces what was there. */
+            checks: components["schemas"]["CheckInput"][];
+        };
         /** CitationView */
         CitationView: {
             /** Chunkno */
@@ -3521,6 +3577,16 @@ export interface components {
             /** @description Email or username. */
             login: string;
             password: string;
+        };
+        MaterialCheck: {
+            /** @description Your last outcome on this question (Right, Partial, Wrong, Blank), if you've answered it. */
+            lastOutcome?: string | null;
+            /**
+             * Format: int32
+             * @description After this page (PDF) or section (notes); 0 = at the end.
+             */
+            position: number;
+            question: components["schemas"]["PracticeQuestion"];
         };
         MaterialFields: {
             /** @description Keep this file away from every AI model (licence, copyright). */
@@ -7376,6 +7442,52 @@ export interface operations {
             };
         };
     };
+    getCoursesIdQuiz: {
+        parameters: {
+            query?: {
+                /** @description One lecture. */
+                componentId?: string;
+                /** @description One concept. */
+                conceptId?: string;
+                /** @description 1-10, default 2. */
+                n?: number;
+                /** @description Comma-separated question ids already shown ("one more" skips them). */
+                exclude?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PracticeQuestion"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
     postCoursesIdRestore: {
         parameters: {
             query?: never;
@@ -8596,6 +8708,76 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    getMaterialsIdChecks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialCheck"][];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    putMaterialsIdChecks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChecksInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialCheck"][];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -160,6 +160,7 @@ fn body_for_path(method: &str, path: &str) -> Option<Value> {
         ("POST", "/flashcards/{id}/suspend") => Some(json!({"suspended": true})),
         ("POST", "/courses/{id}/deadlines") => Some(json!({"startsAt": "2026-12-01T09:00:00Z"})),
         ("PUT", "/deadlines/{id}/layout") => Some(json!({"components": []})),
+        ("PUT", "/materials/{id}/checks") => Some(json!({"checks": []})),
         ("PATCH", "/courses/{id}/progress") => Some(json!({"componentId": "01AAAAAAAAAAAAAAAAAAAAAAAA"})),
         ("POST", "/mocks/{id}/questions/{order}/grade") => Some(json!({"outcome": "Right"})),
         ("POST", "/mocks/{id}/questions/{order}/ai-grade/accept")

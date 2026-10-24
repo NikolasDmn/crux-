@@ -67,7 +67,7 @@ fn severity_rank(s: &str) -> u8 {
     }
 }
 
-async fn practice_question(conn: &mut MySqlConnection, question_id: i64) -> AppResult<Option<PracticeQuestion>> {
+pub(crate) async fn practice_question(conn: &mut MySqlConnection, question_id: i64) -> AppResult<Option<PracticeQuestion>> {
     let Some(q) = bank::question_by_id(conn, question_id).await? else { return Ok(None) };
     let Some(vid) = q.current_version_id else { return Ok(None) };
     let versions = bank::versions_by_ids(conn, &[vid]).await?;

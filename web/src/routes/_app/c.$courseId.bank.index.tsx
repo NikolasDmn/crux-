@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Download, Plus, Search } from "lucide-react";
+import { Download, MoreHorizontal, Plus, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
@@ -215,7 +215,8 @@ function Bank() {
                 <th className="w-20 py-2 font-medium">Type</th>
                 <th className="py-2 font-medium">Prompt</th>
                 <th className="w-28 py-2 font-medium">Source</th>
-                <th className="w-40 py-2 pr-3 font-medium" />
+                <th className="w-40 py-2 font-medium" />
+                <th className="w-10 py-2 pr-2" />
               </tr>
             </thead>
             <tbody>
@@ -265,6 +266,53 @@ function Bank() {
                       ) : null}
                       {r.private ? <Badge kind="status">Private</Badge> : null}
                     </span>
+                  </td>
+                  <td className="pr-2">
+                    {editor || r.private ? (
+                      <Menu>
+                        <MenuTrigger asChild>
+                          <Button size="iconSm" variant="ghost" aria-label="Question actions">
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </MenuTrigger>
+                        <MenuContent align="end">
+                          <MenuItem
+                            onSelect={() =>
+                              void navigate({
+                                to: "/c/$courseId/q/$questionId/edit",
+                                params: { courseId, questionId: r.id },
+                              })
+                            }
+                          >
+                            Edit
+                          </MenuItem>
+                          {r.reviewState === "Draft" ? (
+                            <MenuItem
+                              onSelect={() =>
+                                action.mutate(
+                                  { id: r.id, action: "approve" },
+                                  { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) },
+                                )
+                              }
+                            >
+                              Approve
+                            </MenuItem>
+                          ) : null}
+                          {!r.archivedAt ? (
+                            <MenuItem
+                              onSelect={() =>
+                                action.mutate(
+                                  { id: r.id, action: "archive" },
+                                  { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) },
+                                )
+                              }
+                            >
+                              Archive
+                            </MenuItem>
+                          ) : null}
+                        </MenuContent>
+                      </Menu>
+                    ) : null}
                   </td>
                 </tr>
               ))}

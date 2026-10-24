@@ -3,6 +3,7 @@ pub mod admin;
 pub mod auth;
 pub mod bank;
 pub mod catalog;
+pub mod checks;
 pub mod courses;
 pub mod deadlines;
 pub mod flash;
@@ -67,6 +68,8 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(catalog::list_concepts, catalog::create_concept))
         .routes(routes!(catalog::list_materials, catalog::create_material))
         .routes(routes!(catalog::patch_material, catalog::archive_material))
+        .routes(routes!(checks::list, checks::set))
+        .routes(routes!(checks::quiz))
         .routes(routes!(catalog::list_papers, catalog::create_paper))
         .routes(routes!(catalog::patch_paper))
         .routes(routes!(bank::list, bank::create))

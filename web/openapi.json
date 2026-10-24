@@ -883,6 +883,37 @@
         ],
         "type": "object"
       },
+      "CheckInput": {
+        "properties": {
+          "position": {
+            "description": "After this page or section; 0 (default) = at the end.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "questionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "questionId"
+        ],
+        "type": "object"
+      },
+      "ChecksInput": {
+        "properties": {
+          "checks": {
+            "description": "The material's full list; replaces what was there.",
+            "items": {
+              "$ref": "#/components/schemas/CheckInput"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "checks"
+        ],
+        "type": "object"
+      },
       "CitationView": {
         "properties": {
           "chunkNo": {
@@ -3653,6 +3684,30 @@
         "required": [
           "login",
           "password"
+        ],
+        "type": "object"
+      },
+      "MaterialCheck": {
+        "properties": {
+          "lastOutcome": {
+            "description": "Your last outcome on this question (Right, Partial, Wrong, Blank), if you've answered it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "position": {
+            "description": "After this page (PDF) or section (notes); 0 = at the end.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "question": {
+            "$ref": "#/components/schemas/PracticeQuestion"
+          }
+        },
+        "required": [
+          "position",
+          "question"
         ],
         "type": "object"
       },
@@ -11749,6 +11804,102 @@
         ]
       }
     },
+    "/courses/{id}/quiz": {
+      "get": {
+        "operationId": "getCoursesIdQuiz",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "One lecture.",
+            "in": "query",
+            "name": "componentId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "One concept.",
+            "in": "query",
+            "name": "conceptId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "1-10, default 2.",
+            "in": "query",
+            "name": "n",
+            "required": false,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Comma-separated question ids already shown (\"one more\" skips them).",
+            "in": "query",
+            "name": "exclude",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PracticeQuestion"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A couple of questions on a lecture or concept: never tried first, then missed, then the longest\nunseen (no keys: POST /attempts with context Practice returns it).",
+        "tags": [
+          "questions"
+        ]
+      }
+    },
     "/courses/{id}/restore": {
       "post": {
         "operationId": "postCoursesIdRestore",
@@ -13660,6 +13811,122 @@
             "bearer": []
           }
         ],
+        "tags": [
+          "materials"
+        ]
+      }
+    },
+    "/materials/{id}/checks": {
+      "get": {
+        "operationId": "getMaterialsIdChecks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MaterialCheck"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The material's check questions you can answer, in reading order (no keys: POST /attempts with\ncontext Notes and the material returns it).",
+        "tags": [
+          "materials"
+        ]
+      },
+      "put": {
+        "operationId": "putMaterialsIdChecks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChecksInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MaterialCheck"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Replace the material's check questions (Owner or Editor): course-bank questions, each after a\npage or section (0 = at the end).",
         "tags": [
           "materials"
         ]

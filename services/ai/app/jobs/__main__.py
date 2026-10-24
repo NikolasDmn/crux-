@@ -5,7 +5,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.service import chat, grading
+from app.service import chat, generation, grading
 from app.service.deps import Deps
 from app.service.wiring import build_deps
 from app.settings import Settings, get_settings
@@ -40,8 +40,31 @@ async def daily_jobs(sessions: async_sessionmaker[AsyncSession], stop: asyncio.E
             pass
 
 
+async def generation_loop(sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event) -> None:
+    """The generation queue (one job at a time per worker) and the hourly nightly top-up."""
+    s = get_settings()
+    deps = build_deps(s, sessions, Contracts(s.contracts_dir))
+    last_nightly = 0.0
+    loop = asyncio.get_running_loop()
+    while not stop.is_set():
+        worked = False
+        try:
+            if loop.time() - last_nightly > 3600:
+                last_nightly = loop.time()
+                n = await generation.nightly(deps)
+                log.info("job done", extra={"job": "topup.nightly", "count": n})
+            worked = await generation.run_one(deps)
+        except Exception as e:
+            log.error("job failed", extra={"job": "generation", "error": repr(e), "alert": True})
+        if not worked:
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=2.0)
+            except TimeoutError:
+                pass
+
+
 if __name__ == "__main__":
     settings = get_settings()
     deps = worker_deps(settings)
     handlers: list[Handler] = [grading.MockSubmittedHandler(deps), grading.GradeDecidedHandler()]
-    asyncio.run(run_worker(settings, handlers, extra=[daily_jobs]))
+    asyncio.run(run_worker(settings, handlers, extra=[daily_jobs, generation_loop]))

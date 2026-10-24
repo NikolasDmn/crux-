@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 
-from app.service import account, chat, grading, runtime, tutors
+from app.service import account, chat, generation, grading, runtime, tutors
 from app.service.deps import Deps
 from crux_common.auth import Caller, User
 
@@ -141,6 +141,20 @@ async def message_feedback(message_id: int, body: chat.FeedbackInput, user: User
 async def grades(mockId: str, user: User, request: Request) -> list[grading.GradeView]:
     """AI grading suggestions for the review screen; decide on them in core (ai-grade routes)."""
     return await grading.grades_for(deps(request), user, mockId)
+
+
+# ---------- generation ----------
+
+
+@router.post("/generate", response_model=generation.JobView, response_model_by_alias=True, status_code=202)
+async def generate(body: generation.GenerateInput, user: User, request: Request) -> generation.JobView:
+    """Queues up to 20 questions for a lecture (optionally seeded); they become your own questions."""
+    return await generation.start(deps(request), user, body)
+
+
+@router.get("/generate/{job_id}", response_model=generation.JobView, response_model_by_alias=True)
+async def generation_job(job_id: str, user: User, request: Request) -> generation.JobView:
+    return await generation.get(deps(request), user, job_id)
 
 
 # ---------- internal ----------

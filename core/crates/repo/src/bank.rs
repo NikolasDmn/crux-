@@ -507,3 +507,47 @@ pub async fn family_root(conn: &mut MySqlConnection, course_id: i64, question_re
         .fetch_optional(conn)
         .await?)
 }
+
+/// Generated questions remember the question they were seeded from (spec 7.5).
+pub async fn set_seed(conn: &mut MySqlConnection, question_id: i64, seed_id: i64) -> RepoResult<()> {
+    sqlx::query("UPDATE Question SET SeedQuestionId = ? WHERE Id = ?").bind(seed_id).bind(question_id).execute(conn).await?;
+    Ok(())
+}
+
+/// (prompt, type) of questions in a course the user can see, newest first (generation dedupe/style).
+pub async fn prompts_for(
+    conn: &mut MySqlConnection,
+    user_id: i64,
+    course_id: i64,
+    component_id: Option<i64>,
+    limit: i64,
+) -> RepoResult<Vec<(String, String)>> {
+    Ok(sqlx::query_as(
+        "SELECT v.Prompt, CAST(q.Type AS CHAR) FROM Question q JOIN QuestionVersion v ON v.Id = q.CurrentVersionId \
+         WHERE q.CourseId = ? AND q.ArchivedAt IS NULL AND (q.OwnerUserId IS NULL OR q.OwnerUserId = ?) AND (? IS NULL OR q.CourseComponentId = ?) \
+         ORDER BY q.Id DESC LIMIT ?",
+    )
+    .bind(course_id)
+    .bind(user_id)
+    .bind(component_id)
+    .bind(component_id)
+    .bind(limit)
+    .fetch_all(conn)
+    .await?)
+}
+
+/// Per lecture: questions the user can see and how many of them aren't answered right yet
+/// (`UserQuestionStat.FirstRightAt IS NULL`, spec 7.5 "untested").
+pub async fn untested_by_component(conn: &mut MySqlConnection, user_id: i64, course_id: i64) -> RepoResult<Vec<(i64, i64)>> {
+    Ok(sqlx::query_as(
+        "SELECT q.CourseComponentId, CAST(SUM(s.FirstRightAt IS NULL) AS SIGNED) FROM Question q \
+         LEFT JOIN UserQuestionStat s ON s.QuestionId = q.Id AND s.UserId = ? \
+         WHERE q.CourseId = ? AND q.ArchivedAt IS NULL AND q.ReviewState = 'Approved' AND (q.OwnerUserId IS NULL OR q.OwnerUserId = ?) \
+         GROUP BY q.CourseComponentId",
+    )
+    .bind(user_id)
+    .bind(course_id)
+    .bind(user_id)
+    .fetch_all(conn)
+    .await?)
+}

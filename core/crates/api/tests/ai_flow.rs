@@ -202,3 +202,71 @@ async fn ai_grading_decisions() {
     assert_eq!(r.json["status"], "Graded");
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn generated_questions_and_topup_plan() {
+    let Some(h) = common::harness().await else { return };
+    let (t, me, _) = signup(&h.app, &h.t.ctx, "gina").await;
+    let me = me["id"].as_str().unwrap().to_string();
+    let (_, bob, _) = signup(&h.app, &h.t.ctx, "bob").await;
+    let bob = bob["id"].as_str().unwrap().to_string();
+    let course = call(&h.app, "POST", "/courses", Some(&t), Some(json!({"name": "Stats", "code": "ST"})), &[]).await.json["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let l1 = call(&h.app, "POST", &format!("/courses/{course}/components"), Some(&t), Some(json!({"code": "L1", "name": "Intro"})), &[])
+        .await
+        .json["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let svc = h.t.ctx.keys.sign_service("ai", "core", h.t.ctx.clock.now().timestamp());
+    let auth = format!("Bearer {svc}");
+    let headers = [("authorization", auth.as_str())];
+    let opts = |two: bool| json!([{"text": "4 Var(X)", "isCorrect": true}, {"text": "2 Var(X)", "isCorrect": two}]);
+    let body = |user: &str| {
+        json!({
+            "user": user, "course": course, "component": l1, "autoApprove": false,
+            "questions": [
+                {"type": "MC", "content": {"prompt": "What is Var(2X)?", "keyReliability": "Official", "options": opts(false)}},
+                {"type": "MC", "content": {"prompt": "Two right?", "options": opts(true)}}
+            ]
+        })
+    };
+    let r = call(&h.app, "POST", "/internal/v1/questions/generated", None, Some(body(&me)), &headers).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.json);
+    assert_eq!((r.json["created"].as_array().unwrap().len(), r.json["rejected"].as_array().unwrap().len()), (1, 1));
+    let qid = r.json["created"][0].as_str().unwrap();
+    let q = call(&h.app, "GET", &format!("/questions/{qid}"), Some(&t), None, &[]).await.json;
+    assert_eq!(
+        (q["source"].as_str(), q["private"].as_bool(), q["reviewState"].as_str()),
+        (Some("Generated"), Some(true), Some("Draft")),
+        "{q}"
+    );
+    assert_eq!(q["current"]["keyReliability"], "Derived", "never Official");
+    let r = call(&h.app, "POST", "/internal/v1/questions/generated", None, Some(body(&bob)), &headers).await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND, "core re-checks access for the user");
+
+    call(
+        &h.app,
+        "POST",
+        &format!("/courses/{course}/deadlines"),
+        Some(&t),
+        Some(json!({"type": "Exam", "startsAt": "2026-11-10T09:00:00Z"})),
+        &[],
+    )
+    .await;
+    let r = call(&h.app, "GET", &format!("/internal/v1/ai/topup-plan?user={me}"), None, None, &headers).await;
+    assert_eq!(
+        (r.json["timeZone"].as_str(), r.json["courses"][0]["courseId"].as_str()),
+        (Some("Europe/Amsterdam"), Some(course.as_str())),
+        "{}",
+        r.json
+    );
+    assert_eq!(r.json["courses"][0]["daysToExam"], 17);
+    let r =
+        call(&h.app, "GET", &format!("/internal/v1/ai/generation-context?user={me}&course={course}&component={l1}"), None, None, &headers)
+            .await;
+    assert_eq!(r.json["existingPrompts"][0], "What is Var(2X)?");
+    h.db.drop_db().await;
+}

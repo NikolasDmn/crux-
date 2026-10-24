@@ -263,3 +263,97 @@ fn strip_key(v: &mut serde_json::Value) {
         obj.remove("keyNote");
     }
 }
+
+// ---------- generation (spec 7.5) ----------
+
+/// `GET /internal/v1/ai/generation-context?user=&course=&component=&seed=`: style examples, the
+/// prompts to avoid duplicating, and the seed. The seed's key only when the user may see it.
+pub async fn generation_context(
+    ctx: &Ctx,
+    user_ref: &str,
+    course_ref: &str,
+    component_ref: Option<&str>,
+    seed_ref: Option<&str>,
+) -> AppResult<serde_json::Value> {
+    use serde_json::json;
+    let mut conn = ctx.pool.acquire().await?;
+    let actor = actor_of(&mut conn, user_ref).await?;
+    let course = readable(&mut conn, &actor, course_ref).await?;
+    let component = match component_ref {
+        Some(r) => Some(crux_repo::catalog::component(&mut conn, r).await?.filter(|k| k.course_id == course.id).ok_or(AppError::NotFound)?),
+        None => None,
+    };
+    let prompts = crux_repo::bank::prompts_for(&mut conn, actor.user_id, course.id, component.as_ref().map(|k| k.id), 200).await?;
+    let exam = crux_repo::deadlines::upcoming_exams(&mut conn, actor.user_id, ctx.clock.now())
+        .await?
+        .into_iter()
+        .find(|d| d.course_id == course.id);
+    drop(conn);
+    let seed = match seed_ref {
+        Some(r) => match crate::bank::get(ctx, &actor, r).await {
+            Ok(q) => {
+                let editor = crux_domain::policy::can_edit_course(&crate::courses::access_of(&course));
+                let mut v = serde_json::to_value(&q).map_err(anyhow::Error::from)?;
+                if !editor {
+                    strip_key(&mut v["current"]);
+                }
+                Some(json!({ "type": v["type"], "content": v["current"] }))
+            }
+            Err(_) => None,
+        },
+        None => None,
+    };
+    Ok(json!({
+        "course": { "id": course.public_id, "name": course.name, "code": course.code, "examFormat": exam.and_then(|d| d.format) },
+        "component": component.map(|k| json!({ "id": k.public_id, "code": k.code, "name": k.name })),
+        "existingPrompts": prompts.iter().map(|(p, _)| p).collect::<Vec<_>>(),
+        "examples": prompts.iter().take(5).map(|(p, t)| json!({ "type": t, "prompt": p })).collect::<Vec<_>>(),
+        "seed": seed,
+    }))
+}
+
+/// `GET /internal/v1/ai/topup-plan?user=`: per Active course, ordered by the plan then the nearest
+/// exam, each lecture's exam question count and untested questions (spec 7.5 nightly top-up).
+pub async fn topup_plan(ctx: &Ctx, user_ref: &str) -> AppResult<serde_json::Value> {
+    use serde_json::json;
+    let now = ctx.clock.now();
+    let mut conn = ctx.pool.acquire().await?;
+    let actor = actor_of(&mut conn, user_ref).await?;
+    let exams = crux_repo::deadlines::upcoming_exams(&mut conn, actor.user_id, now).await?;
+    let plan = crux_repo::plan::between(&mut conn, actor.user_id, now, now + chrono::Duration::days(14)).await?;
+    let mut order: Vec<i64> = plan.iter().filter(|e| e.status == "Planned").map(|e| e.course_id).collect();
+    order.extend(exams.iter().map(|d| d.course_id));
+    order.extend(crux_repo::flash::active_course_ids(&mut conn, actor.user_id).await?);
+    let active = crux_repo::flash::active_course_ids(&mut conn, actor.user_id).await?;
+    let mut seen = Vec::new();
+    let mut courses = Vec::new();
+    for c in order {
+        if seen.contains(&c) || !active.contains(&c) {
+            continue;
+        }
+        seen.push(c);
+        let course_ref = crux_repo::courses::public_id_of(&mut conn, c).await?;
+        let exam = exams.iter().find(|d| d.course_id == c);
+        let layout = match exam {
+            Some(d) => crux_repo::deadlines::layouts(&mut conn, &[d.id]).await?,
+            None => Vec::new(),
+        };
+        let untested: std::collections::HashMap<i64, i64> =
+            crux_repo::bank::untested_by_component(&mut conn, actor.user_id, c).await?.into_iter().collect();
+        let lectures: Vec<_> = crux_repo::catalog::components(&mut conn, c, false)
+            .await?
+            .into_iter()
+            .map(|k| {
+                let x = layout.iter().find(|l| l.component_ref == k.public_id).and_then(|l| l.question_count);
+                json!({ "componentId": k.public_id, "code": k.code, "questionCount": x, "untested": untested.get(&k.id).copied().unwrap_or(0) })
+            })
+            .collect();
+        courses.push(json!({
+            "courseId": course_ref,
+            "daysToExam": exam.map(|d| (d.starts_at - now).num_days()),
+            "lectures": lectures,
+        }));
+    }
+    let tz = crux_repo::users::by_id(&mut conn, actor.user_id).await?.map(|u| u.time_zone).unwrap_or_else(|| "Europe/Amsterdam".into());
+    Ok(json!({ "timeZone": tz, "courses": courses }))
+}

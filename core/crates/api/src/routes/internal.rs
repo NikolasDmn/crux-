@@ -21,6 +21,9 @@ pub fn router() -> Router<AppState> {
         .route("/internal/v1/ai/materials", get(ai_materials))
         .route("/internal/v1/context/user", post(ai_context))
         .route("/internal/v1/mocks/{id}/open", get(mock_open))
+        .route("/internal/v1/ai/generation-context", get(generation_context))
+        .route("/internal/v1/ai/topup-plan", get(topup_plan))
+        .route("/internal/v1/questions/generated", post(questions_generated))
 }
 
 #[derive(Deserialize)]
@@ -94,6 +97,35 @@ async fn mock_open(
 ) -> ApiResult<Json<serde_json::Value>> {
     let status = crux_service::mocks::open_for(&state.ctx, &q.user, &id).await?;
     Ok(Json(serde_json::json!({ "status": status })))
+}
+
+#[derive(Deserialize)]
+struct GenerationQuery {
+    user: String,
+    course: String,
+    component: Option<String>,
+    seed: Option<String>,
+}
+
+async fn generation_context(
+    State(state): State<AppState>,
+    _svc: Service,
+    Query(q): Query<GenerationQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    Ok(Json(crux_service::ai::generation_context(&state.ctx, &q.user, &q.course, q.component.as_deref(), q.seed.as_deref()).await?))
+}
+
+async fn topup_plan(State(state): State<AppState>, _svc: Service, Query(q): Query<UserQuery>) -> ApiResult<Json<serde_json::Value>> {
+    Ok(Json(crux_service::ai::topup_plan(&state.ctx, &q.user).await?))
+}
+
+/// Spec 7.5: ai never writes catalog rows; core creates generated questions after its own checks.
+async fn questions_generated(
+    State(state): State<AppState>,
+    _svc: Service,
+    JsonBody(input): JsonBody<crux_service::bank::GeneratedInput>,
+) -> ApiResult<Json<crux_service::bank::GeneratedResult>> {
+    Ok(Json(crux_service::bank::create_generated(&state.ctx, input).await?))
 }
 
 /// Public keys for verifying access and service tokens. Public data; cache for a few minutes.

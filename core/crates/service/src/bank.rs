@@ -708,3 +708,90 @@ pub(crate) fn version_input_from(v: &VersionView) -> VersionInput {
         }),
     }
 }
+
+// ---------- generated questions (from ai, spec 7.5) ----------
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedQuestion {
+    #[serde(rename = "type")]
+    pub qtype: QuestionType,
+    pub content: VersionInput,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedInput {
+    pub user: String,
+    pub course: String,
+    pub component: String,
+    pub concept: Option<String>,
+    pub seed_question: Option<String>,
+    /// UserAiSettings.AutoApproveGenerated: Approved, else Draft.
+    #[serde(default)]
+    pub auto_approve: bool,
+    pub questions: Vec<GeneratedQuestion>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedResult {
+    pub created: Vec<String>,
+    /// Index into `questions` and why it was refused.
+    pub rejected: Vec<(usize, String)>,
+}
+
+/// `POST /internal/v1/questions/generated`. Core re-checks access for the user (spec 9.2) and the
+/// rules: Source Generated, KeyReliability Derived, the user's own question (spec 7.5).
+pub async fn create_generated(ctx: &Ctx, input: GeneratedInput) -> AppResult<GeneratedResult> {
+    let mut tx = crux_repo::begin(&ctx.pool).await?;
+    let actor = crate::ai::actor_of(&mut tx, &input.user).await?;
+    let course = readable(&mut tx, &actor, &input.course).await?;
+    let component_id = resolve_component(&mut tx, course.id, &input.component).await?;
+    let concepts = match &input.concept {
+        Some(c) => concept_links(&mut tx, course.id, std::slice::from_ref(c), Some(c)).await?,
+        None => Vec::new(),
+    };
+    let seed_id = match &input.seed_question {
+        Some(r) => repo::question(&mut tx, r).await?.filter(|q| q.course_id == course.id).map(|q| q.id),
+        None => None,
+    };
+    let mut out = GeneratedResult { created: Vec::new(), rejected: Vec::new() };
+    for (i, g) in input.questions.into_iter().enumerate().take(50) {
+        let mut content = g.content;
+        content.key_reliability = Some("Derived".into());
+        let errors = question::validate_version(g.qtype, &content, "Generated");
+        if !errors.is_empty() {
+            out.rejected.push((i, errors.0.first().map(|e| e.code.clone()).unwrap_or_default()));
+            continue;
+        }
+        let public_id = ctx.ids.ulid();
+        let qid = repo::insert_question(
+            &mut tx,
+            &repo::NewQuestion {
+                public_id: &public_id,
+                course_id: course.id,
+                component_id,
+                qtype: g.qtype.as_db(),
+                owner_user_id: Some(actor.user_id),
+                source: "Generated",
+                source_label: Some("AI"),
+                paper_id: None,
+                paper_question_no: None,
+                family_id: None,
+                review_state: if input.auto_approve { "Approved" } else { "Draft" },
+                created_by: actor.user_id,
+            },
+        )
+        .await?;
+        let vid = write_version(&mut tx, ctx, &actor, qid, g.qtype, &content).await?;
+        repo::set_current_version(&mut tx, qid, vid).await?;
+        repo::set_concepts(&mut tx, qid, &concepts).await?;
+        if let Some(seed) = seed_id {
+            repo::set_seed(&mut tx, qid, seed).await?;
+        }
+        out.created.push(public_id);
+    }
+    tx.commit().await?;
+    Ok(out)
+}

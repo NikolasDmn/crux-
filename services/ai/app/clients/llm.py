@@ -22,6 +22,15 @@ import httpx
 class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
+    #: Set when a fallback model produced the reply instead of the requested one (B8-2).
+    served_by: str | None = None
+
+    def __add__(self, other: "Usage") -> "Usage":
+        return Usage(
+            self.input_tokens + other.input_tokens,
+            self.output_tokens + other.output_tokens,
+            other.served_by or self.served_by,
+        )
 
 
 class LlmError(Exception):
@@ -50,6 +59,16 @@ class Provider(Protocol):
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 #: Models that take `fallbacks: "default"` (the API picks the fallback by refusal category).
 FALLBACK_MODELS = frozenset({"claude-opus-5-5", "claude-sonnet-5-5"})
+
+
+def _served_by(final: Any) -> str | None:
+    """The fallback model, when one produced the message: a `fallback_message` entry in
+    `usage.iterations` is the served-by signal (sticky turns carry no fallback block); the
+    top-level `model` names the model that wrote it."""
+    iterations = getattr(final.usage, "iterations", None) or []
+    if any(getattr(i, "type", None) == "fallback_message" for i in iterations):
+        return str(final.model)
+    return None
 
 
 def _anthropic_error(e: Exception) -> LlmError:
@@ -95,7 +114,7 @@ class AnthropicProvider:
             raise _anthropic_error(e) from e
         if final.stop_reason == "refusal":
             raise LlmError("the model declined this request")
-        yield Usage(final.usage.input_tokens, final.usage.output_tokens)
+        yield Usage(final.usage.input_tokens, final.usage.output_tokens, _served_by(final))
 
     async def complete_json(
         self, api_key: str, model: str, system: str, messages: list[Message], schema: dict[str, Any], max_tokens: int
@@ -120,7 +139,7 @@ class AnthropicProvider:
             data = json.loads(text)
         except json.JSONDecodeError as e:
             raise LlmError("the model returned invalid JSON") from e
-        return data, Usage(final.usage.input_tokens, final.usage.output_tokens)
+        return data, Usage(final.usage.input_tokens, final.usage.output_tokens, _served_by(final))
 
 
 # ---------- OpenAI-shaped chat completions (OpenAI, Mistral) ----------
@@ -290,6 +309,8 @@ class FakeProvider:
     chat_reply: Callable[[str, list[Message]], str] | None = None
     calls: list[dict[str, Any]] = field(default_factory=list)
     fail_with: LlmError | None = None
+    #: Pretend a refusal fallback answered (the reply is "served by" this model).
+    served_by: str | None = None
 
     async def verify(self, api_key: str) -> bool:
         return api_key.startswith("fake-valid")
@@ -304,7 +325,7 @@ class FakeProvider:
         reply = self.chat_reply(system, messages) if self.chat_reply else f"You asked: {last[:200]} [p.1]"
         for i in range(0, len(reply), 16):
             yield reply[i : i + 16]
-        yield Usage(len(system + last) // 4, len(reply) // 4)
+        yield Usage(len(system + last) // 4, len(reply) // 4, self.served_by)
 
     async def complete_json(
         self, api_key: str, model: str, system: str, messages: list[Message], schema: dict[str, Any], max_tokens: int

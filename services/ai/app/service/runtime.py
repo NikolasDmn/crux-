@@ -174,7 +174,10 @@ async def finish_run(
     now = utcnow()
     async with transaction(deps.sessions) as s:
         r = (await s.execute(select(run).where(run.c.Id == run_id).with_for_update())).one()
-        model = models.find(r.Provider, r.Model)
+        # A fallback reply bills at the fallback model's rates (when the price table has it).
+        model = (used and used.served_by and models.find(r.Provider, used.served_by)) or models.find(
+            r.Provider, r.Model
+        )
         actual = models.cost_micro_usd(model, used.input_tokens, used.output_tokens) if model and used else 0
         month = rules.month_of(r.CreatedAt)
         await s.execute(

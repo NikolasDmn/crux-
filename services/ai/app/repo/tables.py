@@ -171,6 +171,7 @@ message = Table(
     Column("Anchor", JSON),
     Column("AiRunId", BigInteger),
     Column("Feedback", String(8)),
+    Column("ServedByModel", String(64)),
     Column("CreatedAt", DateTime),
 )
 

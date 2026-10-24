@@ -58,6 +58,8 @@ class MessageView(Camel):
     content: str
     anchor: dict[str, Any] | None
     feedback: str | None
+    #: The model that wrote this reply when it wasn't the one picked (a refusal fallback, B8-2).
+    served_by: str | None = None
     created_at: str
     citations: list[CitationView]
 
@@ -178,6 +180,7 @@ async def _messages(s: Any, conv_id: int) -> list[MessageView]:
             content=m.Content,
             anchor=m.Anchor,
             feedback=m.Feedback,
+            served_by=m.ServedByModel,
             created_at=iso(m.CreatedAt) if m.CreatedAt else "",
             citations=cites.get(m.Id, []),
         )
@@ -369,7 +372,7 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
         if prep["approach"]:
             # Spec 7.3: yes/no + one hint. Judge the reply; regenerate once if it solves the problem.
             reply, used = await _complete(deps, g, prep["system"], prep["messages"])
-            total = Usage(total.input_tokens + used.input_tokens, total.output_tokens + used.output_tokens)
+            total = total + used
             verdict, used = await provider.complete_json(
                 key,
                 g.model.id,
@@ -378,7 +381,7 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
                 prompt.JUDGE_SCHEMA,
                 200,
             )
-            total = Usage(total.input_tokens + used.input_tokens, total.output_tokens + used.output_tokens)
+            total = total + used
             if verdict.get("fullSolution"):
                 stricter = (
                     prep["system"]
@@ -386,7 +389,7 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
                     + "Yes or No, one hint, then a question."
                 )
                 reply, used = await _complete(deps, g, stricter, prep["messages"])
-                total = Usage(total.input_tokens + used.input_tokens, total.output_tokens + used.output_tokens)
+                total = total + used
             reply = prompt.trim_words(reply, prep["max_words"])
             for i in range(0, len(reply), 24):
                 yield event("delta", {"text": reply[i : i + 24]})
@@ -413,7 +416,12 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
         async with transaction(deps.sessions) as s:
             result = await s.execute(
                 insert(message).values(
-                    ConversationId=conv.Id, Role="Assistant", Content=reply, AiRunId=run_id, CreatedAt=utcnow()
+                    ConversationId=conv.Id,
+                    Role="Assistant",
+                    Content=reply,
+                    AiRunId=run_id,
+                    ServedByModel=total.served_by,
+                    CreatedAt=utcnow(),
                 )
             )
             msg_id = int(cast(CursorResult[Any], result).inserted_primary_key[0])  # type: ignore[index]
@@ -434,7 +442,7 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
         cost = await runtime.finish_run(
             deps, run_id, total, transcript_ref=transcript_ref, retain_days=deps.settings.transcript_days
         )
-        yield event("done", {"messageId": msg_id, "costMicroUsd": cost})
+        yield event("done", {"messageId": msg_id, "costMicroUsd": cost, "servedBy": total.served_by})
     except LlmError as e:
         await runtime.finish_run(deps, run_id, total, error=str(e))
         yield event("error", {"code": "provider_auth" if e.auth else "provider_error", "message": str(e)})

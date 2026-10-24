@@ -33,6 +33,21 @@ async def turn_on(deps: Any) -> None:
     await account.add_key(deps, USER, account.KeyInput(provider="fake", api_key="fake-valid-key-0001"))
 
 
+def test_served_by_reads_the_fallback_signal() -> None:
+    from types import SimpleNamespace as N
+
+    from app.clients.llm import Usage, _served_by
+
+    plain = N(model="claude-opus-5-5", usage=N(iterations=[N(type="message")]))
+    rescued = N(model="claude-opus-4-8", usage=N(iterations=[N(type="message"), N(type="fallback_message")]))
+    assert (_served_by(plain), _served_by(rescued), _served_by(N(model="m", usage=N()))) == (
+        None,
+        "claude-opus-4-8",
+        None,
+    )
+    assert (Usage(1, 2) + Usage(3, 4, "x")) == Usage(4, 6, "x")
+
+
 def test_prompt_rules() -> None:
     assert prompt.is_approach_check("Is my approach right? I divided by n.")
     assert not prompt.is_approach_check("Explain the central limit theorem")
@@ -120,6 +135,17 @@ async def test_chat_with_context_citations_and_rules() -> None:
         stored = json.loads(deps.store.objects[r.TranscriptRef])  # type: ignore[union-attr]
         assert "fake-valid" not in json.dumps(stored), "never the key"
 
+        # A refusal fallback wrote the reply: the stream and the stored message say which model.
+        fake.served_by = "claude-opus-4-8"
+        inp2 = chat.SendInput(content="And the variance of X + 3?")
+        out = frames(
+            [f async for f in chat.stream_reply(deps, USER, inp2, await chat.prepare(deps, USER, conv.id, inp2))]
+        )
+        assert out[-1] == ("done", {**out[-1][1], "servedBy": "claude-opus-4-8"})
+        full = await chat.get_conversation(deps, USER, conv.id)
+        assert [m.served_by for m in full.messages or []] == [None, None, None, "claude-opus-4-8"]
+        fake.served_by = None
+
         # Approach check with a strict tutor: the full solution is judged and regenerated once.
         strict = next(t for t in await tutors.list_tutors(deps, USER) if t.key == "strict-coach")
         await account.put_course_settings(deps, USER, COURSE, account.CourseSettingsInput(tutor_id=strict.id))
@@ -142,5 +168,5 @@ async def test_chat_with_context_citations_and_rules() -> None:
         # Transcripts past RetainUntil are purged.
         async with deps.sessions() as s, s.begin():
             await s.execute(run.update().values(RetainUntil=datetime(2020, 1, 1)))
-        assert await chat.purge_transcripts(deps) == 2, "two runs (the judge call is part of its run)"
+        assert await chat.purge_transcripts(deps) == 3, "three runs (the judge call is part of its run)"
         assert deps.store.objects == {}  # type: ignore[union-attr]

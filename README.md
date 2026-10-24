@@ -67,7 +67,7 @@ with dev defaults. The important ones:
 | `CRUX_UNSUBSCRIBE_SECRET` | notify | HMAC key for one-click unsubscribe links |
 | `CRUX_EMAIL_WEBHOOK_SECRET` | notify | shared secret for the bounce/complaint webhook |
 | `CRUX_*_DB_PASSWORD` | mysql, each service | service DB users' passwords, set on first start by `deploy/mysql/init-prod.sh` |
-| `BACKUP_S3_*`, `BACKUP_KEEP_DAYS` | `scripts/backup.sh` | off-site bucket for nightly backups; empty = local only |
+| `BACKUP_S3_*`, `BACKUP_KEEP_DAYS`, `BACKUP_AGE_RECIPIENT` | `scripts/backup.sh` | off-site bucket for nightly backups (age-encrypted); empty = local only |
 
 ## How to add an event topic
 
@@ -98,8 +98,10 @@ with dev defaults. The important ones:
   (outbox backlog, pending exports and deletions).
 - **Backups.** `scripts/backup.sh` (cron: `15 2 * * *`) writes one consistent `mysqldump` per
   database (binlog position included, for point-in-time replay), the object store as a tar, and
-  `SHA256SUMS`, into `backups/<UTC stamp>/`. With `BACKUP_S3_BUCKET` set it uploads them and prunes
-  uploads older than `BACKUP_KEEP_DAYS`. Use a private, encrypted bucket: dumps hold personal data.
+  `SHA256SUMS`, into `backups/<UTC stamp>/`. With `BACKUP_S3_BUCKET` set it uploads them, encrypted
+  with `age` to `BACKUP_AGE_RECIPIENT` (it refuses to upload plain dumps), and prunes uploads older
+  than `BACKUP_KEEP_DAYS`. Keep the private key off the server; to restore an upload:
+  `age -d -i crux-backup.key crux_core.sql.gz.age > crux_core.sql.gz`.
 - **Restore drill.** Monthly: `scripts/restore-drill.sh backups/<stamp>` loads each dump into a
   scratch database, compares table counts, checks the checksums and lists the tar.
 - **Load test.** `scripts/load/run.sh <base-url> [users] [duration]` creates test users (refused
@@ -114,8 +116,9 @@ with dev defaults. The important ones:
 1. Docker + Compose on the host; clone the repo; `cp .env.example .env` and `chmod 600 .env`.
 2. Change **every** secret in `.env`, and set `CRUX_ENV=prod`, `CRUX_SITE_ADDRESS=<your domain>`
    (Caddy gets the TLS certificate), `CRUX_APP_BASE_URL=https://<your domain>`,
-   `CRUX_COOKIE_SECURE=true`, a real `CRUX_SMTP_URL`, `CRUX_SCANNER=clamd` (ClamAV), and the
-   `BACKUP_S3_*` bucket.
+   `CRUX_COOKIE_SECURE=true`, Postmark in `CRUX_SMTP_URL` and its webhook secret,
+   `CRUX_SCANNER=clamd` (ClamAV), the `BACKUP_S3_*` bucket and `BACKUP_AGE_RECIPIENT`
+   (`apt install age`; make the key pair on your own machine).
 3. A JWT key: `openssl genpkey -algorithm ed25519 -out deploy/secrets/jwt_ed25519.pem`.
 4. `docker compose -f deploy/compose.yaml --env-file .env --profile ai --profile full up -d --build`
    (`full` adds ClamAV). On an empty volume MySQL creates the service users with the `.env` passwords and drops the test user.

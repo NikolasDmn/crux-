@@ -382,6 +382,52 @@ pub async fn stat_for_update(conn: &mut MySqlConnection, user_id: i64, question_
     .await?)
 }
 
+/// One graded answer from the log: `(question, outcome, confidence, at)`.
+pub type LoggedAnswer = (i64, String, Option<String>, DateTime<Utc>);
+
+/// Every graded answer of the user, oldest first: practice/warm-up attempts and the items of
+/// graded mocks (the same answers and times `practice::record` applied).
+pub async fn answer_log(conn: &mut MySqlConnection, user_id: i64) -> RepoResult<Vec<LoggedAnswer>> {
+    Ok(sqlx::query_as(
+        "SELECT QuestionId, Outcome, Confidence, At FROM ( \
+           SELECT a.QuestionId, CAST(a.Outcome AS CHAR) AS Outcome, CAST(a.Confidence AS CHAR) AS Confidence, a.AnsweredAt AS At, a.Id AS Seq, 0 AS Src \
+             FROM QuestionAttempt a WHERE a.UserId = ? \
+           UNION ALL \
+           SELECT mq.QuestionId, CAST(mq.Outcome AS CHAR), CAST(mq.Confidence AS CHAR), COALESCE(mq.AnsweredAt, m.FinishedAt), mq.QuestionOrder, 1 \
+             FROM MockQuestion mq JOIN MockExam m ON m.Id = mq.MockExamId \
+            WHERE m.UserId = ? AND m.Status IN ('Graded', 'Reviewed') AND mq.Outcome IS NOT NULL \
+         ) log WHERE At IS NOT NULL ORDER BY At, Src, Seq",
+    )
+    .bind(user_id)
+    .bind(user_id)
+    .fetch_all(conn)
+    .await?)
+}
+
+/// All of the user's stat rows, keyed by question.
+pub async fn stats_of_user(conn: &mut MySqlConnection, user_id: i64) -> RepoResult<Vec<(i64, StatRow)>> {
+    #[derive(sqlx::FromRow)]
+    #[sqlx(rename_all = "PascalCase")]
+    struct Row {
+        question_id: i64,
+        #[sqlx(flatten)]
+        stat: StatRow,
+    }
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT QuestionId, Attempts, Rights, SureWrongs, CAST(LastOutcome AS CHAR) AS LastOutcome, CAST(LastConfidence AS CHAR) AS LastConfidence, \
+         LastAnsweredAt, FirstRightAt FROM UserQuestionStat WHERE UserId = ?",
+    )
+    .bind(user_id)
+    .fetch_all(conn)
+    .await?;
+    Ok(rows.into_iter().map(|r| (r.question_id, r.stat)).collect())
+}
+
+pub async fn delete_stat(conn: &mut MySqlConnection, user_id: i64, question_id: i64) -> RepoResult<()> {
+    sqlx::query("DELETE FROM UserQuestionStat WHERE UserId = ? AND QuestionId = ?").bind(user_id).bind(question_id).execute(conn).await?;
+    Ok(())
+}
+
 pub async fn upsert_stat(conn: &mut MySqlConnection, user_id: i64, question_id: i64, s: &StatRow) -> RepoResult<()> {
     sqlx::query(
         "INSERT INTO UserQuestionStat (UserId, QuestionId, Attempts, Rights, SureWrongs, LastOutcome, LastConfidence, LastAnsweredAt, FirstRightAt) \

@@ -393,3 +393,55 @@ async fn studying_the_lecture_makes_a_practice_pass_warm() {
     assert_eq!(view["resolved"][0]["topic"], "Median", "{view}");
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn nightly_check_repairs_drifted_question_stats() {
+    let Some(h) = common::harness().await else { return };
+    let (t, me, _) = signup(&h.app, &h.t.ctx, "drifter").await;
+    let c = setup(&h, &t).await;
+    let q = mc(&h, &t, &c, "Drift?").await;
+    for (n, right, conf) in [(1, false, "Sure"), (2, true, "Guess"), (3, true, "Sure")] {
+        let body = json!({"clientId": format!("01DRIFT{:019}", n), "questionId": q["id"], "context": "Practice",
+            "choiceOptionId": option(&q, right), "confidence": conf});
+        assert_eq!(call(&h.app, "POST", "/attempts", Some(&t), Some(body), &[]).await.status, StatusCode::OK);
+        h.t.clock.advance(chrono::Duration::minutes(5));
+    }
+    let user_id: i64 = sqlx::query_scalar("SELECT Id FROM Users WHERE PublicId = ?")
+        .bind(me["id"].as_str().unwrap())
+        .fetch_one(&h.t.ctx.pool)
+        .await
+        .unwrap();
+    let stat = || async {
+        sqlx::query_as::<_, (i32, i32, i32)>("SELECT Attempts, Rights, SureWrongs FROM UserQuestionStat WHERE UserId = ?")
+            .bind(user_id)
+            .fetch_one(&h.t.ctx.pool)
+            .await
+            .unwrap()
+    };
+    assert_eq!(stat().await, (3, 1, 1), "a guessed right isn't a right");
+
+    // A graded mock is part of the log too (fresh token: the clock moved 15 min).
+    let t = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "drifter", "password": "correct horse battery"})), &[])
+        .await
+        .json["accessToken"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let m = call(&h.app, "POST", &format!("/courses/{}/mocks", c.id), Some(&t), Some(json!({"n": 1})), &[]).await;
+    assert_eq!(m.status, StatusCode::CREATED, "{}", m.json);
+    let mid = m.json["id"].as_str().unwrap().to_string();
+    assert!(call(&h.app, "POST", &format!("/mocks/{mid}/start"), Some(&t), None, &[]).await.status.is_success());
+    let a = json!({"choiceOptionId": option(&q, false), "confidence": "Sure"});
+    assert!(call(&h.app, "PUT", &format!("/mocks/{mid}/questions/1/answer"), Some(&t), Some(a), &[]).await.status.is_success());
+    let done = call(&h.app, "POST", &format!("/mocks/{mid}/submit"), Some(&t), None, &[]).await;
+    assert_eq!(done.json["status"], "Graded", "{}", done.json);
+    assert_eq!(stat().await, (4, 1, 2));
+
+    let mut conn = h.t.ctx.pool.acquire().await.unwrap();
+    assert_eq!(crux_service::practice::verify_stats(&mut conn, user_id).await.unwrap(), 0, "no drift after normal use");
+    sqlx::query("UPDATE UserQuestionStat SET Attempts = 9, Rights = 0 WHERE UserId = ?").bind(user_id).execute(&mut *conn).await.unwrap();
+    drop(conn);
+    crux_service::stats::rebuild_all(&h.t.ctx).await.unwrap();
+    assert_eq!(stat().await, (4, 1, 2), "the nightly job put it back");
+    h.db.drop_db().await;
+}

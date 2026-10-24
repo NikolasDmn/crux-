@@ -331,7 +331,8 @@ pub async fn week(ctx: &Ctx, actor: &Actor, q: WeekQuery) -> AppResult<WeekView>
     Ok(WeekView { iso_week: w, summary, rebuilt_at: iso(at) })
 }
 
-/// Nightly readmodels.rebuild (spec 10): this and last week for every user active in the last 8 days.
+/// Nightly readmodels.rebuild (spec 10): this and last week for every user active in the last 8 days,
+/// and their `UserQuestionStat` rows checked against the answer log (drift is logged and repaired).
 pub async fn rebuild_all(ctx: &Ctx) -> anyhow::Result<u64> {
     let now = ctx.clock.now();
     let mut conn = ctx.pool.acquire().await?;
@@ -345,6 +346,10 @@ pub async fn rebuild_all(ctx: &Ctx) -> anyhow::Result<u64> {
         for d in [today - Duration::days(7), today] {
             rebuild_week(&mut tx, ctx, u, &iso_week_of(d)).await.map_err(|e| anyhow::anyhow!("week for {u}: {e}"))?;
             n += 1;
+        }
+        let drift = crate::practice::verify_stats(&mut tx, u).await.map_err(|e| anyhow::anyhow!("stats for {u}: {e}"))?;
+        if drift > 0 {
+            tracing::warn!(user_id = u, rows = drift, "UserQuestionStat drift repaired");
         }
         tx.commit().await?;
     }

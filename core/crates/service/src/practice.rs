@@ -29,7 +29,7 @@ pub struct Answered {
     pub cold: Option<bool>,
 }
 
-fn stat_from_row(r: Option<StatRow>) -> Stat {
+pub(crate) fn stat_from_row(r: Option<StatRow>) -> Stat {
     match r {
         None => Stat::EMPTY,
         Some(r) => Stat {
@@ -44,7 +44,7 @@ fn stat_from_row(r: Option<StatRow>) -> Stat {
     }
 }
 
-fn stat_to_row(s: &Stat) -> StatRow {
+pub(crate) fn stat_to_row(s: &Stat) -> StatRow {
     StatRow {
         attempts: s.attempts,
         rights: s.rights,
@@ -54,6 +54,34 @@ fn stat_to_row(s: &Stat) -> StatRow {
         last_answered_at: s.last_answered_at,
         first_right_at: s.first_right_at,
     }
+}
+
+/// Spec 10 `readmodels.rebuild`: rebuilds the user's `UserQuestionStat` rows from the answer log
+/// and repairs any that drifted. `Stat::apply` is order-free (sums, newest-wins, earliest right),
+/// so replaying the log oldest first gives what the incremental updates should have produced.
+/// Returns the number of rows repaired.
+pub async fn verify_stats(conn: &mut MySqlConnection, user_id: i64) -> AppResult<u64> {
+    use std::collections::BTreeMap;
+    let mut want: BTreeMap<i64, Stat> = BTreeMap::new();
+    for (q, outcome, confidence, at) in mocks::answer_log(conn, user_id).await? {
+        let Some(outcome) = Outcome::from_db(&outcome) else { continue };
+        let s = want.remove(&q).unwrap_or(Stat::EMPTY);
+        want.insert(q, s.apply(outcome, confidence.as_deref().and_then(Confidence::from_db), at));
+    }
+    let mut have: BTreeMap<i64, Stat> =
+        mocks::stats_of_user(conn, user_id).await?.into_iter().map(|(q, r)| (q, stat_from_row(Some(r)))).collect();
+    let mut repaired = 0;
+    for (q, s) in &want {
+        if have.remove(q).as_ref() != Some(s) {
+            mocks::upsert_stat(conn, user_id, *q, &stat_to_row(s)).await?;
+            repaired += 1;
+        }
+    }
+    for q in have.into_keys() {
+        mocks::delete_stat(conn, user_id, q).await?;
+        repaired += 1;
+    }
+    Ok(repaired)
 }
 
 pub async fn record(conn: &mut MySqlConnection, a: &Answered) -> AppResult<()> {

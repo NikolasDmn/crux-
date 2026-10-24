@@ -134,7 +134,7 @@ files waits for the object store, and every compose service has `restart: unless
 | B6-7 | Unsubscribe link: `…/notify/unsubscribe?token=<HMAC(secret, userRef)>&kind=<kind>` (only the hash is stored). **GET shows a confirm page** (mail scanners open links); the button or the RFC 8058 one-click POST applies it. `kind=all` puts the address on EmailSuppression (Unsubscribe) | A GET that changes state gets triggered by link scanners |
 | B6-8 | Bounce/complaint webhook: `POST /notify/webhooks/email`, a generic `{events:[{type: bounce|complaint, email}]}` body, secret in `X-Crux-Webhook-Secret`; 404 while no secret is configured. Provider-specific adapters come with the provider choice | Spec names no provider |
 | B6-9 | `plan.today` (07:30 local) and `flash.due` (08:00 local, only with cards due) are produced by **core** in `deadlines.tick`, once per user per local day (Redis marker + dedupe key), and not after 12:00 local if the job was down | Core has the plan and the cards |
-| B6-10 | `mock.graded`, `import.ready`, `generation.done` have templates now; their producers come with AI grading/import/generation (M8). An auto-graded mock is graded at submit, so it sends nothing | |
+| B6-10 | `mock.graded` is requested whenever a mock becomes Graded (opt-in, so only users who turned it on get it) and when AI suggestions are ready; `import.ready` and `generation.done` come from ai (M8) | |
 | B6-11 | Inbox paging: `?cursor=<id of the last item>`; every inbox/read response carries the unread count | |
 | B6-12 | Gateway: compression only for a list of text/JSON types (never `text/event-stream`), `flush_interval -1` on the files and notify proxies | Compressed SSE frames sit in a buffer |
 | B6-13 | New routes: `POST /notify/unsubscribe` (beside the GET in spec 15) and `POST /notify/webhooks/email` | B6-7, B6-8 |
@@ -155,6 +155,32 @@ files waits for the object store, and every compose service has `restart: unless
 | B7-9 | The purge runs in the files worker's hourly sweep and sends one opt-in `storage.purged` notification per owner per run; `file.infected` became an always-in-app kind | Users should learn originals went |
 | B7-10 | Quota view per course adds `pendingPurge` bytes; `purgeable` = extracted originals not yet pending | Spec lists `purgeable` only |
 | B7-11 | Fix found by the log scan: core's event consumer uses its **own Redis connection** (its blocking read stalled the relay's XADD on the shared multiplexed connection, making API writes wait ~9 s) | |
+
+## Milestone 8 build choices (AI)
+
+| # | Choice | Why / where |
+|---|---|---|
+| B8-1 | Adapters: **Anthropic through the official SDK** (`anthropic` 2.x); OpenAI, Mistral (same chat-completions shape) and Google over httpx. Google replies arrive as one piece rather than streamed. A **fake provider** (keys starting `fake-valid`) exists for dev and tests only and is refused when `CRUX_ENV=prod` | Spec 7.2 lists four providers; tests can't call real ones |
+| B8-2 | Anthropic calls on Claude Opus 5.5 and Sonnet 5.5 use the **server-side refusal fallback** (beta, `fallbacks: "default"`): if the model declines, the API re-runs the request on another model in the same call. A final refusal shows as an error in the chat | Recommended default for these models; drop it if you'd rather a refusal just stops |
+| B8-3 | Price table: Anthropic rows from Anthropic's list (Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50 per MTok); **OpenAI/Google/Mistral rows are placeholders to check** before launch. Default model per provider: Claude Opus 5.5 for Anthropic | Spec: a static list updated by hand |
+| B8-4 | Keys: AES-256-GCM envelope encryption (a data key per row wrapped by `CRUX_KMS_MASTER_KEY`, the row's PublicId as associated data); revoking wipes the ciphertext. The first usable key becomes the default, with that provider's default model | Spec 7.2 |
+| B8-5 | Consent: turning AI on needs the current policy version (`2026-10`); every change to a switch, share scope or the cap writes `AiConsentLog` with the delta | Spec 15 |
+| B8-6 | Core's public gate check is `GET /me/ai-allowed?feature=&courseId=` (everything under `/api/v1/ai/*` goes to the ai service). ai unreachable → `service_unavailable` | Spec 7.1 "core proxies it" |
+| B8-7 | Budget: the reservation = price-table cost of (estimated input + max output tokens); over the cap the run is Blocked (402); settled with the actual usage | Spec 7.2 reserve-then-settle |
+| B8-8 | Custom tutors: free text up to 2,000 characters, refused when it tries to override safety (a phrase list); rule keys and ranges are fixed (`maxWords` 50–1000, `hintsBeforeSolution` 0–5, …). No tutor chosen → the built-in Friendly explainer. An edit makes the old version inactive | Spec 7.3 |
+| B8-9 | Chat retrieval: MySQL FULLTEXT, top 8 chunks from AI-allowed, non-excluded materials (the conversation's material or lecture first), plus the anchored page. **Embeddings are not built** | Spec 7.4 allows FULLTEXT when there are no embeddings |
+| B8-10 | The approach-check rule uses a **heuristic classifier** (phrases like "is my approach right"), not an extra model call; the judge is a model call and the reply is regenerated once. `maxWords` stops the stream and trims the stored reply | Spec 7.3 allows "a cheap classifier call, or heuristics" |
+| B8-11 | Citations: `[p.N]` in the reply matched to the retrieved chunk of that page. Transcripts (prompt + reply, never the key) go to the object store for 90 days; a daily job deletes them | Spec 7.4 |
+| B8-12 | Answer keys reach the prompt only when the user may see them: mock items as the mock view shows them; a bank question's key after the user answered it once; a seed question's key only for Owners/Editors | Spec 7.4 "never reveal a hidden key" |
+| B8-13 | AI grading: one run per open answer; a blank answer is suggested as Blank without a model call; core fetches the suggestion from ai when the user decides and checks it belongs to that mock, item and user. Self grading also works while suggestions are pending | Core owns the grade (schema note) |
+| B8-14 | Generation: `componentId` is required; generated questions are the user's own (private), Source Generated, KeyReliability Derived, Draft unless AutoApproveGenerated. Jobs run one at a time per worker | Spec 7.5; "at most 3 concurrent per user" is met trivially |
+| B8-15 | Nightly top-up: an hourly loop asks core for the user's time zone and plan, runs at 03:00 local, at most once per 20 h; a course's NightlyGeneration setting overrides the user's | Spec 7.5 |
+| B8-16 | Import: **one model call over all files** (about 60,000 characters of text, split across files); proposal payloads travel as JSON strings so the output schema stays strict; Question proposals only with `importPastExams`; a Course proposal is ignored when importing into an existing course; Official keys only with a paper link. Accepted and edited proposals are applied; each failed proposal fails alone. **Duplicate detection (`DuplicateOfRef`) is not built** | Spec 7.5 |
+| B8-17 | Core applies imports idempotently with a new table `ImportApplication` (core migration 0007): a second apply returns the stored result | Spec 7.5 "idempotent on the import ref" |
+| B8-18 | `POST /ai/papers/{id}/extract` makes an import of that paper's file, already queued, with questions linked by `paperId` | Spec 7.5 |
+| B8-19 | aiomysql can't send raw bytes with PyMySQL 2.2.8 (it imports a function that became a string), so the key ciphertext is stored base64 in its VARBINARY column | Revisit when aiomysql fixes it |
+| B8-20 | New internal routes in core: `ai/materials`, `context/user`, `mocks/{id}/open`, `ai/generation-context`, `ai/topup-plan`, `ai/paper`, `questions/generated`, `import/apply`; in ai: `grades` | Spec 15 lists only some internal routes |
+| B8-21 | Verify script fix: the cold start stops every compose profile first (ai containers outlived the wiped database). Core logs "ai unreachable" at info: AI off is a supported setup | Spec 9.6 |
 
 ## Product / behaviour
 

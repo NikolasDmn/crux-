@@ -270,3 +270,92 @@ async fn generated_questions_and_topup_plan() {
     assert_eq!(r.json["existingPrompts"][0], "What is Var(2X)?");
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn import_apply_is_ordered_checked_and_idempotent() {
+    let Some(h) = common::harness().await else { return };
+    let (t, me, _) = signup(&h.app, &h.t.ctx, "ivy").await;
+    let me = me["id"].as_str().unwrap().to_string();
+    let (bt, bob, _) = signup(&h.app, &h.t.ctx, "bob").await;
+    let bob = bob["id"].as_str().unwrap().to_string();
+    let svc = h.t.ctx.keys.sign_service("ai", "core", h.t.ctx.clock.now().timestamp());
+    let auth = format!("Bearer {svc}");
+    let headers = [("authorization", auth.as_str())];
+    let p = |r: &str, kind: &str, key: &str, parent: Option<&str>, payload: serde_json::Value| json!({"ref": r, "kind": kind, "tempKey": key, "parentTempKey": parent, "payload": payload});
+    let mc = |two: bool| json!({"prompt": "Var(2X)?", "keyReliability": "Official", "options": [{"text": "4 Var(X)", "isCorrect": true}, {"text": "2 Var(X)", "isCorrect": two}]});
+    // Sent out of order on purpose: core sorts topologically.
+    let proposals = json!([
+        p(
+            "01PROPOSAL0000000000000010",
+            "Question",
+            "q1",
+            Some("l1"),
+            json!({"type": "MC", "content": mc(false), "paperTempKey": "p1", "paperQuestionNo": "3", "conceptTempKeys": ["c1"]})
+        ),
+        p("01PROPOSAL0000000000000011", "Question", "q2", Some("l1"), json!({"type": "MC", "content": mc(true)})),
+        p("01PROPOSAL0000000000000012", "Question", "q3", Some("l9"), json!({"type": "MC", "content": mc(false)})),
+        p("01PROPOSAL0000000000000001", "Course", "course", None, json!({"name": "Imported stats", "code": "IMP"})),
+        p("01PROPOSAL0000000000000002", "Component", "l1", Some("course"), json!({"code": "L1", "name": "Variance", "estHours": 2})),
+        p("01PROPOSAL0000000000000003", "Concept", "c1", None, json!({"name": "Variance rules"})),
+        p(
+            "01PROPOSAL0000000000000004",
+            "Material",
+            "m1",
+            Some("l1"),
+            json!({"kind": "Notes", "title": "Summary", "content": "Var(aX)=a^2Var(X)"})
+        ),
+        p("01PROPOSAL0000000000000005", "Paper", "p1", None, json!({"paperKey": "2025-A", "label": "Exam 2025"})),
+        p("01PROPOSAL0000000000000006", "Flashcard", "f1", Some("l1"), json!({"front": "Var(aX)?", "back": "a^2 Var(X)"})),
+        p(
+            "01PROPOSAL0000000000000007",
+            "Deadline",
+            "d1",
+            None,
+            json!({"type": "Exam", "title": "Final", "startsAt": "2026-12-01T09:00:00Z", "durationMin": 120})
+        ),
+        p("01PROPOSAL0000000000000008", "DeadlineComponent", "dc1", Some("d1"), json!({"componentTempKey": "l1", "questionCount": 10})),
+        p("01PROPOSAL0000000000000009", "ExamAids", "aids", None, json!({"calculator": "Simple calculator"}))
+    ]);
+    let body = json!({"user": me, "importRef": "01IMPORT000000000000000001", "proposals": proposals});
+    let r = call(&h.app, "POST", "/internal/v1/import/apply", None, Some(body.clone()), &headers).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.json);
+    let failed: Vec<(&str, &str)> =
+        r.json["failed"].as_array().unwrap().iter().map(|f| (f["proposalRef"].as_str().unwrap(), f["reason"].as_str().unwrap())).collect();
+    assert_eq!(failed.len(), 2, "{failed:?}");
+    assert!(failed.iter().any(|(p, reason)| p.ends_with("11") && reason.contains("options")), "{failed:?}");
+    assert!(failed.iter().any(|(p, reason)| p.ends_with("12") && *reason == "parent_component"), "{failed:?}");
+    let course = r.json["courseRef"].as_str().unwrap().to_string();
+    let q1 = r.json["created"].as_array().unwrap().iter().find(|c| c["proposalRef"] == "01PROPOSAL0000000000000010").unwrap()["entityRef"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let q = call(&h.app, "GET", &format!("/questions/{q1}"), Some(&t), None, &[]).await.json;
+    assert_eq!(
+        (q["source"].as_str(), q["current"]["keyReliability"].as_str(), q["paperQuestionNo"].as_str()),
+        (Some("PastExam"), Some("Official"), Some("3")),
+        "{q}"
+    );
+    let cards = call(&h.app, "GET", &format!("/courses/{course}/flashcards"), Some(&t), None, &[]).await.json;
+    assert_eq!(cards[0]["code"], "IMP001");
+    let deadlines = call(&h.app, "GET", &format!("/courses/{course}/deadlines"), Some(&t), None, &[]).await.json;
+    assert_eq!(deadlines[0]["layout"][0]["questionCount"], 10);
+
+    // Idempotent on the import ref.
+    let again = call(&h.app, "POST", "/internal/v1/import/apply", None, Some(body), &headers).await;
+    assert_eq!(again.json, r.json);
+    let courses = call(&h.app, "GET", "/courses", Some(&t), None, &[]).await.json;
+    assert_eq!(courses.as_array().unwrap().len(), 1, "applied once");
+
+    // Into someone else's course: 404. The paper lookup needs edit rights too.
+    let other = json!({"user": bob, "importRef": "01IMPORT000000000000000002", "course": course, "proposals": []});
+    let r = call(&h.app, "POST", "/internal/v1/import/apply", None, Some(other), &headers).await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+    let paper =
+        call(&h.app, "GET", &format!("/courses/{course}/papers"), Some(&t), None, &[]).await.json[0]["id"].as_str().unwrap().to_string();
+    let r = call(&h.app, "GET", &format!("/internal/v1/ai/paper?user={me}&paper={paper}"), None, None, &headers).await;
+    assert_eq!(r.json["courseId"].as_str(), Some(course.as_str()));
+    let r = call(&h.app, "GET", &format!("/internal/v1/ai/paper?user={bob}&paper={paper}"), None, None, &headers).await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+    let _ = bt;
+    h.db.drop_db().await;
+}

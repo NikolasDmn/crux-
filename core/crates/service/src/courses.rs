@@ -152,25 +152,33 @@ pub async fn get(ctx: &Ctx, actor: &Actor, course_ref: &str) -> AppResult<Course
 }
 
 pub async fn create(ctx: &Ctx, actor: &Actor, f: CourseFields) -> AppResult<CourseView> {
-    catalog::validate_course(&f, true).into_result()?;
     let mut tx = crux_repo::begin(&ctx.pool).await?;
-    let user = users::by_id(&mut tx, actor.user_id).await?.ok_or(AppError::NotFound)?;
-    let tier = tiers::by_id(&mut tx, user.tier_id).await?.ok_or(AppError::NotFound)?;
+    let id = create_in(&mut tx, ctx, actor, f).await?;
+    let c = courses::by_internal_id(&mut tx, actor.user_id, id).await?.ok_or(AppError::NotFound)?;
+    tx.commit().await?;
+    Ok(CourseView::from(&c))
+}
+
+/// Creating a course inside the caller's transaction (also used by the AI import apply).
+pub(crate) async fn create_in(tx: &mut MySqlConnection, ctx: &Ctx, actor: &Actor, f: CourseFields) -> AppResult<i64> {
+    catalog::validate_course(&f, true).into_result()?;
+    let user = users::by_id(&mut *tx, actor.user_id).await?.ok_or(AppError::NotFound)?;
+    let tier = tiers::by_id(&mut *tx, user.tier_id).await?.ok_or(AppError::NotFound)?;
     let limits = TierLimits { storage_quota_bytes: tier.storage_quota_bytes, max_courses: tier.max_courses, extra: None };
-    if !may_create_course(&limits, courses::count_owned_active(&mut tx, actor.user_id).await?) {
+    if !may_create_course(&limits, courses::count_owned_active(&mut *tx, actor.user_id).await?) {
         return Err(ValidationErrors::single("tier", "max_courses", "Your plan's course limit is reached.").into());
     }
     let scale_ref = f.grade_scale_id.as_deref().unwrap_or(catalog::DEFAULT_GRADE_SCALE_PUBLIC_ID);
-    let scale = courses::grade_scale_usable_by(&mut tx, actor.user_id, scale_ref)
+    let scale = courses::grade_scale_usable_by(&mut *tx, actor.user_id, scale_ref)
         .await?
         .ok_or_else(|| ValidationErrors::single("gradeScaleId", "unknown", "No such grade scale."))?;
     let color = match &f.color {
         Some(c) => c.to_lowercase(),
-        None => catalog::next_color(courses::count_owned_ever(&mut tx, actor.user_id).await?).to_string(),
+        None => catalog::next_color(courses::count_owned_ever(&mut *tx, actor.user_id).await?).to_string(),
     };
     let public_id = ctx.ids.ulid();
     let id = courses::insert(
-        &mut tx,
+        &mut *tx,
         &courses::NewCourse {
             public_id: &public_id,
             owner: actor.user_id,
@@ -185,11 +193,9 @@ pub async fn create(ctx: &Ctx, actor: &Actor, f: CourseFields) -> AppResult<Cour
     .await
     .map_err(code_taken)?;
     // The owner studies their own course: subscribe them straight away.
-    courses::subscribe(&mut tx, actor.user_id, id, ctx.clock.now().date_naive()).await?;
-    emit_course(&mut tx, ctx, topics::COURSE_CREATED, id, &public_id, &actor.public_id, &color).await?;
-    let c = courses::by_internal_id(&mut tx, actor.user_id, id).await?.ok_or(AppError::NotFound)?;
-    tx.commit().await?;
-    Ok(CourseView::from(&c))
+    courses::subscribe(&mut *tx, actor.user_id, id, ctx.clock.now().date_naive()).await?;
+    emit_course(&mut *tx, ctx, topics::COURSE_CREATED, id, &public_id, &actor.public_id, &color).await?;
+    Ok(id)
 }
 
 /// Editors may change name, code, institution, term; colour and grade scale are owner-only.

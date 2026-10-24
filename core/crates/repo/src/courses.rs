@@ -534,3 +534,49 @@ pub async fn insert_grade_scale(conn: &mut MySqlConnection, g: &NewGradeScale<'_
     .await?;
     Ok(res.last_insert_id() as i64)
 }
+
+/// Exam aids on the user's subscription (imported "ExamAids").
+pub async fn set_aids(
+    conn: &mut MySqlConnection,
+    user_id: i64,
+    course_id: i64,
+    calculator: Option<&str>,
+    cheat_sheet: Option<&str>,
+    other: Option<&str>,
+) -> RepoResult<()> {
+    sqlx::query(
+        "UPDATE CourseSubscription SET AidCalculator = COALESCE(?, AidCalculator), AidCheatSheet = COALESCE(?, AidCheatSheet), \
+         AidOther = COALESCE(?, AidOther) WHERE UserId = ? AND CourseId = ?",
+    )
+    .bind(calculator)
+    .bind(cheat_sheet)
+    .bind(other)
+    .bind(user_id)
+    .bind(course_id)
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
+pub async fn import_result(conn: &mut MySqlConnection, import_ref: &str) -> RepoResult<Option<sqlx::types::Json<serde_json::Value>>> {
+    Ok(sqlx::query_scalar("SELECT Result FROM ImportApplication WHERE ImportRef = ?").bind(import_ref).fetch_optional(conn).await?)
+}
+
+pub async fn save_import_result(
+    conn: &mut MySqlConnection,
+    import_ref: &str,
+    user_id: i64,
+    course_id: Option<i64>,
+    result: &serde_json::Value,
+    at: DateTime<Utc>,
+) -> RepoResult<()> {
+    sqlx::query("INSERT INTO ImportApplication (ImportRef, UserId, CourseId, Result, AppliedAt) VALUES (?, ?, ?, ?, ?)")
+        .bind(import_ref)
+        .bind(user_id)
+        .bind(course_id)
+        .bind(sqlx::types::Json(result))
+        .bind(at)
+        .execute(conn)
+        .await?;
+    Ok(())
+}

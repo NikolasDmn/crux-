@@ -1,11 +1,14 @@
 """Public routes under /api/v1/ai (spec 15), and the internal gate."""
 
+from collections.abc import AsyncIterator
+
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 
-from app.service import account, chat, generation, grading, runtime, tutors
+from app.service import account, chat, generation, grading, imports, runtime, tutors
 from app.service.deps import Deps
 from crux_common.auth import Caller, User
+from crux_common.sse import PING_SECONDS, event, redeem
 
 router = APIRouter(tags=["ai"])
 internal = APIRouter(prefix="/internal/v1", tags=["internal"])
@@ -155,6 +158,92 @@ async def generate(body: generation.GenerateInput, user: User, request: Request)
 @router.get("/generate/{job_id}", response_model=generation.JobView, response_model_by_alias=True)
 async def generation_job(job_id: str, user: User, request: Request) -> generation.JobView:
     return await generation.get(deps(request), user, job_id)
+
+
+# ---------- course import, past exams ----------
+
+
+@router.post("/imports", response_model=imports.ImportView, response_model_by_alias=True, status_code=201)
+async def create_import(body: imports.ImportInput, user: User, request: Request) -> imports.ImportView:
+    """Files must be your clean, extracted uploads. Then `start`."""
+    return await imports.create(deps(request), user, body)
+
+
+@router.get("/imports/{import_id}", response_model=imports.ImportView, response_model_by_alias=True)
+async def get_import(import_id: str, user: User, request: Request) -> imports.ImportView:
+    return await imports.get(deps(request), user, import_id)
+
+
+@router.post("/imports/{import_id}/start", response_model=imports.ImportView, response_model_by_alias=True)
+async def start_import(import_id: str, user: User, request: Request) -> imports.ImportView:
+    return await imports.start(deps(request), user, import_id)
+
+
+@router.post("/imports/{import_id}/cancel", response_model=imports.ImportView, response_model_by_alias=True)
+async def cancel_import(import_id: str, user: User, request: Request) -> imports.ImportView:
+    return await imports.cancel(deps(request), user, import_id)
+
+
+@router.post("/imports/{import_id}/apply", response_model=imports.ImportView, response_model_by_alias=True)
+async def apply_import(import_id: str, user: User, request: Request) -> imports.ImportView:
+    """Core creates the accepted and edited proposals in one transaction."""
+    return await imports.apply(deps(request), user, import_id)
+
+
+@router.get(
+    "/imports/{import_id}/proposals", response_model=dict[str, list[imports.ProposalView]], response_model_by_alias=True
+)
+async def import_proposals(import_id: str, user: User, request: Request) -> dict[str, list[imports.ProposalView]]:
+    return await imports.proposals(deps(request), user, import_id)
+
+
+@router.patch("/proposals/{proposal_id}", response_model=imports.ProposalView, response_model_by_alias=True)
+async def patch_proposal(
+    proposal_id: str, body: imports.ProposalPatch, user: User, request: Request
+) -> imports.ProposalView:
+    return await imports.patch_proposal(deps(request), user, proposal_id, body)
+
+
+@router.post("/imports/{import_id}/proposals/bulk")
+async def bulk_proposals(import_id: str, body: imports.BulkInput, user: User, request: Request) -> dict[str, int]:
+    return await imports.bulk(deps(request), user, import_id, body)
+
+
+@router.post(
+    "/papers/{paper_id}/extract", response_model=imports.ImportView, response_model_by_alias=True, status_code=201
+)
+async def extract_paper(paper_id: str, user: User, request: Request) -> imports.ImportView:
+    """Past exam -> question proposals (needs edit rights and PastExamImport)."""
+    return await imports.extract_paper(deps(request), user, paper_id)
+
+
+@router.get("/imports/{import_id}/events")
+async def import_events(import_id: str, ticket: str, request: Request) -> StreamingResponse:
+    """SSE: `status` {status, proposalCounts} on every change, `ping` every 20 s, then `done`."""
+    import asyncio
+
+    d = deps(request)
+    principal = await redeem(request.app.state.redis, ticket)
+    await imports.get(d, principal, import_id)
+
+    async def frames() -> AsyncIterator[str]:
+        loop = asyncio.get_running_loop()
+        last, last_ping = None, loop.time()
+        while not await request.is_disconnected():
+            v = await imports.get(d, principal, import_id)
+            state = (v.status, tuple(sorted(v.proposal_counts.items())))
+            if state != last:
+                last = state
+                yield event("status", {"status": v.status, "proposalCounts": v.proposal_counts})
+                if v.status in ("Proposed", *imports.TERMINAL):
+                    yield event("done", {})
+                    return
+            if loop.time() - last_ping >= PING_SECONDS:
+                last_ping = loop.time()
+                yield event("ping", {})
+            await asyncio.sleep(1)
+
+    return StreamingResponse(frames(), media_type="text/event-stream", headers={"cache-control": "no-cache"})
 
 
 # ---------- internal ----------

@@ -16,6 +16,7 @@ pub mod digests;
 pub mod error;
 pub mod events;
 pub mod flash;
+pub mod import;
 pub mod invites;
 pub mod jwt;
 pub mod me;

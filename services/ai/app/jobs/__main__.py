@@ -5,7 +5,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.service import chat, generation, grading
+from app.service import chat, generation, grading, imports
 from app.service.deps import Deps
 from app.service.wiring import build_deps
 from app.settings import Settings, get_settings
@@ -41,7 +41,7 @@ async def daily_jobs(sessions: async_sessionmaker[AsyncSession], stop: asyncio.E
 
 
 async def generation_loop(sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event) -> None:
-    """The generation queue (one job at a time per worker) and the hourly nightly top-up."""
+    """The import and generation queues (one job at a time per worker) and the hourly nightly top-up."""
     s = get_settings()
     deps = build_deps(s, sessions, Contracts(s.contracts_dir))
     last_nightly = 0.0
@@ -53,7 +53,7 @@ async def generation_loop(sessions: async_sessionmaker[AsyncSession], stop: asyn
                 last_nightly = loop.time()
                 n = await generation.nightly(deps)
                 log.info("job done", extra={"job": "topup.nightly", "count": n})
-            worked = await generation.run_one(deps)
+            worked = await imports.run_one(deps) or await generation.run_one(deps)
         except Exception as e:
             log.error("job failed", extra={"job": "generation", "error": repr(e), "alert": True})
         if not worked:

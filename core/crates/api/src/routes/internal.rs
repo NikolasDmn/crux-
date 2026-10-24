@@ -24,6 +24,8 @@ pub fn router() -> Router<AppState> {
         .route("/internal/v1/ai/generation-context", get(generation_context))
         .route("/internal/v1/ai/topup-plan", get(topup_plan))
         .route("/internal/v1/questions/generated", post(questions_generated))
+        .route("/internal/v1/import/apply", post(import_apply))
+        .route("/internal/v1/ai/paper", get(ai_paper))
 }
 
 #[derive(Deserialize)]
@@ -126,6 +128,25 @@ async fn questions_generated(
     JsonBody(input): JsonBody<crux_service::bank::GeneratedInput>,
 ) -> ApiResult<Json<crux_service::bank::GeneratedResult>> {
     Ok(Json(crux_service::bank::create_generated(&state.ctx, input).await?))
+}
+
+/// Spec 7.5: the import is applied by core, in one transaction, idempotent on the import ref.
+async fn import_apply(
+    State(state): State<AppState>,
+    _svc: Service,
+    JsonBody(input): JsonBody<crux_service::import::ApplyInput>,
+) -> ApiResult<Json<crux_service::import::ApplyResult>> {
+    Ok(Json(crux_service::import::apply(&state.ctx, input).await?))
+}
+
+#[derive(Deserialize)]
+struct PaperQuery {
+    user: String,
+    paper: String,
+}
+
+async fn ai_paper(State(state): State<AppState>, _svc: Service, Query(q): Query<PaperQuery>) -> ApiResult<Json<serde_json::Value>> {
+    Ok(Json(crux_service::ai::paper(&state.ctx, &q.user, &q.paper).await?))
 }
 
 /// Public keys for verifying access and service tokens. Public data; cache for a few minutes.

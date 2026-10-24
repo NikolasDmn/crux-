@@ -170,7 +170,7 @@ services:
       <<: *python-env
       CRUX_DATABASE_URL: mysql+aiomysql://crux_ai:${CRUX_AI_DB_PASSWORD:-crux-ai}@mysql:3306/crux_ai
       CRUX_SERVICE_NAME: ai
-      CRUX_KMS_MASTER_KEY: ${CRUX_KMS_MASTER_KEY:-}
+      CRUX_KMS_MASTER_KEY: ${CRUX_KMS_MASTER_KEY:-ZGV2LW9ubHktbWFzdGVyLWtleS1jaGFuZ2UtbWUtISE=}
     depends_on:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
@@ -184,7 +184,7 @@ services:
       <<: *python-env
       CRUX_DATABASE_URL: mysql+aiomysql://crux_ai:${CRUX_AI_DB_PASSWORD:-crux-ai}@mysql:3306/crux_ai
       CRUX_SERVICE_NAME: ai
-      CRUX_KMS_MASTER_KEY: ${CRUX_KMS_MASTER_KEY:-}
+      CRUX_KMS_MASTER_KEY: ${CRUX_KMS_MASTER_KEY:-ZGV2LW9ubHktbWFzdGVyLWtleS1jaGFuZ2UtbWUtISE=}
     depends_on: [ai]
 
 volumes:

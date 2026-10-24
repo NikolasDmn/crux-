@@ -265,7 +265,7 @@ impl From<&MaterialRow> for MaterialView {
 
 /// Spec 5.1: the file must be Active and scanned Clean in files, and belong to this course (an
 /// upload for it) or to the course owner (D2-4: course files count against the owner).
-async fn usable_file(ctx: &Ctx, actor: &Actor, course: &CourseRow, file_ref: &str, field: &str) -> AppResult<FileInfo> {
+pub(crate) async fn usable_file(ctx: &Ctx, actor: &Actor, course: &CourseRow, file_ref: &str, field: &str) -> AppResult<FileInfo> {
     let token = ctx.keys.sign_service("core", "files", ctx.clock.now().timestamp());
     let info = ctx.files.get_file(&token, &actor.public_id, file_ref).await.map_err(|e| anyhow::anyhow!("files service: {e}"))?;
     let unknown = || AppError::from(ValidationErrors::single(field, "unknown", "No such file."));

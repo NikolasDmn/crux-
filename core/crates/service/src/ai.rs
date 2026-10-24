@@ -21,7 +21,8 @@ pub async fn reason(ctx: &Ctx, actor: &Actor, feature: &str, course_ref: Option<
         Ok(a) if a.allowed => None,
         Ok(a) => Some(a.reason.unwrap_or_else(|| "feature_off".into())),
         Err(e) => {
-            tracing::warn!(error = %e, "ai gate unreachable");
+            // ai off is a supported setup (spec 9.6): AI controls hide, nothing is wrong.
+            tracing::info!(error = %e, "ai gate unreachable");
             Some("service_unavailable".into())
         }
     }
@@ -356,4 +357,16 @@ pub async fn topup_plan(ctx: &Ctx, user_ref: &str) -> AppResult<serde_json::Valu
     }
     let tz = crux_repo::users::by_id(&mut conn, actor.user_id).await?.map(|u| u.time_zone).unwrap_or_else(|| "Europe/Amsterdam".into());
     Ok(json!({ "timeZone": tz, "courses": courses }))
+}
+
+/// `GET /internal/v1/ai/paper?user=&paper=`: for "past exam → questions" (spec 7.5, edit only).
+pub async fn paper(ctx: &Ctx, user_ref: &str, paper_ref: &str) -> AppResult<serde_json::Value> {
+    let mut conn = ctx.pool.acquire().await?;
+    let actor = actor_of(&mut conn, user_ref).await?;
+    let p = crux_repo::catalog::paper(&mut conn, paper_ref).await?.ok_or(AppError::NotFound)?;
+    let course_ref = crux_repo::courses::public_id_of(&mut conn, p.course_id).await?;
+    crate::courses::editable(&mut conn, &actor, &course_ref).await?;
+    Ok(serde_json::json!({
+        "paperId": paper_ref, "courseId": course_ref, "paperKey": p.paper_key, "label": p.label, "fileRef": p.file_ref,
+    }))
 }

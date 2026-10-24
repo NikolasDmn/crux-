@@ -2,7 +2,7 @@
 # Smoke test against a running stack: health of every service through the gateway, signup with an
 # invite, /me, user.created reaching files and notify (M1); then a course with a lecture, a PDF
 # uploaded to its pre-signed URL through the gateway, scanned, extracted, attached as a material,
-# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5); a live inbox notification (M6); storage saver and thumbnails (M7).
+# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5); a live inbox notification (M6); storage saver and thumbnails (M7); AI chat and generation, or service_unavailable without ai (M8).
 # Usage: scripts/smoke.sh [base-url]   (default http://localhost:8000)
 set -euo pipefail
 
@@ -151,3 +151,28 @@ api PATCH /files/storage/settings '{"keepThumbnails":true}' >/dev/null || fail "
 for _ in $(seq 1 40); do curl -fsS -o /dev/null "$BASE/api/v1/files/$file/pages/1/thumbnail" -H "authorization: Bearer $token" 2>/dev/null && ok=1 && break; ok=0; sleep 0.5; done
 [ "$ok" = 1 ] || fail "no thumbnail within 20 s"
 echo "ok   storage saver request + undo reached files, thumbnails made"
+
+# ---------- milestone 8 ----------
+# With the ai profile: consent, a key (the dev-only fake provider), the gate seen from core, a chat
+# reply streamed through the gateway, and a generation job. Without it: core says AI is unavailable.
+if [ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/v1/ai/healthz")" = 200 ]; then
+    policy=$(api GET /ai/settings | j '["currentPolicyVersion"]')
+    api PATCH /ai/settings "{\"enabled\":true,\"consentPolicyVersion\":\"$policy\"}" >/dev/null || fail "AI consent"
+    kst=$(api POST /ai/keys '{"provider":"fake","apiKey":"fake-valid-smoke-0001"}' | j '["status"]')
+    [ "$kst" = Valid ] || fail "AI key: $kst"
+    allowed=$(api GET "/me/ai-allowed?feature=MaterialChat&courseId=$course" | j '["allowed"]')
+    [ "$allowed" = True ] || fail "core doesn't see the AI gate open"
+    conv=$(api POST /ai/conversations "{\"courseId\":\"$course\",\"scope\":\"Material\",\"materialId\":\"$material\"}" | j '["id"]')
+    reply=$(curl -sN --max-time 30 -X POST "$BASE/api/v1/ai/conversations/$conv/messages" -H "authorization: Bearer $token" \
+        -H 'content-type: application/json' -d '{"content":"What are confidence intervals?"}')
+    echo "$reply" | grep -q '^event: delta' && echo "$reply" | grep -q '^event: done' || fail "chat stream: $(echo "$reply" | head -c 300)"
+    job=$(curl -fsS -X POST "$BASE/api/v1/ai/generate" -H "authorization: Bearer $token" -H 'content-type: application/json' \
+        -d "{\"courseId\":\"$course\",\"componentId\":\"$lecture\",\"n\":2}" | j '["id"]')
+    for _ in $(seq 1 30); do gst=$(api GET "/ai/generate/$job" | j '["status"]'); [ "$gst" = Done ] && break; sleep 1; done
+    [ "$gst" = Done ] || fail "generation job: $gst"
+    echo "ok   AI: consent, key, gate via core, chat stream, generation job"
+else
+    reason=$(api GET "/me/ai-allowed?feature=MaterialChat" | j '["reason"]')
+    [ "$reason" = service_unavailable ] || fail "without ai, core should say service_unavailable (got $reason)"
+    echo "ok   ai profile off: core reports service_unavailable"
+fi

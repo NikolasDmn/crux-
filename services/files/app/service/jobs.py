@@ -17,6 +17,7 @@ from app.domain.file_state import counts_against_quota
 from app.domain.uploads import needs_ocr
 from app.repo import files as repo
 from app.repo import storage
+from app.service import saver
 from app.service.deps import Deps
 from crux_common.db import transaction
 from crux_common.messaging.bus import Delivery
@@ -46,6 +47,8 @@ async def run_one(deps: Deps) -> bool:
     try:
         if job.Kind == "Scan":
             await scan(deps, job.FileId)
+        elif job.Kind == "Thumbnail":
+            await saver.make_thumbnails(deps, job.FileId)
         else:
             await extract(deps, job.FileId)
     except Exception as e:
@@ -181,6 +184,7 @@ async def extract(deps: Deps, file_id: int) -> None:
     async with transaction(deps.sessions) as s:
         await repo.replace_chunks(s, row.Id, rows)
         await repo.set_fields(s, row.Id, ExtractStatus="Done", ExtractorVersion=EXTRACTOR_VERSION, PageCount=len(pages))
+        await saver.after_extract(deps, s, row.Id)
         await emit(
             s,
             deps.contracts,

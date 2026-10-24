@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/file.purge_scheduled@1",
+  "title": "file.purge_scheduled v1 payload",
+  "description": "files → core: the original will be purged at purgeAt (auto purge, spec 6.2). Core shows it as PendingPurge.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fileRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "ownerRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "purgeAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "requested"
+      ]
+    }
+  },
+  "required": [
+    "fileRef",
+    "ownerRef",
+    "purgeAt"
+  ]
+}

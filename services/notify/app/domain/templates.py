@@ -89,6 +89,19 @@ def inbox(kind: str, payload: dict[str, Any], tz: str = "Europe/Amsterdam") -> I
             f"As {p.get('role', 'Viewer')}. Accept to add it to your courses.",
             "/courses?invitations=1",
         )
+    if kind == "file.infected":
+        return InboxText(
+            f"Upload blocked: {p.get('fileName', 'a file')}",
+            "It failed the virus scan and was removed. Nothing else was affected.",
+            "/settings/storage",
+        )
+    if kind == "storage.purged":
+        n = int(p.get("count", 1))
+        return InboxText(
+            f"{n} original file{'s' if n != 1 else ''} removed",
+            "Their text, question images and thumbnails stay. Upload the same file again to bring one back.",
+            "/settings/storage",
+        )
     return InboxText(kind, "", None)
 
 

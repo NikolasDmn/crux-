@@ -13,6 +13,7 @@ from app.domain import uploads as rules
 from app.domain.uploads import Rejection
 from app.repo import files as repo
 from app.repo import storage
+from app.service import saver
 from app.service.deps import Deps
 from crux_common.auth import Principal
 from crux_common.db import transaction
@@ -152,12 +153,14 @@ async def start_upload(deps: Deps, user: Principal, inp: UploadInput) -> UploadS
             }
             if existing is not None:
                 # Purged or Deleted original of the same file: the same row comes back (restore,
-                # spec 6.1/6.2), so core can reattach it to its material.
+                # spec 6.1/6.2), so core can reattach it to its material. A purged clean file keeps
+                # its scan verdict and text: complete() checks the bytes hash to the same sha256.
                 key = f"originals/{owner}/{existing.PublicId}/{new_id()}"
                 await repo.set_status(
                     s, existing.Id, existing.Status, "Uploading", StorageKey=key, PurgedAt=None, PurgeAt=None, **values
                 )
-                await repo.set_fields(s, existing.Id, ScanStatus="Pending", ExtractStatus="Pending")
+                if existing.Status == "Deleted" or existing.ScanStatus != "Clean":
+                    await repo.set_fields(s, existing.Id, ScanStatus="Pending", ExtractStatus="Pending")
                 file_id = existing.Id
             else:
                 public_id = new_id()
@@ -209,7 +212,14 @@ async def complete_upload(deps: Deps, user: Principal, file_ref: str) -> FileVie
         else:
             await storage.settle(s, row.OwnerUserRef, row.SizeBytes)
             await repo.set_status(s, row.Id, "Uploading", "Active")
-            await repo.enqueue(s, row.Id, "Scan", utcnow())
+            if row.ScanStatus == "Clean":
+                # A restored original (same bytes as before its purge): no new scan or extract.
+                await saver.restored(s, deps.contracts, row)
+                q = await storage.get(s, row.OwnerUserRef)
+                if q is not None and q.KeepThumbnails:
+                    await repo.enqueue(s, row.Id, "Thumbnail", utcnow())
+            else:
+                await repo.enqueue(s, row.Id, "Scan", utcnow())
             fresh = await repo.by_id(s, row.Id)
             assert fresh is not None
             return view(fresh)
@@ -267,8 +277,10 @@ class CourseUsage(Camel):
     course_id: str | None
     bytes: int
     originals: int
-    #: Bytes the storage saver could free (milestone 7: originals already extracted).
+    #: Bytes the storage saver could free now: originals that are extracted and not yet pending.
     purgeable: int
+    #: Bytes already set to go (PendingPurge, still undoable).
+    pending_purge: int
 
 
 class StorageView(Camel):
@@ -286,6 +298,7 @@ async def storage_view(deps: Deps, user: Principal) -> StorageView:
         await storage.ensure(s, user.user_ref, deps.settings.default_quota_bytes)
         q = await storage.get(s, user.user_ref)
         usage = await repo.usage_by_course(s, user.user_ref)
+        purgeable = await repo.purgeable_by_course(s, user.user_ref)
     assert q is not None
     return StorageView(
         used_bytes=q.UsedBytes,
@@ -295,7 +308,13 @@ async def storage_view(deps: Deps, user: Principal) -> StorageView:
         auto_purge_originals=bool(q.AutoPurgeOriginals),
         keep_thumbnails=bool(q.KeepThumbnails),
         by_course=[
-            CourseUsage(course_id=u.CourseRef, bytes=int(u.Bytes), originals=int(u.Originals), purgeable=int(u.Bytes))
+            CourseUsage(
+                course_id=u.CourseRef,
+                bytes=int(u.Bytes),
+                originals=int(u.Originals),
+                purgeable=purgeable.get(u.CourseRef, (0, 0))[0],
+                pending_purge=purgeable.get(u.CourseRef, (0, 0))[1],
+            )
             for u in usage
         ],
     )
@@ -314,9 +333,27 @@ async def patch_storage_settings(deps: Deps, user: Principal, inp: StorageSettin
     }
     async with transaction(deps.sessions) as s:
         await storage.ensure(s, user.user_ref, deps.settings.default_quota_bytes)
+        before = await storage.get(s, user.user_ref)
         if values:
             await storage.set_settings(s, user.user_ref, **values)
+        if (
+            inp.keep_thumbnails is not None
+            and before is not None
+            and bool(before.KeepThumbnails) != inp.keep_thumbnails
+        ):
+            await saver.thumbnails_setting_changed(deps, s, user.user_ref, inp.keep_thumbnails)
     return await storage_view(deps, user)
+
+
+async def thumbnail_url(deps: Deps, user: Principal, file_ref: str, page: int) -> SignedUrl:
+    """A page thumbnail (when kept): the viewer's fallback once the original is purged (spec 6.2)."""
+    row = await readable(deps, user, file_ref)
+    async with deps.sessions() as s:
+        t = await repo.thumbnail(s, row.Id, page)
+    if t is None or t.StorageKey is None:
+        raise NotFound("No thumbnail for this page.")
+    url = deps.store.presign_get(t.StorageKey, t.FileName, DOWNLOAD_URL_SECONDS)
+    return SignedUrl(url=url, expires_at=iso(utcnow() + timedelta(seconds=DOWNLOAD_URL_SECONDS)))
 
 
 async def emit_event(deps: Deps, s: Any, topic: str, aggregate: str, payload: dict[str, Any]) -> None:

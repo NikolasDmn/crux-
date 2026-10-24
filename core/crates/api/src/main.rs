@@ -193,6 +193,21 @@ async fn build_ctx(cli: &Cli, pool: crux_repo::MySqlPool) -> anyhow::Result<Ctx>
 async fn run_jobs(cli: &Cli, ctx: Ctx, shutdown: tokio::sync::watch::Receiver<bool>) -> anyhow::Result<()> {
     let redis = RedisKv::connect(&cli.redis_url).await?;
     let bus: Arc<dyn crux_clients::bus::EventBus> = Arc::new(RedisBus::new(redis.connection()));
+    // The consumer gets its own connection: its blocking XREADGROUP would otherwise hold up the
+    // relay's XADDs on the shared multiplexed connection while the relay holds Outbox row locks.
+    let consumer_redis = RedisKv::connect(&cli.redis_url).await?;
+    let consumer_bus = RedisBus::new(consumer_redis.connection());
+    let file_events = Arc::new(crux_jobs::files::FileEvents);
+    consumer_bus.ensure_group("core", &crux_jobs::consumer::Handler::topics(file_events.as_ref())).await?;
+    let consumer_name = format!("core-{}", std::env::var("HOSTNAME").unwrap_or_else(|_| "jobs".into()));
+    let files_consumer = tokio::spawn(crux_jobs::consumer::run(
+        ctx.pool.clone(),
+        Arc::new(consumer_bus),
+        "core",
+        consumer_name,
+        file_events,
+        shutdown.clone(),
+    ));
     let relay = tokio::spawn(crux_jobs::relay::run(ctx.pool.clone(), bus, ctx.clock.clone(), "core", shutdown.clone()));
     let pool = ctx.pool.clone();
     let clock = ctx.clock.clone();
@@ -220,7 +235,7 @@ async fn run_jobs(cli: &Cli, ctx: Ctx, shutdown: tokio::sync::watch::Receiver<bo
         let ctx = tick_ctx.clone();
         async move { crux_service::deadlines::tick(&ctx).await }
     }));
-    let _ = tokio::join!(relay, tokens, trash, derive, weeks, tick);
+    let _ = tokio::join!(relay, files_consumer, tokens, trash, derive, weeks, tick);
     Ok(())
 }
 

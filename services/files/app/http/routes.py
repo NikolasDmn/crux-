@@ -63,6 +63,12 @@ async def page_text(file_id: str, page: int, user: User, request: Request) -> sv
     return await svc.page_text(deps(request), user, file_id, page)
 
 
+@router.get("/{file_id}/pages/{page}/thumbnail", response_model=svc.SignedUrl, response_model_by_alias=True)
+async def page_thumbnail(file_id: str, page: int, user: User, request: Request) -> svc.SignedUrl:
+    """A signed URL for the page's thumbnail (only when thumbnails are kept)."""
+    return await svc.thumbnail_url(deps(request), user, file_id, page)
+
+
 @router.get("/{file_id}/events")
 async def file_events(file_id: str, ticket: str, request: Request) -> StreamingResponse:
     """SSE (spec 3.4): `scanned`, `extracted`, `failed`, then `done`. Auth: `?ticket=` from

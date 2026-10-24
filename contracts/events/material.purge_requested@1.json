@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/material.purge_requested@1",
+  "title": "material.purge_requested v1 payload",
+  "description": "core → files: the course owner freed up space (spec 6.2). Files moves the original to PendingPurge until purgeAt.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fileRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "ownerRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "courseRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "materialRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "purgeAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "fileRef",
+    "ownerRef",
+    "purgeAt"
+  ]
+}

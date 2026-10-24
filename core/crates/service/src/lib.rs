@@ -25,6 +25,7 @@ pub mod password;
 pub mod plan;
 pub mod practice;
 pub mod ratelimit;
+pub mod saver;
 pub mod sse;
 pub mod stats;
 pub mod time;

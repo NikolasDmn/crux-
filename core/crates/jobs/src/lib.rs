@@ -2,6 +2,7 @@
 //! counts.
 
 pub mod consumer;
+pub mod files;
 pub mod relay;
 pub mod tokens;
 

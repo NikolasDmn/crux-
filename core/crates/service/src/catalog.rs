@@ -285,7 +285,12 @@ async fn usable_file(ctx: &Ctx, actor: &Actor, course: &CourseRow, file_ref: &st
     Ok(info)
 }
 
-async fn material_for(conn: &mut MySqlConnection, actor: &Actor, material_ref: &str, edit: bool) -> AppResult<(MaterialRow, CourseRow)> {
+pub(crate) async fn material_for(
+    conn: &mut MySqlConnection,
+    actor: &Actor,
+    material_ref: &str,
+    edit: bool,
+) -> AppResult<(MaterialRow, CourseRow)> {
     let m = repo::material(conn, material_ref).await?.ok_or(AppError::NotFound)?;
     let course_ref = crux_repo::courses::public_id_of(conn, m.course_id).await?;
     let course = if edit { editable(conn, actor, &course_ref).await? } else { readable(conn, actor, &course_ref).await? };

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/file.restored@1",
+  "title": "file.restored v1 payload",
+  "description": "files → core: a re-upload of the same bytes restored a purged original into the same row (spec 6.1 step 1).",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "fileRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "ownerRef": {
+      "type": "string",
+      "pattern": "^[0-9A-Z]{26}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "fileRef",
+    "ownerRef",
+    "sha256"
+  ]
+}

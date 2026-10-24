@@ -140,6 +140,22 @@ files waits for the object store, and every compose service has `restart: unless
 | B6-13 | New routes: `POST /notify/unsubscribe` (beside the GET in spec 15) and `POST /notify/webhooks/email` | B6-7, B6-8 |
 | B6-14 | notify depends on `tzdata` (zoneinfo has no time-zone database on Windows dev machines) | Email/inbox times are shown in the user's zone |
 
+## Milestone 7 build choices (storage saver)
+
+| # | Choice | Why / where |
+|---|---|---|
+| B7-1 | **Files owns the purge state**; core mirrors it on materials. New contracts: core → files `material.purge_requested` / `material.purge_cancelled`; files → core `file.purge_scheduled` (auto purge), `file.purged`, `file.restored` | One source of truth for whether the object exists |
+| B7-2 | A purge acts on the **file**, so every material using that file shows the same status (one upload can back several materials) | The object is shared |
+| B7-3 | Files only accepts a purge request from the file's owner (the course owner whose quota it uses, D2-4); others are logged and ignored | Spec: only the owner frees space |
+| B7-4 | Free space on a material without a file → 422 `no_original`; on a purged one → 422 `already_purged`; again while pending → no change. Undo with nothing pending → 409 | |
+| B7-5 | Course free-space also sends past-paper files; papers have no status column in core, so their state is only visible in files | Schema has `Paper.FileRef` only |
+| B7-6 | Auto purge (`AutoPurgeOriginals`) is scheduled right after extraction with the same **7-day window**; that window is the time to cut question images (crops need the original) | Spec: "once any questions cut from it have their crops", which can't be known in advance |
+| B7-7 | Re-uploading the same bytes of a **purged clean** original restores the row **without a new scan or extract** (the sha256 check proves identical bytes; text is still there) and emits `file.restored`. A deleted (infected/removed) one is scanned again | Saves work; same file |
+| B7-8 | Thumbnails: 320 px WebP per page as a `Thumbnail` FileJob after extraction; they count against quota and are **skipped when they'd go over it**. Turning the setting on backfills present originals; turning it off **deletes** them and gives the space back. `GET /files/{id}/pages/{n}/thumbnail` returns a signed URL | Spec 6.1 step 5 |
+| B7-9 | The purge runs in the files worker's hourly sweep and sends one opt-in `storage.purged` notification per owner per run; `file.infected` became an always-in-app kind | Users should learn originals went |
+| B7-10 | Quota view per course adds `pendingPurge` bytes; `purgeable` = extracted originals not yet pending | Spec lists `purgeable` only |
+| B7-11 | Fix found by the log scan: core's event consumer uses its **own Redis connection** (its blocking read stalled the relay's XADD on the shared multiplexed connection, making API writes wait ~9 s) | |
+
 ## Product / behaviour
 
 | # | Question | Built meanwhile |

@@ -437,3 +437,42 @@ pub async fn replace_omissions(conn: &mut MySqlConnection, paper_id: i64, items:
     }
     Ok(())
 }
+
+// ---------- storage saver (spec 6.2) ----------
+
+/// Every material that uses the file (one file can back several materials; it's purged once).
+/// `status` is None/Present/PendingPurge/Purged; `purge_at` is set only for PendingPurge.
+pub async fn set_original_status_for_file(
+    conn: &mut MySqlConnection,
+    file_ref: &str,
+    from: &[&str],
+    status: &str,
+    purge_at: Option<DateTime<Utc>>,
+) -> RepoResult<u64> {
+    let from = from.iter().map(|s| format!("'{s}'")).collect::<Vec<_>>().join(",");
+    let res = sqlx::query(&format!(
+        "UPDATE ComponentMaterial SET OriginalStatus = ?, OriginalPurgeAt = ?, RowVersion = RowVersion + 1 \
+         WHERE FileRef = ? AND OriginalStatus IN ({from})"
+    ))
+    .bind(status)
+    .bind(purge_at)
+    .bind(file_ref)
+    .execute(conn)
+    .await?;
+    Ok(res.rows_affected())
+}
+
+/// The course's materials with an original still present (course free-space).
+pub async fn course_materials_with_file(conn: &mut MySqlConnection, course_id: i64) -> RepoResult<Vec<MaterialRow>> {
+    Ok(sqlx::query_as(&format!(
+        "{MATERIAL_SELECT} WHERE c.CourseId = ? AND m.ArchivedAt IS NULL AND m.FileRef IS NOT NULL AND m.OriginalStatus = 'Present'"
+    ))
+    .bind(course_id)
+    .fetch_all(conn)
+    .await?)
+}
+
+/// Past-paper files of a course (their questions are in the bank; spec 6.2 per course).
+pub async fn course_paper_files(conn: &mut MySqlConnection, course_id: i64) -> RepoResult<Vec<String>> {
+    Ok(sqlx::query_scalar("SELECT FileRef FROM Paper WHERE CourseId = ? AND FileRef IS NOT NULL").bind(course_id).fetch_all(conn).await?)
+}

@@ -17,6 +17,7 @@ from sqlalchemy import (
     Table,
     Text,
     and_,
+    case,
     func,
     select,
     update,
@@ -77,7 +78,7 @@ file_job = Table(
     metadata,
     Column("Id", BigInteger, primary_key=True, autoincrement=True),
     Column("FileId", BigInteger, nullable=False),
-    Column("Kind", String(8), nullable=False),
+    Column("Kind", String(16), nullable=False),
     Column("Status", String(8), nullable=False),
     Column("Attempts", Integer, nullable=False),
     Column("NextAttemptAt", DateTime, nullable=False),
@@ -260,3 +261,86 @@ async def reclaim_stuck(session: AsyncSession, started_before: datetime) -> int:
         ),
     )
     return int(result.rowcount)
+
+
+# ---------- storage saver (spec 6.2) ----------
+
+
+async def due_purges(session: AsyncSession, now: datetime, limit: int = 100) -> list[Any]:
+    """PendingPurge originals whose undo window has ended, locked."""
+    stmt = (
+        select(stored_file)
+        .where(stored_file.c.Status == "PendingPurge", stored_file.c.PurgeAt <= now)
+        .order_by(stored_file.c.PurgeAt)
+        .limit(limit)
+        .with_for_update(skip_locked=True)
+    )
+    return list((await session.execute(stmt)).all())
+
+
+async def derived(session: AsyncSession, source_id: int, purpose: str) -> list[Any]:
+    stmt = select(stored_file).where(
+        stored_file.c.DerivedFromFileId == source_id, stored_file.c.Purpose == purpose, stored_file.c.Status == "Active"
+    )
+    return list((await session.execute(stmt.order_by(stored_file.c.SourcePage))).all())
+
+
+async def thumbnail(session: AsyncSession, source_id: int, page: int) -> Any | None:
+    stmt = select(stored_file).where(
+        stored_file.c.DerivedFromFileId == source_id,
+        stored_file.c.Purpose == "Thumbnail",
+        stored_file.c.SourcePage == page,
+        stored_file.c.Status == "Active",
+    )
+    return (await session.execute(stmt)).first()
+
+
+async def owner_thumbnails(session: AsyncSession, owner_ref: str) -> list[Any]:
+    stmt = (
+        select(stored_file)
+        .where(
+            stored_file.c.OwnerUserRef == owner_ref,
+            stored_file.c.Purpose == "Thumbnail",
+            stored_file.c.Status == "Active",
+        )
+        .with_for_update()
+    )
+    return list((await session.execute(stmt)).all())
+
+
+async def originals_for_thumbnails(session: AsyncSession, owner_ref: str) -> list[Any]:
+    """Extracted originals whose object is still there (thumbnails need the PDF)."""
+    stmt = select(stored_file).where(
+        stored_file.c.OwnerUserRef == owner_ref,
+        stored_file.c.Purpose == "Original",
+        stored_file.c.Status.in_(["Active", "PendingPurge"]),
+        stored_file.c.ExtractStatus == "Done",
+    )
+    return list((await session.execute(stmt)).all())
+
+
+async def purgeable_by_course(session: AsyncSession, owner_ref: str) -> dict[str | None, tuple[int, int]]:
+    """Per course: (bytes the saver could free now: Active + extracted originals, bytes already pending)."""
+    stmt = (
+        select(
+            stored_file.c.CourseRef,
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(stored_file.c.Status == "Active", stored_file.c.ExtractStatus == "Done"),
+                            stored_file.c.SizeBytes,
+                        ),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("Purgeable"),
+            func.coalesce(
+                func.sum(case((stored_file.c.Status == "PendingPurge", stored_file.c.SizeBytes), else_=0)), 0
+            ).label("Pending"),
+        )
+        .where(stored_file.c.OwnerUserRef == owner_ref, stored_file.c.Purpose == "Original")
+        .group_by(stored_file.c.CourseRef)
+    )
+    return {r.CourseRef: (int(r.Purgeable), int(r.Pending)) for r in await session.execute(stmt)}

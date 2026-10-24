@@ -2,7 +2,7 @@
 # Smoke test against a running stack: health of every service through the gateway, signup with an
 # invite, /me, user.created reaching files and notify (M1); then a course with a lecture, a PDF
 # uploaded to its pre-signed URL through the gateway, scanned, extracted, attached as a material,
-# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5); a live inbox notification (M6).
+# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5); a live inbox notification (M6); storage saver and thumbnails (M7).
 # Usage: scripts/smoke.sh [base-url]   (default http://localhost:8000)
 set -euo pipefail
 
@@ -136,3 +136,18 @@ prefs=$(curl -fsS -X PUT "$BASE/api/v1/notify/preferences" -H "authorization: Be
     -d '{"preferences":[{"kind":"flash.due","channel":"Email","enabled":true}]}' | python3 -c "import json,sys; print([k['email'] for k in json.load(sys.stdin)['kinds'] if k['kind']=='flash.due'][0])")
 [ "$prefs" = True ] || fail "preferences: $prefs"
 echo "ok   live inbox notification through the gateway, inbox, preferences"
+
+# ---------- milestone 7 ----------
+# Free space on the material: files moves the original to PendingPurge (event), undo brings it back.
+st=$(api POST "/materials/$material/free-space" | j '["originalStatus"]')
+[ "$st" = PendingPurge ] || fail "free-space: $st"
+for _ in $(seq 1 30); do fst=$(api GET "/files/$file" | j '["status"]'); [ "$fst" = PendingPurge ] && break; sleep 0.5; done
+[ "$fst" = PendingPurge ] || fail "files didn't follow the purge request ($fst)"
+api POST "/materials/$material/free-space/cancel" >/dev/null || fail "undo"
+for _ in $(seq 1 30); do fst=$(api GET "/files/$file" | j '["status"]'); [ "$fst" = Active ] && break; sleep 0.5; done
+[ "$fst" = Active ] || fail "undo didn't reach files ($fst)"
+# Thumbnails on: they're made for the files already there.
+api PATCH /files/storage/settings '{"keepThumbnails":true}' >/dev/null || fail "storage settings"
+for _ in $(seq 1 40); do curl -fsS -o /dev/null "$BASE/api/v1/files/$file/pages/1/thumbnail" -H "authorization: Bearer $token" 2>/dev/null && ok=1 && break; ok=0; sleep 0.5; done
+[ "$ok" = 1 ] || fail "no thumbnail within 20 s"
+echo "ok   storage saver request + undo reached files, thumbnails made"

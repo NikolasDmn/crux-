@@ -12,6 +12,7 @@ pub mod me;
 pub mod mistakes;
 pub mod mocks;
 pub mod plan;
+pub mod saver;
 pub mod sse;
 pub mod time;
 
@@ -109,6 +110,9 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(plan::next))
         .routes(routes!(plan::advance))
         .routes(routes!(plan::warmup))
+        .routes(routes!(saver::free_material))
+        .routes(routes!(saver::cancel_material))
+        .routes(routes!(saver::free_course))
 }
 
 /// `?limit=&cursor=` (spec 3.1).

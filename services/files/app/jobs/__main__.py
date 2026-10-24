@@ -8,7 +8,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.clients.store import S3Store
-from app.service import jobs
+from app.service import jobs, saver
 from app.service.deps import Deps
 from app.service.users import UserEventsHandler
 from app.service.wiring import build_deps
@@ -55,7 +55,8 @@ async def job_loop(sessions: async_sessionmaker[AsyncSession], stop: asyncio.Eve
                 last_sweep = time.monotonic()
                 stuck = await jobs.recover_stuck(deps)
                 abandoned = await jobs.sweep_abandoned(deps)
-                log.info("sweeps done", extra={"stuck_jobs": stuck, "abandoned_uploads": abandoned})
+                purged = await saver.purge_due(deps)
+                log.info("sweeps done", extra={"stuck_jobs": stuck, "abandoned_uploads": abandoned, "purged": purged})
             worked = await jobs.run_one(deps)
         except Exception as e:
             log.error("job loop error", extra={"error": repr(e), "alert": True})
@@ -77,5 +78,9 @@ if __name__ == "__main__":
         settings.s3_bucket,
         settings.s3_region,
     )
-    handlers: list[Handler] = [UserEventsHandler(), jobs.CourseEventsHandler(store)]
+    handlers: list[Handler] = [
+        UserEventsHandler(),
+        jobs.CourseEventsHandler(store),
+        saver.PurgeRequestsHandler(Contracts(settings.contracts_dir)),
+    ]
     asyncio.run(run_worker(get_settings(), handlers, extra=[job_loop]))

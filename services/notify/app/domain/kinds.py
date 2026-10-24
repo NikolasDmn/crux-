@@ -1,7 +1,8 @@
 """Notification kinds and channel rules (spec 8). Pure.
 
-Everything is opt-in: no NotificationPreference row = that kind/channel is off. Two kinds always
-show in the inbox because they need an answer: a course shared with you, and the exam check-in.
+Everything is opt-in: no NotificationPreference row = that kind/channel is off. Some kinds always
+show in the inbox: a course shared with you and the exam check-in need an answer, and a blocked
+(infected) upload must not go unnoticed.
 """
 
 from collections.abc import Mapping
@@ -30,11 +31,13 @@ KINDS: dict[str, Kind] = {
         Kind("import.ready", "Import ready", "When imported questions are ready to review."),
         Kind("generation.done", "Questions generated", "When generated questions are ready to review."),
         Kind("course.shared", "Course shared with you", "Someone shared a course; accept or decline."),
+        Kind("file.infected", "Upload blocked", "An upload failed the virus scan and was removed."),
+        Kind("storage.purged", "Originals removed", "The storage saver removed original files (their text stays)."),
     )
 }
 
 #: Shown in the inbox whatever the preferences (spec 8): they need an answer.
-ALWAYS_IN_APP = frozenset({"course.shared", "exam.checkin"})
+ALWAYS_IN_APP = frozenset({"course.shared", "exam.checkin", "file.infected"})
 
 Prefs = Mapping[tuple[str, str], bool]
 

@@ -1,6 +1,7 @@
 """M8 part 1: settings + consent, keys, tutors, course settings, gate, budget (spec 7.1-7.3)."""
 
 import base64
+from datetime import date
 
 import pytest
 from sqlalchemy import select
@@ -33,6 +34,13 @@ def test_gate_and_cost_rules() -> None:
     assert gate.decide(True, True, "Valid", None, [m(True, False, None)]) is None
     opus = models.find("anthropic", "claude-opus-5-5")
     assert opus is not None and models.cost_micro_usd(opus, 1_000_000, 0) == 4_000_000
+    haiku, argon = models.find("anthropic", "claude-haiku-5-5"), models.find("google", "gemini-4-argon")
+    assert haiku is not None and argon is not None
+    assert models.cost_micro_usd(haiku, 100_000, 0) == 10_000, "up to 100K prompt tokens: $0.10/MTok"
+    assert models.cost_micro_usd(haiku, 100_001, 0) == 50_001, "above: $0.50/MTok"
+    assert models.cost_micro_usd(argon, 0, 1_000_000, on=date(2026, 11, 30)) == 10_000_000
+    assert models.cost_micro_usd(argon, 0, 1_000_000, on=date(2026, 12, 1)) == 20_000_000, "the announced rise"
+    assert all(models.default_for(p) for p in models.PROVIDERS)
     assert gate.over_cap(100, 60, 30, 20) and not gate.over_cap(None, 10**9, 0, 1)
 
 

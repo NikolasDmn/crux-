@@ -4,7 +4,7 @@
 COMPOSE := docker compose -f deploy/compose.yaml --env-file .env
 export CRUX_TEST_MYSQL_URL ?= mysql://crux_test:crux-test@127.0.0.1:3306
 
-.PHONY: help env keys web web-dev up up-ai down logs seed smoke verify test test-core test-py test-web lint fmt invite
+.PHONY: help env keys web web-dev up up-ai down logs seed smoke verify test test-core test-py test-web lint fmt invite unlock
 
 help:
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -34,6 +34,9 @@ down: ## stop everything
 
 logs: ## follow logs
 	$(COMPOSE) logs -f --tail 100
+
+unlock: ## dev: clear login/signup rate limits ("Too many attempts")
+	@$(COMPOSE) exec -T redis sh -c 'redis-cli --scan --pattern "crux:rl:*" | xargs -r redis-cli del' >/dev/null && echo "rate limits cleared"
 
 invite: ## print a fresh invite code
 	@$(COMPOSE) exec -T core crux-core create-invite

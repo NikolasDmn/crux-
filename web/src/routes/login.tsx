@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { login } from "@/features/auth/api";
 import { safeRedirect } from "@/features/auth/lib/redirect";
+import { ApiError } from "@/lib/api";
 import { messageFor } from "@/lib/errors";
 import { t } from "@/lib/t";
 
@@ -35,7 +36,8 @@ function Login() {
       setUser(await login(form));
       void navigate({ to: safeRedirect(target) });
     } catch (err) {
-      setError(messageFor(err));
+      // A 401 here means the login itself failed, not an expired session.
+      setError(err instanceof ApiError && err.status === 401 ? t("auth.login.failed") : messageFor(err));
     } finally {
       setBusy(false);
     }

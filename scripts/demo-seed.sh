@@ -28,6 +28,19 @@ fi
 api() { curl -fsS -X "$1" "$BASE/api/v1$2" -H "authorization: Bearer $token" -H 'content-type: application/json' ${3:+-d "$3"}; }
 echo "demo-admin ready (admin, verified)"
 
+# A plain user for trying the web app (verified; password on its line in demo-accounts.txt).
+WPW=$(awk '/^webtest/ {print $3}' deploy/secrets/demo-accounts.txt)
+if [ -n "$WPW" ]; then
+    if curl -fsS -o /dev/null -X POST "$BASE/api/v1/auth/login" -H 'content-type: application/json'         -d "{\"login\":\"webtest\",\"password\":\"$WPW\"}" 2>/dev/null; then
+        echo "webtest already there"
+    else
+        wcode=$($COMPOSE exec -T core crux-core create-invite | tr -d '')
+        curl -fsS -o /dev/null -X POST "$BASE/api/v1/auth/signup" -H 'content-type: application/json'             -d "{\"inviteCode\":\"$wcode\",\"email\":\"webtest@crux.test\",\"username\":\"webtest\",\"firstName\":\"Web\",\"lastName\":\"Tester\",\"password\":\"$WPW\",\"timeZone\":\"Europe/Amsterdam\",\"acceptBreachedPassword\":true}"
+        $COMPOSE exec -T mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD:-crux-root}" -e             "UPDATE crux_core.Users SET EmailVerifiedAt = UTC_TIMESTAMP() WHERE Email = 'webtest@crux.test'" 2>/dev/null
+        echo "webtest ready (verified)"
+    fi
+fi
+
 if api GET /courses | grep -q '"code":"BSA"'; then
     echo "demo course already there"
 else

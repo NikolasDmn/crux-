@@ -24,3 +24,7 @@ if [ -n "$problems" ]; then
     exit 1
 fi
 echo "none"
+# The wipe removed the demo accounts: put them back (deploy/secrets/demo-accounts.txt), if any.
+if [ -f deploy/secrets/demo-accounts.txt ]; then
+    bash scripts/demo-seed.sh "$BASE" | grep -E "ready|already" || echo "(demo seed failed; run make seed)"
+fi

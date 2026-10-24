@@ -28,6 +28,7 @@ export const en = {
   "auth.login.password": "Password",
   "auth.login.submit": "Log in",
   "auth.login.forgot": "Forgot your password?",
+  "auth.login.failed": "Wrong username or password.",
   "auth.login.invite": "Have an invite? Sign up",
   "auth.signup.title": "Create your account",
   "auth.signup.invite": "Invite code",

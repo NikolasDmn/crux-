@@ -1,5 +1,7 @@
 """Preferences, inbox, unsubscribe and the bounce webhook (spec 8). One transaction per call."""
 
+import base64
+import hmac
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -169,6 +171,35 @@ class BounceEvent(Camel):
 
 class BounceBatch(Camel):
     events: list[BounceEvent] = Field(max_length=500)
+
+
+def postmark_event(body: dict[str, Any]) -> BounceEvent | None:
+    """A Postmark bounce or spam-complaint webhook (one event per request) as a suppression event.
+    Only what Postmark itself deactivated suppresses: hard bounces (`Inactive`) and complaints;
+    soft and transient bounces are retried by Postmark and ignored here (B6-8)."""
+    email = str(body.get("Email") or "")
+    if body.get("RecordType") == "SpamComplaint":
+        return BounceEvent(type="complaint", email=email)
+    if body.get("RecordType") == "Bounce" and body.get("Inactive") is True:
+        return BounceEvent(type="bounce", email=email)
+    return None
+
+
+def webhook_authorized(secret: str, header: str, authorization: str) -> bool:
+    """The shared secret in `X-Crux-Webhook-Secret`, or as the password of HTTP Basic auth (what
+    Postmark offers, as it doesn't sign webhooks). Never open while no secret is set."""
+    if not secret:
+        return False
+    if header and hmac.compare_digest(secret, header):
+        return True
+    scheme, _, value = authorization.partition(" ")
+    if scheme.lower() != "basic":
+        return False
+    try:
+        _, _, password = base64.b64decode(value, validate=True).decode().partition(":")
+    except (ValueError, UnicodeDecodeError):
+        return False
+    return bool(password) and hmac.compare_digest(secret, password)
 
 
 async def record_bounces(sessions: async_sessionmaker[AsyncSession], batch: BounceBatch) -> int:

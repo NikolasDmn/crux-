@@ -89,6 +89,21 @@ def user_event(verified: bool) -> Delivery:
     return Delivery("1-0", "user.updated", Envelope(_id(), "user.updated", 1, "x", "core", USER, p))
 
 
+def test_postmark_webhook_mapping_and_auth() -> None:
+    import base64
+
+    hard = {"RecordType": "Bounce", "Type": "HardBounce", "TypeCode": 1, "Email": "a@x.eu", "Inactive": True}
+    soft = {**hard, "Type": "SoftBounce", "TypeCode": 4096, "Inactive": False}
+    spam = {"RecordType": "SpamComplaint", "Email": "b@x.eu", "Inactive": True}
+    assert svc.postmark_event(hard) == svc.BounceEvent(type="bounce", email="a@x.eu")
+    assert svc.postmark_event(spam) == svc.BounceEvent(type="complaint", email="b@x.eu")
+    assert svc.postmark_event(soft) is None and svc.postmark_event({"RecordType": "Delivery"}) is None
+    basic = "Basic " + base64.b64encode(b"postmark:s3cret").decode()
+    assert svc.webhook_authorized("s3cret", "s3cret", "") and svc.webhook_authorized("s3cret", "", basic)
+    assert not svc.webhook_authorized("s3cret", "nope", "Basic !!!")
+    assert not svc.webhook_authorized("", "", basic), "never open without a secret"
+
+
 def test_channel_rules() -> None:
     assert kinds.channels_for({}, "exam.eve") == [], "everything is opt-in"
     assert kinds.channels_for({}, "course.shared") == ["InApp"], "needs an answer: always in-app"

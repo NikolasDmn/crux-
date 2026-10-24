@@ -1,10 +1,10 @@
 """Public routes under /api/v1/notify (spec 15). The gateway strips the prefix."""
 
 import asyncio
-import hmac
 import json
 from collections.abc import AsyncIterator
 from html import escape
+from typing import Any
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -127,11 +127,30 @@ async def unsubscribe(request: Request, token: str | None = None, kind: str | No
 async def email_webhook(body: svc.BounceBatch, request: Request) -> dict[str, int]:
     """Bounces and complaints from the email provider (spec 8) → suppression list. Authenticated
     with the shared secret in `X-Crux-Webhook-Secret`; 404 when unset or wrong."""
-    secret = request.app.state.settings.email_webhook_secret
-    given = request.headers.get("x-crux-webhook-secret", "")
-    if not secret or not hmac.compare_digest(secret, given):
+    if not _webhook_ok(request):
         raise NotFound()
     return {"suppressed": await svc.record_bounces(sessions(request), body)}
+
+
+@router.post("/webhooks/postmark")
+async def postmark_webhook(body: dict[str, Any], request: Request) -> dict[str, int]:
+    """Postmark's bounce and spam-complaint webhooks (B6-8). Set the webhook URL with HTTP Basic
+    auth whose password is `CRUX_EMAIL_WEBHOOK_SECRET` (or send it in `X-Crux-Webhook-Secret`);
+    404 when unset or wrong. Soft bounces are acknowledged and ignored."""
+    if not _webhook_ok(request):
+        raise NotFound()
+    event = svc.postmark_event(body)
+    if event is None:
+        return {"suppressed": 0}
+    return {"suppressed": await svc.record_bounces(sessions(request), svc.BounceBatch(events=[event]))}
+
+
+def _webhook_ok(request: Request) -> bool:
+    return svc.webhook_authorized(
+        request.app.state.settings.email_webhook_secret,
+        request.headers.get("x-crux-webhook-secret", ""),
+        request.headers.get("authorization", ""),
+    )
 
 
 @internal.post("/export")

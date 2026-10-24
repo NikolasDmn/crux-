@@ -76,6 +76,19 @@
 		}
 	}
 
+	# The M1 demo console, in dev only (frontend-spec 0.1): /demo, plus its own /style.css and
+	# /app.js (it links them from the root; the app's assets live under /assets/).
+	@demo {
+		expression `'{$CRUX_ENV:prod}' == 'dev'`
+		path /demo /demo/ /style.css /app.js
+	}
+	handle @demo {
+		root * /srv/demo
+		rewrite /demo* /index.html
+		file_server
+	}
+
+	# The web app (web/dist): files as they are, every other path is a client route.
 	handle {
 		root * /srv/web
 		try_files {path} /index.html

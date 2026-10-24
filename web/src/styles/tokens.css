@@ -1,0 +1,101 @@
+/* Design tokens (frontend-spec 3.1). Components use these variables only. Type and radius tokens
+   (--font-*, --text-*, --radius-*) live in app.css's @theme, which emits them under the same names. Light on :root; dark under
+   [data-theme="dark"] and, for "system", under prefers-color-scheme with no explicit light choice. */
+
+:root {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --surface-sunken: #efeeea;
+  --surface-raised: #ffffff;
+  --border: #e6e5e1;
+  --text: #1c1c1a;
+  --text-muted: #6b6a65;
+  --primary: #1c1c1a;
+  --primary-text: #fafaf9;
+  --danger: #c4321f;
+  --danger-bg: #fdecea;
+  --danger-text: #a8281a;
+  --warning: #a15c00;
+  --warning-bg: #fdf3e3;
+  --warning-text: #8a4b00;
+  --success: #1f7a4d;
+  --success-bg: #e7f4ec;
+  --success-text: #17603c;
+  --info-bg: #e9edfb;
+  --info-text: #2a47b8;
+  --focus-ring: #c4520a;
+  --course: #f76b15;
+  --course-soft: #fde7d9;
+  --shadow: 0 8px 24px rgb(28 28 26 / 0.1);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161618;
+    --surface: #1c1c1f;
+    --surface-sunken: #232327;
+    --surface-raised: #232327;
+    --border: #2e2e33;
+    --text: #f2f2ef;
+    --text-muted: #a3a29d;
+    --primary: #f2f2ef;
+    --primary-text: #161618;
+    --danger: #ff6b5b;
+    --danger-bg: #3a1b17;
+    --danger-text: #ff8a7d;
+    --warning: #f0b45a;
+    --warning-bg: #3a2a12;
+    --warning-text: #f0b45a;
+    --success: #4cc38a;
+    --success-bg: #13301f;
+    --success-text: #6fd6a3;
+    --info-bg: #1b2240;
+    --info-text: #9db1ff;
+    --focus-ring: #ff8a3d;
+    --course-soft: #3a2416;
+    --shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #161618;
+  --surface: #1c1c1f;
+  --surface-sunken: #232327;
+  --surface-raised: #232327;
+  --border: #2e2e33;
+  --text: #f2f2ef;
+  --text-muted: #a3a29d;
+  --primary: #f2f2ef;
+  --primary-text: #161618;
+  --danger: #ff6b5b;
+  --danger-bg: #3a1b17;
+  --danger-text: #ff8a7d;
+  --warning: #f0b45a;
+  --warning-bg: #3a2a12;
+  --warning-text: #f0b45a;
+  --success: #4cc38a;
+  --success-bg: #13301f;
+  --success-text: #6fd6a3;
+  --info-bg: #1b2240;
+  --info-text: #9db1ff;
+  --focus-ring: #ff8a3d;
+  --course-soft: #3a2416;
+  --shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+  color-scheme: dark;
+}

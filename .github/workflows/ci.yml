@@ -80,12 +80,41 @@ jobs:
           for s in files notify ai; do (cd $s && uv run pytest); done
       - run: uv run --with pip-audit pip-audit
 
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: the client matches openapi.json (regenerate with `npm run api` after an API change)
+        run: npm run api && git diff --exit-code -- src/lib/api.gen.ts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run format:check
+      - name: unit tests (>= 80% on lib/)
+        run: npm run coverage
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+
   # Spec 9.6: with the ai service absent, the non-AI suite passes. Core's tests never start ai.
   no-ai:
     runs-on: ubuntu-latest
-    needs: [core, python]
+    needs: [core, python, web]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19"
+      - name: build the web app (the gateway serves it)
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npm run build
       - name: compose up without the ai profile
         run: |
           mkdir -p deploy/secrets

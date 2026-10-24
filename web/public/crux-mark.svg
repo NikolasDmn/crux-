@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Crux mark A (brand/crux-mark-light.svg without metadata). -->
+  <line x1="14" y1="46" x2="50" y2="14" stroke="#1c1c1a" stroke-width="8" stroke-linecap="round"/>
+  <line x1="16" y1="20" x2="44" y2="48" stroke="#1c1c1a" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="28.8" cy="32.8" r="9" fill="#fafaf9"/>
+  <circle cx="28.8" cy="32.8" r="5.5" fill="#f76b15"/>
+</svg>

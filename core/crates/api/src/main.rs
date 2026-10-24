@@ -78,6 +78,9 @@ enum Cmd {
     MakeAdmin {
         email: String,
     },
+    /// Container health check: exits 0 when this process's `/healthz` answers on CRUX_LISTEN's port
+    /// (the image has no curl).
+    Healthcheck,
     /// Load testing: create users and print `username token` lines (refused when CRUX_ENV=prod).
     LoadUsers {
         #[arg(long, default_value_t = 500)]
@@ -98,6 +101,17 @@ fn init_tracing() {
 async fn main() -> anyhow::Result<()> {
     init_tracing();
     let cli = Cli::parse();
+    if let Cmd::Healthcheck = &cli.cmd {
+        let port = cli.listen.rsplit(':').next().unwrap_or("8080");
+        let ok = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(3))
+            .build()?
+            .get(format!("http://127.0.0.1:{port}/healthz"))
+            .send()
+            .await
+            .is_ok_and(|r| r.status().is_success());
+        std::process::exit(if ok { 0 } else { 1 });
+    }
     if let Cmd::GenKeys { path } = &cli.cmd {
         if std::path::Path::new(path).exists() {
             anyhow::bail!("{path} exists; refusing to overwrite a signing key");

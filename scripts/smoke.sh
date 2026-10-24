@@ -2,7 +2,7 @@
 # Smoke test against a running stack: health of every service through the gateway, signup with an
 # invite, /me, user.created reaching files and notify (M1); then a course with a lecture, a PDF
 # uploaded to its pre-signed URL through the gateway, scanned, extracted, attached as a material,
-# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5); a live inbox notification (M6); storage saver and thumbnails (M7); AI chat and generation, or service_unavailable without ai (M8); an account export (M9).
+# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5); a live inbox notification (M6); storage saver and thumbnails (M7); AI chat and generation, or service_unavailable without ai (M8); an account export (M9); the web app at / and the demo at /demo.
 # Usage: scripts/smoke.sh [base-url]   (default http://localhost:8000)
 set -euo pipefail
 
@@ -191,3 +191,17 @@ zipf=$(mktemp)
 curl -fsS "$eurl" -o "$zipf" || fail "export download"
 python3 -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); assert {'core.json', 'notify.json', 'files.json'} <= set(n), n" "$zipf" || fail "export zip contents"
 echo "ok   account export zipped and downloadable"
+
+# ---------- web app ----------
+# The gateway serves web/dist at / (client routes fall back to index.html) under the CSP; the demo
+# console stays at /demo in dev.
+page=$(curl -fsS "$BASE/")
+grep -q '<div id="root">' <<<"$page" || fail "web app not served at / (run make web)"
+curl -fsS "$BASE/c/01NOSUCHCOURSE0000000000000/bank" | grep -q '<div id="root">' || fail "client route fallback"
+curl -fsSI "$BASE/" | grep -qi "content-security-policy: default-src 'self'" || fail "CSP header"
+asset=$(grep -o '/assets/index-[^"]*\.js' <<<"$page" | head -1)
+curl -fsS -o /dev/null "$BASE$asset" || fail "app bundle $asset"
+if [ "$(docker compose -f deploy/compose.yaml --env-file .env exec -T gateway printenv CRUX_ENV 2>/dev/null | tr -d '\r')" = dev ]; then
+    curl -fsS "$BASE/demo" | grep -qi "<title>" || fail "demo console at /demo"
+fi
+echo "ok   web app at / (CSP, client routes, bundle) and the demo at /demo"

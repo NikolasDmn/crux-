@@ -28,11 +28,16 @@ services:
     ports: ["${CRUX_HTTP_PORT:-8000}:80"]
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      # The SPA build. Until the frontend exists, .env points this at ../demo (the M1 demo console).
+      # The web app build (`make web`); the demo console is served at /demo in dev only.
       - ${CRUX_WEB_DIR:-../web/dist}:/srv/web:ro
+      - ../demo:/srv/demo:ro
     environment:
       CRUX_SITE_ADDRESS: ${CRUX_SITE_ADDRESS:-:80}
-    depends_on: [core, files, notify]
+      CRUX_ENV: ${CRUX_ENV:-dev}
+    depends_on:
+      core: {condition: service_healthy}
+      files: {condition: service_healthy}
+      notify: {condition: service_healthy}
 
   mysql:
     restart: unless-stopped
@@ -104,6 +109,13 @@ services:
     depends_on:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
+    # Ready = answering HTTP: `up --wait` and the gateway wait for it (no request races start-up).
+    healthcheck:
+      test: ["CMD", "crux-core", "healthcheck"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 5s
 
   core-jobs:
     restart: unless-stopped
@@ -129,6 +141,13 @@ services:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
       s3: {condition: service_started}
+    # Ready = answering HTTP: `up --wait` and the gateway wait for it (no request races start-up).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 5s
 
   files-worker:
     restart: unless-stopped
@@ -153,6 +172,13 @@ services:
     depends_on:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
+    # Ready = answering HTTP: `up --wait` and the gateway wait for it (no request races start-up).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 5s
 
   notify-worker:
     restart: unless-stopped
@@ -180,6 +206,13 @@ services:
     depends_on:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
+    # Ready = answering HTTP: `up --wait` and the gateway wait for it (no request races start-up).
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
+      start_period: 5s
 
   ai-worker:
     restart: unless-stopped

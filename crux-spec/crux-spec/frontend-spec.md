@@ -167,7 +167,7 @@ Build every component with these CSS variables only. Light values on `:root`, da
 | Blue | `#3e63dd` | `#e1e7fb` / `#1b2240` |
 | Teal | `#12a594` | `#d9f2ee` / `#10302c` |
 | Purple | `#8e4ec6` | `#ede1f7` / `#2a1d38` |
-| Pink | `#d6409f` | `#fae0ef` / `#3a1a2e` |
+| Pink | `#e5559f` | `#fae0ef` / `#3a1a2e` |
 | Green | `#30a46c` | `#dcf2e5` / `#13301f` |
 | Amber | `#e2a336` | `#fbefd6` / `#36290f` |
 | Slate | `#8b8d98` | `#ececee` / `#26272b` |

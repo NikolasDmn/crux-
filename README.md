@@ -15,13 +15,13 @@ services/        Python 3.12 uv workspace
 contracts/       event JSON Schemas (topic@version), shared test fixtures
 deploy/          compose.yaml, Caddyfile (gateway), MySQL init
 scripts/         smoke, verify-stack, backup, restore-drill, load/ (k6)
-web/             React SPA (frontend-spec; not started)
+web/             React SPA (frontend-spec): Vite, TanStack Router + Query, Tailwind on the spec 3 tokens
 ```
 
 ## Run it locally
 
-Needs Docker Desktop (Compose v2) and `openssl` (Git Bash has it). `make` is optional; each target
-is a couple of plain commands in the [Makefile](Makefile).
+Needs Docker Desktop (Compose v2), Node 20.19+ and `openssl` (Git Bash has it). `make` is optional;
+each target is a couple of plain commands in the [Makefile](Makefile).
 
 ```bash
 make up            # .env from .env.example, a JWT key in deploy/secrets, then docker compose up
@@ -31,10 +31,15 @@ make verify        # cold start from an EMPTY database (drops volumes), smoke, l
 make up-ai         # same, plus the ai service (the product works without it)
 ```
 
-Until the React SPA exists, the gateway serves a small **demo console** (`demo/`, selected by
-`CRUX_WEB_DIR=../demo` in `.env`) at `/`: sign up, log in, verify email, reset password, edit
-profile/settings, invites, and the admin tools, with a log of every API call. Emails land in
-Mailpit at <http://localhost:8025>.
+The gateway serves the web app (`web/dist`, built by `make web`) at <http://localhost:8000>. For
+frontend work, `make web-dev` runs it with hot reload on <http://localhost:5173>, proxying the API
+to the running stack (`CRUX_GATEWAY` overrides the target). In dev the M1 **demo console** (`demo/`)
+is still at `/demo`: a raw API client for poking endpoints. Emails land in Mailpit at
+<http://localhost:8025>. With `npm run dev`, `/dev/ui` shows every component skin in both themes.
+
+After an API change, regenerate the frontend client from the running stack (ai profile on):
+`cd web && npm run api:fetch && npm run api`; CI fails when `src/lib/api.gen.ts` doesn't match
+`web/openapi.json`.
 
 The first admin: sign up with an invite, then
 `docker compose -f deploy/compose.yaml exec core crux-core make-admin you@example.com`.
@@ -42,8 +47,8 @@ The first admin: sign up with an invite, then
 ## Tests
 
 ```bash
-make test          # Rust + Python. DB tests need MySQL: `make up` first, or they skip
-make lint          # rustfmt, clippy -D warnings, ruff, mypy --strict
+make test          # Rust + Python + web. DB tests need MySQL: `make up` first, or they skip
+make lint          # rustfmt, clippy -D warnings, ruff, mypy --strict, eslint, tsc, prettier
 ```
 
 DB integration tests read `CRUX_TEST_MYSQL_URL` (default in the Makefile:

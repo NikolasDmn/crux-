@@ -9,7 +9,34 @@ use utoipa::openapi::{InfoBuilder, OpenApi, ServerBuilder};
 
 use crate::AppState;
 
+/// `GET /courses/{id}/deadlines` → `getCoursesIdDeadlines`: unique by construction (handler names
+/// such as `list` repeat across modules, and clients generate one type per operation id).
+pub fn operation_id(method: &str, path: &str) -> String {
+    let mut out = method.to_ascii_lowercase();
+    for word in path.split(|c: char| !c.is_ascii_alphanumeric()).filter(|w| !w.is_empty()) {
+        let mut cs = word.chars();
+        if let Some(f) = cs.next() {
+            out.push(f.to_ascii_uppercase());
+            out.push_str(cs.as_str());
+        }
+    }
+    out
+}
+
 pub fn finish(mut api: OpenApi) -> OpenApi {
+    for (path, item) in api.paths.paths.iter_mut() {
+        for (method, op) in [
+            ("get", &mut item.get),
+            ("put", &mut item.put),
+            ("post", &mut item.post),
+            ("delete", &mut item.delete),
+            ("patch", &mut item.patch),
+        ] {
+            if let Some(op) = op {
+                op.operation_id = Some(operation_id(method, path));
+            }
+        }
+    }
     api.info = InfoBuilder::new().title("Crux core").version(env!("CARGO_PKG_VERSION")).build();
     api.servers = Some(vec![ServerBuilder::new().url("/api/v1").build()]);
     let components = api.components.get_or_insert_with(Default::default);
@@ -91,6 +118,25 @@ pub fn merge_peer(doc: &mut serde_json::Value, prefix: &str, peer: serde_json::V
 #[cfg(test)]
 mod tests {
     use serde_json::json;
+
+    #[test]
+    fn operation_ids_come_from_method_and_path() {
+        assert_eq!(super::operation_id("get", "/courses/{id}/deadlines"), "getCoursesIdDeadlines");
+        assert_eq!(super::operation_id("post", "/course-invitations/{courseId}/accept"), "postCourseInvitationsCourseIdAccept");
+        let doc = crate::openapi_doc();
+        let mut ids: Vec<String> = doc
+            .paths
+            .paths
+            .values()
+            .flat_map(|i| [&i.get, &i.put, &i.post, &i.delete, &i.patch])
+            .flatten()
+            .filter_map(|o| o.operation_id.clone())
+            .collect();
+        let n = ids.len();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), n, "operation ids are unique");
+    }
 
     #[test]
     fn peers_merge_under_their_prefix_and_clashing_schemas_are_renamed() {

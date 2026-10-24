@@ -74,12 +74,13 @@ pub struct NewSlip<'a> {
     pub mock_id: Option<i64>,
     pub mock_order: Option<i32>,
     pub attempt_id: Option<i64>,
+    pub review_id: Option<i64>,
 }
 
 pub async fn insert_slip(conn: &mut MySqlConnection, s: &NewSlip<'_>) -> RepoResult<i64> {
     let res = sqlx::query(
         "INSERT INTO Slip (PublicId, UserId, CourseId, ComponentId, WeakSpotId, Type, Description, OccurredAt, Confidence, LoggedBy, MockExamId, \
-         MockQuestionOrder, QuestionAttemptId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+         MockQuestionOrder, QuestionAttemptId, FlashcardReviewId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(s.public_id)
     .bind(s.user_id)
@@ -94,6 +95,7 @@ pub async fn insert_slip(conn: &mut MySqlConnection, s: &NewSlip<'_>) -> RepoRes
     .bind(s.mock_id)
     .bind(s.mock_order)
     .bind(s.attempt_id)
+    .bind(s.review_id)
     .execute(conn)
     .await?;
     Ok(res.last_insert_id() as i64)

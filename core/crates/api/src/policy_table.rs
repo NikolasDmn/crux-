@@ -112,6 +112,16 @@ pub const ROUTES: &[(&str, &str, Policy)] = &[
     ("DELETE", "/courses/{id}/traps/{trapId}", Policy::Mine),
     ("GET", "/insight/patterns", Policy::Owns),
     ("GET", "/courses/{id}/stats/confidence", Policy::Read),
+    ("GET", "/courses/{id}/flashcards", Policy::Read),
+    ("POST", "/courses/{id}/flashcards", Policy::Read),
+    // Course cards: Edit. Personal cards: only their owner (also 404 to a course Editor).
+    ("PATCH", "/flashcards/{id}", Policy::Edit),
+    ("POST", "/flashcards/{id}/warmup-flag", Policy::Read),
+    ("POST", "/flashcards/{id}/suspend", Policy::Read),
+    ("GET", "/flash/queue", Policy::Owns),
+    ("POST", "/flash/custom", Policy::Owns),
+    ("POST", "/flash/reviews", Policy::Owns),
+    ("GET", "/flash/cards", Policy::Owns),
 ];
 
 pub fn policy_of(method: &str, path: &str) -> Option<Policy> {

@@ -3,6 +3,7 @@ pub mod auth;
 pub mod bank;
 pub mod catalog;
 pub mod courses;
+pub mod flash;
 pub mod health;
 pub mod internal;
 pub mod invites;
@@ -82,6 +83,14 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(mistakes::retire_trap))
         .routes(routes!(mistakes::patterns))
         .routes(routes!(mistakes::confidence))
+        .routes(routes!(flash::list, flash::create))
+        .routes(routes!(flash::patch))
+        .routes(routes!(flash::warmup_flag))
+        .routes(routes!(flash::suspend))
+        .routes(routes!(flash::queue))
+        .routes(routes!(flash::custom))
+        .routes(routes!(flash::reviews))
+        .routes(routes!(flash::by_code))
 }
 
 /// `?limit=&cursor=` (spec 3.1).

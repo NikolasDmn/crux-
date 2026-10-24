@@ -25,6 +25,7 @@ struct Fixture {
     slip: String,
     weak_spot: String,
     trap: String,
+    card: String,
 }
 
 async fn fixture(h: &common::Harness, alice: &str, n: usize) -> Fixture {
@@ -67,12 +68,23 @@ async fn fixture(h: &common::Harness, alice: &str, n: usize) -> Fixture {
         .json;
     let spot = call(&h.app, "POST", &format!("/courses/{course}/weak-spots"), Some(alice), Some(json!({"topic": "T"})), &[]).await.json;
     let trap = call(&h.app, "POST", &format!("/courses/{course}/traps"), Some(alice), Some(json!({"text": "careful"})), &[]).await.json;
+    let card = call(
+        &h.app,
+        "POST",
+        &format!("/courses/{course}/flashcards"),
+        Some(alice),
+        Some(json!({"componentId": component, "front": "F", "back": "B", "shared": true})),
+        &[],
+    )
+    .await
+    .json;
     Fixture {
         question: q["id"].as_str().expect("question fixture").to_string(),
         mock: mock["id"].as_str().expect("mock fixture").to_string(),
         slip: slip["id"].as_str().expect("slip fixture").to_string(),
         weak_spot: spot["id"].as_str().expect("weak spot fixture").to_string(),
         trap: trap["id"].as_str().expect("trap fixture").to_string(),
+        card: card["id"].as_str().expect("card fixture").to_string(),
         course,
         component,
         material: m["id"].as_str().unwrap().to_string(),
@@ -91,6 +103,7 @@ fn fixture_path(path: &str, f: &Fixture, member_id: &str) -> Option<String> {
         p if p.starts_with("/mocks/{id}") => p.replace("{id}", &f.mock).replace("{order}", "1"),
         p if p.starts_with("/slips/{id}") => p.replace("{id}", &f.slip),
         p if p.starts_with("/weak-spots/{id}") => p.replace("{id}", &f.weak_spot),
+        p if p.starts_with("/flashcards/{id}") => p.replace("{id}", &f.card),
         p if p.starts_with("/courses/{id}") => p.replace("{id}", &f.course),
         p if p.starts_with("/course-invitations/{courseId}") => p.replace("{courseId}", &f.course),
         p if p.starts_with("/components/{id}") => p.replace("{id}", &f.component),
@@ -116,6 +129,9 @@ fn body_for_path(method: &str, path: &str) -> Option<Value> {
         }
         ("POST", "/courses/{id}/weak-spots") => Some(json!({"topic": "x"})),
         ("POST", "/courses/{id}/traps") => Some(json!({"text": "x"})),
+        ("POST", "/courses/{id}/flashcards") => Some(json!({"componentId": "01AAAAAAAAAAAAAAAAAAAAAAAA", "front": "x", "back": "y"})),
+        ("POST", "/flashcards/{id}/warmup-flag") => Some(json!({"flagged": true})),
+        ("POST", "/flashcards/{id}/suspend") => Some(json!({"suspended": true})),
         ("POST", "/mocks/{id}/questions/{order}/grade") => Some(json!({"outcome": "Right"})),
         ("POST", "/questions/{id}/image-crop") => {
             Some(json!({"fileId": "01AAAAAAAAAAAAAAAAAAAAAAAA", "page": 1, "box": {"x": 0, "y": 0, "w": 1, "h": 1}}))

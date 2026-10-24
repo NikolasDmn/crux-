@@ -6,6 +6,7 @@
 pub mod auth;
 pub mod builder;
 pub mod catalog;
+pub mod fsrs;
 pub mod grading;
 pub mod ids;
 pub mod mock;

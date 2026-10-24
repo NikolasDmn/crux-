@@ -2,7 +2,7 @@
 # Smoke test against a running stack: health of every service through the gateway, signup with an
 # invite, /me, user.created reaching files and notify (M1); then a course with a lecture, a PDF
 # uploaded to its pre-signed URL through the gateway, scanned, extracted, attached as a material,
-# its page text and a download link (M2).
+# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4).
 # Usage: scripts/smoke.sh [base-url]   (default http://localhost:8000)
 set -euo pipefail
 
@@ -10,8 +10,13 @@ BASE="${1:-http://localhost:8000}"
 COMPOSE="docker compose -f deploy/compose.yaml"
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
+# Services may still be finishing start-up (migrations, upstream connect): retry up to 60 s.
 for path in /api/v1/healthz /api/v1/files/healthz /api/v1/notify/healthz; do
-    curl -fsS "$BASE$path" >/dev/null || fail "$path"
+    for i in $(seq 1 60); do
+        curl -fsS "$BASE$path" >/dev/null 2>&1 && break
+        [ "$i" = 60 ] && fail "$path"
+        sleep 1
+    done
 done
 echo "ok   health through the gateway"
 
@@ -82,3 +87,15 @@ api PUT "/mocks/$mock/questions/1/answer" "{\"choiceOptionId\":\"$right\",\"conf
 score=$(api POST "/mocks/$mock/submit" | j '["status"] + " " + str(d["score"]) + "/" + str(d["maxScore"])')
 [ "$score" = "Graded 1.0/1.0" ] || fail "mock result: $score"
 echo "ok   mock built, answered, auto-graded ($score)"
+
+# ---------- milestone 4 ----------
+card=$(api POST "/courses/$course/flashcards" "{\"componentId\":\"$lecture\",\"front\":\"p-value?\",\"back\":\"P(data | H0)\",\"shared\":true}")
+code=$(echo "$card" | j '["code"]')
+[ "$code" = SMK001 ] || fail "card code $code"
+cardid=$(echo "$card" | j '["id"]')
+api POST "/courses/$course/subscription" '{}' >/dev/null
+now=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+rid=$(python3 -c "import random,string; print('01'+''.join(random.choice('0123456789ABCDEFGHJKMNPQRSTVWXYZ') for _ in range(24)))")
+st=$(api POST /flash/reviews "{\"reviews\":[{\"clientId\":\"$rid\",\"flashcardId\":\"$cardid\",\"rating\":3,\"reviewedAt\":\"$now\"}]}" | j '["results"][0]["status"] + "/" + d["results"][0]["card"]["progress"]["state"]')
+[ "$st" = "applied/Review" ] || fail "flash review: $st"
+echo "ok   flashcard $code reviewed ($st)"

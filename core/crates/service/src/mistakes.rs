@@ -95,10 +95,12 @@ pub struct SlipInput {
     pub description: String,
     pub occurred_at: Option<DateTime<Utc>>,
     pub confidence: Option<String>,
-    /// Source: a mock item (confirming a proposed slip) or a practice attempt. At most one.
+    /// Source: a mock item (confirming a proposed slip), a practice attempt or a flashcard review
+    /// (confirming a proposal from POST /flash/reviews). At most one.
     pub mock_id: Option<String>,
     pub mock_question_order: Option<i32>,
     pub attempt_client_id: Option<String>,
+    pub flashcard_review_client_id: Option<String>,
 }
 
 fn check_type(stype: &str, description: &str) -> ValidationErrors {
@@ -118,7 +120,8 @@ pub async fn create_slip(ctx: &Ctx, actor: &Actor, input: SlipInput) -> AppResul
     let mut e = check_type(&input.stype, &input.description);
     let from_mock = input.mock_id.is_some();
     let from_attempt = input.attempt_client_id.is_some();
-    if !ws::one_source(from_mock, false, from_attempt) {
+    let from_review = input.flashcard_review_client_id.is_some();
+    if !ws::one_source(from_mock, from_review, from_attempt) {
         e.push("mockId", "sources", "A slip has at most one source.");
     }
     if from_mock != input.mock_question_order.is_some() {
@@ -154,6 +157,17 @@ pub async fn create_slip(ctx: &Ctx, actor: &Actor, input: SlipInput) -> AppResul
         }
         None => None,
     };
+    let review_id = match &input.flashcard_review_client_id {
+        Some(c) => {
+            let (id, _, component_id) = crux_repo::flash::review_by_client(&mut tx, actor.user_id, c)
+                .await?
+                .filter(|r| r.1 == course.id)
+                .ok_or(AppError::NotFound)?;
+            component_from_source = Some(component_id);
+            Some(id)
+        }
+        None => None,
+    };
     let weak_spot_id = match &input.weak_spot_id {
         Some(r) => {
             Some(repo::weak_spot(&mut tx, actor.user_id, r).await?.filter(|w| w.course_id == course.id).ok_or(AppError::NotFound)?.id)
@@ -177,6 +191,7 @@ pub async fn create_slip(ctx: &Ctx, actor: &Actor, input: SlipInput) -> AppResul
             mock_id,
             mock_order: order,
             attempt_id,
+            review_id,
         },
     )
     .await?;

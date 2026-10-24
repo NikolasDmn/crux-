@@ -8,6 +8,7 @@ pub mod bank;
 pub mod catalog;
 pub mod courses;
 pub mod db;
+pub mod flash;
 pub mod invites;
 pub mod messaging;
 pub mod mistakes;

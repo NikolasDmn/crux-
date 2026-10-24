@@ -78,6 +78,23 @@ stranger gets 404 rather than a validation error (spec 4.2); a body that can't b
 Infra fixes found by the cold-start check: worker loops are **supervised** (a crash restarts that loop, not the worker),
 files waits for the object store, and every compose service has `restart: unless-stopped`.
 
+## Milestone 4 build choices (flashcards)
+
+| # | Choice | Why / where |
+|---|---|---|
+| B4-1 | **FSRS-6 default weights** (the `fsrs` 6.6 crate, the reference implementation) instead of FSRS-5 | The crate moved to FSRS-6; weights are stored as `FsrsParamsVersion=fsrs6.6-dflt` so cards can be refit from the review log later |
+| B4-2 | Learning steps outside FSRS: Again → 1 min, Hard → 6 min on new/learning cards; a lapse relearns in 10 min; Good/Easy graduate to FSRS days | FSRS only gives day intervals; Anki-style steps keep a failed card in today's session |
+| B4-3 | Exam cap: a due date after the next Exam/Resit moves to **18:00 local the day before** (or now if that's passed) | Spec 5.5 says "before the exam" without a time |
+| B4-4 | Codes are `<course code><3+ digits>`, assigned under a lock on the course row, gaps never reused | Spec 5.5 |
+| B4-5 | **Viewers may make personal cards**; course (shared) cards need Owner/Editor; personal cards are 404 to everyone else (even the course owner) | Same pattern as private questions (B3-3) |
+| B4-6 | A review batch never fails as a whole for one bad card: each item is `applied`, `stale` (older than the card's last review: logged, not rescheduled), `duplicate` (clientId seen) or `unknown` (card gone/not yours) | Offline phones must be able to drain their queue |
+| B4-7 | Slip proposals from reviews: a **lapse** (Again on a Review card) or **Again while Sure**. Computed in the response, confirmed with `POST /slips {flashcardReviewClientId}` | Same as mock proposals (B3-6) |
+| B4-8 | The daily new-card limit counts cards whose **first review** happened since local midnight (user's time zone); the review limit caps due cards per queue | Spec 5.5 |
+| B4-9 | Archiving a subscription suspends that user's cards (`CourseArchived`); re-activating lifts only those, never a manual suspension | Spec 5.5 |
+| B4-10 | Custom sets order by most lapses, then most overdue | Spec gives the filters, not the order |
+| B4-11 | Reviews don't add weak-spot checks yet (cards aren't linked to concepts) | Revisit if cards get concepts |
+| B4-12 | New routes: `PATCH /flashcards/{id}`, `POST /flashcards/{id}/suspend`, `GET /flash/cards?code=` | Spec 15 lists warmup-flag only; editing and suspending were described in 5.5 without routes |
+
 ## Product / behaviour
 
 | # | Question | Built meanwhile |

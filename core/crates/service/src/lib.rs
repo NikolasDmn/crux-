@@ -12,6 +12,7 @@ pub mod ctx;
 pub mod deadlines;
 pub mod error;
 pub mod events;
+pub mod flash;
 pub mod invites;
 pub mod jwt;
 pub mod me;

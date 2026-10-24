@@ -323,6 +323,7 @@ pub async fn subscribe(ctx: &Ctx, actor: &Actor, course_ref: &str, input: Subscr
     if status == "Archived" {
         courses::set_subscription_status(&mut tx, actor.user_id, c.id, "Archived").await?;
     }
+    crate::flash::on_subscription_status(&mut tx, actor.user_id, c.id, status == "Archived").await?;
     let fresh = courses::by_internal_id(&mut tx, actor.user_id, c.id).await?.ok_or(AppError::NotFound)?;
     tx.commit().await?;
     Ok(CourseView::from(&fresh))

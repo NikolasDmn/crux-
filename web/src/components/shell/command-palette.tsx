@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CalendarDays,
   CalendarRange,
+  CircleAlert,
   Home,
   Inbox,
   Layers,
@@ -86,6 +87,9 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 </Item>
                 <Item value="plan calendar" onSelect={() => go("/plan")} icon={<CalendarRange />}>
                   {t("nav.plan")}
+                </Item>
+                <Item value="mistakes slips weak spots" onSelect={() => go("/insight")} icon={<CircleAlert />}>
+                  {t("nav.mistakes")}
                 </Item>
                 <Item value="flashcards" onSelect={() => go("/flash")} icon={<Layers />}>
                   {t("nav.flashcards")}

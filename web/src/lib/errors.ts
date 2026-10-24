@@ -26,7 +26,10 @@ export function messageFor(e: unknown): string {
     }
     return MESSAGES[e.code] ?? e.message;
   }
-  if (e instanceof TypeError) return "Can't reach Crux. Check your connection.";
+  // fetch rejects with a TypeError when offline; a TypeError from a bug in the page is not that.
+  if (e instanceof TypeError && /fetch|network|load failed/i.test(e.message)) {
+    return "Can't reach Crux. Check your connection.";
+  }
   return MESSAGES.internal!;
 }
 

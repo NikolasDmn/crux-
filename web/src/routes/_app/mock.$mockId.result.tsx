@@ -1,0 +1,270 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Check, ChevronLeft } from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { Markdown } from "@/components/markdown";
+import { Badge } from "@/components/ui/badge";
+import { Banner } from "@/components/ui/banner";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Field, Select, Textarea } from "@/components/ui/field";
+import { Skeleton } from "@/components/ui/misc";
+import { OptionRow } from "@/components/ui/option-row";
+import { useToast } from "@/components/ui/toast";
+import { SLIP_TYPES, useLogSlip } from "@/features/mistakes/api";
+import { useResult, useReview, type Item, type Mock } from "@/features/mocks/api";
+import { scoreText } from "@/features/mocks/lib/taking";
+import { fieldErrors, messageFor } from "@/lib/errors";
+
+// Mock result and review (frontend-spec 4): the score (open answers: Right 1, Partial 0.5); per
+// question Right/Wrong/Blank with confidence (a lucky guess counts as a miss); right answers show
+// their key, misses stay hidden until "Show answer"; "I fixed this"; self-grading of open answers;
+// proposed slips to log. Keys render only when the API returned them (5.3). AI grading review
+// joins with step 8, "make a flashcard" with step 5.
+export const Route = createFileRoute("/_app/mock/$mockId/result")({ component: Result });
+
+const TONE = { Right: "success", Partial: "warning", Wrong: "danger", Blank: "neutral" } as const;
+
+function Result() {
+  const { mockId } = Route.useParams();
+  const r = useResult(mockId);
+  if (r.isPending) return <Skeleton className="h-96" />;
+  if (r.isError) return <Banner tone="danger">{messageFor(r.error)}</Banner>;
+  const m = r.data;
+  const items = [...m.items].sort((a, b) => a.order - b.order);
+  const toGrade = items.filter((i) => i.type === "Open" && !i.outcome && m.gradingMode === "Self").length;
+  const misses = items.filter((i) => i.outcome && i.outcome !== "Right").length;
+
+  return (
+    <div className="flex max-w-[860px] flex-col gap-5">
+      <Link
+        to="/c/$courseId/mocks"
+        params={{ courseId: m.courseId }}
+        className="inline-flex items-center gap-1 self-start text-sm text-muted hover:text-text"
+      >
+        <ChevronLeft className="size-4" aria-hidden="true" />
+        Mocks
+      </Link>
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+        <div className="flex flex-col gap-1">
+          <h1 className="m-0 text-xl font-semibold tracking-[-0.01em]">{m.name}</h1>
+          <span className="text-sm text-muted">
+            {m.status === "Reviewed" ? "Reviewed" : misses ? `${misses} to review` : "Nothing to review"}
+          </span>
+        </div>
+        <span className="ml-auto font-mono text-3xl font-semibold tnum">{scoreText(m.score, m.maxScore)}</span>
+      </div>
+      {toGrade ? (
+        <Banner tone="notice">
+          Mark your {toGrade} open {toGrade === 1 ? "answer" : "answers"} against the model answer to finish the score.
+        </Banner>
+      ) : null}
+      {m.status === "Reviewed" ? (
+        <Banner tone="notice">Every miss is fixed or shown. All answers are open now.</Banner>
+      ) : null}
+      {items.map((it) => (
+        <ItemCard key={it.order} mock={m} item={it} />
+      ))}
+    </div>
+  );
+}
+
+function ItemCard({ mock, item }: { mock: Mock; item: Item }) {
+  const review = useReview(mock.id);
+  const toast = useToast();
+  const [slip, setSlip] = useState(false);
+  const k = item.key;
+  const miss = !!item.outcome && item.outcome !== "Right";
+  const needsGrade = item.type === "Open" && !item.outcome && mock.gradingMode === "Self";
+  const options = (item.options ?? []) as { id: string; text: string; isCorrect?: boolean | null }[];
+  const run = (a: Parameters<typeof review.mutate>[0]) =>
+    review.mutate(a, { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) });
+
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-sm text-muted tnum">Q{item.order}</span>
+        {item.outcome ? (
+          <Badge kind="status" tone={TONE[item.outcome as keyof typeof TONE] ?? "neutral"}>
+            {item.outcome}
+          </Badge>
+        ) : needsGrade ? (
+          <Badge kind="status" tone="info">
+            To mark
+          </Badge>
+        ) : null}
+        {item.answer.confidence ? <span className="text-sm text-muted">{item.answer.confidence}</span> : null}
+        {item.fixed ? (
+          <span className="flex items-center gap-1 text-sm text-success-text">
+            <Check className="size-3.5" aria-hidden="true" />
+            Fixed
+          </span>
+        ) : null}
+        <span className="ml-auto font-mono text-sm text-muted tnum">
+          {item.grade ?? "–"}/{item.maxGrade}
+        </span>
+      </div>
+      <Markdown>{item.prompt}</Markdown>
+
+      {item.type === "MC" ? (
+        <div className="flex flex-col gap-2">
+          {options.map((o, n) => (
+            <OptionRow
+              key={o.id}
+              index={n}
+              disabled
+              selected={item.answer.choiceOptionId === o.id}
+              onSelect={() => undefined}
+              state={
+                k
+                  ? o.id === k.correctOptionId
+                    ? "right"
+                    : item.answer.choiceOptionId === o.id
+                      ? "wrong"
+                      : undefined
+                  : undefined
+              }
+            >
+              <Markdown>{o.text}</Markdown>
+            </OptionRow>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-md bg-sunken p-3 text-sm">
+          <span className="text-xs font-medium uppercase tracking-[0.06em] text-muted">Your answer</span>
+          <div className="mt-1 whitespace-pre-wrap">
+            {item.type === "Numeric"
+              ? item.answer.numeric !== null && item.answer.numeric !== undefined
+                ? `${item.answer.numeric} ${item.answer.unit ?? ""}`
+                : "(blank)"
+              : item.answer.text?.trim() || "(blank)"}
+          </div>
+        </div>
+      )}
+
+      {k ? (
+        <div className="flex flex-col gap-2 border-t border-border pt-3 text-sm">
+          {k.value !== null && k.value !== undefined ? (
+            <p className="m-0">
+              Answer: <span className="font-mono tnum">{k.value}</span> {k.unit ?? ""}
+              {k.tolerance ? (
+                <span className="text-muted">
+                  {" "}
+                  (± {k.toleranceKind === "Relative" ? `${k.tolerance * 100}%` : k.tolerance})
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+          {k.modelAnswer ? <Markdown>{k.modelAnswer}</Markdown> : null}
+          {k.explanation ? <Markdown className="text-muted">{k.explanation}</Markdown> : null}
+          {k.keyReliability === "Disputed" ? (
+            <Badge kind="status" tone="danger">
+              Key disputed
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
+
+      {needsGrade ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted">Compared with the model answer:</span>
+          {(["Right", "Partial", "Wrong"] as const).map((o) => (
+            <Button
+              key={o}
+              size="sm"
+              disabled={review.isPending}
+              onClick={() => run({ kind: "grade", order: item.order, outcome: o })}
+            >
+              {o === "Partial" ? "Partly" : o}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+
+      {miss ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {!k ? (
+            <Button size="sm" disabled={review.isPending} onClick={() => run({ kind: "show", order: item.order })}>
+              Show answer
+            </Button>
+          ) : null}
+          {!item.fixed ? (
+            <Button size="sm" disabled={review.isPending} onClick={() => run({ kind: "fixed", order: item.order })}>
+              I fixed this
+            </Button>
+          ) : null}
+          {item.slipProposed && !slip ? (
+            <Button size="sm" variant="ghost" onClick={() => setSlip(true)}>
+              Log a slip
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {slip ? <SlipForm mock={mock} item={item} onDone={() => setSlip(false)} /> : null}
+    </Card>
+  );
+}
+
+/** "What went wrong?" for a missed item; it becomes a slip (and maybe a weak spot). */
+function SlipForm({ mock, item, onDone }: { mock: Mock; item: Item; onDone: () => void }) {
+  const log = useLogSlip();
+  const toast = useToast();
+  const [type, setType] = useState<string>("Concept");
+  const [description, setDescription] = useState("");
+  const errors = fieldErrors(log.error);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    log.mutate(
+      {
+        courseId: mock.courseId,
+        mockId: mock.id,
+        mockQuestionOrder: item.order,
+        type,
+        description: description.trim(),
+        confidence: item.answer.confidence ?? null,
+      },
+      {
+        onSuccess: () => {
+          toast({ message: "Slip logged" });
+          onDone();
+        },
+      },
+    );
+  };
+  return (
+    <form className="flex flex-col gap-3 rounded-md border border-border p-3" onSubmit={submit} noValidate>
+      {log.error && !Object.keys(errors).length ? <Banner tone="danger">{messageFor(log.error)}</Banner> : null}
+      <div className="grid gap-3 sm:grid-cols-[12rem_1fr]">
+        <Field label="Kind of slip" error={errors.type}>
+          {(ids) => (
+            <Select {...ids} value={type} onChange={(e) => setType(e.currentTarget.value)}>
+              {SLIP_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t === "OptionMatching" ? "Option matching" : t}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field label="What went wrong" error={errors.description}>
+          {(ids) => (
+            <Textarea
+              {...ids}
+              className="min-h-16"
+              placeholder="Mixed up the sample and population variance"
+              value={description}
+              onChange={(e) => setDescription(e.currentTarget.value)}
+            />
+          )}
+        </Field>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button size="sm" type="submit" variant="primary" disabled={log.isPending || !description.trim()}>
+          Log slip
+        </Button>
+      </div>
+    </form>
+  );
+}

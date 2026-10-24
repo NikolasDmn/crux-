@@ -175,6 +175,8 @@ async fn mock_take_grade_review_and_stats() {
     let wrong = by_order(item_of(q2["id"].as_str().unwrap()));
     assert_eq!(wrong["outcome"], "Wrong");
     assert_eq!(by_order(typed("Numeric"))["outcome"], "Right", "deg = ° via the alias table");
+    assert!(by_order(typed("Open"))["key"].is_object(), "the open answer to self-grade shows its model answer: {}", sub.json);
+    assert!(wrong["key"].is_null(), "a miss stays hidden before grading too");
 
     let graded = call(
         &h.app,

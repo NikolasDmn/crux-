@@ -42,7 +42,7 @@ export function OptionRow({
       >
         {index + 1}
       </span>
-      <span className="min-w-0 flex-1">{children}</span>
+      <span className="min-w-0 flex-1 [&_.crux-prose>*]:my-0">{children}</span>
       {state ? (
         <span className={cn("text-sm font-medium", state === "right" ? "text-success-text" : "text-danger-text")}>
           {state === "right" ? "Right" : "Wrong"}

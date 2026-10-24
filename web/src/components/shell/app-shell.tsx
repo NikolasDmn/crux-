@@ -1,4 +1,4 @@
-import { Link, Outlet, useNavigate } from "@tanstack/react-router";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ArrowRight, BookOpen, Inbox, Layers } from "lucide-react";
 import { Dialog as D } from "radix-ui";
 import { useEffect, useState } from "react";
@@ -25,12 +25,20 @@ const SHORTCUTS: [string, string][] = [
   ["1–4", "Flashcards: Again, Hard, Good, Easy"],
 ];
 
+declare module "@tanstack/react-router" {
+  interface StaticDataRouteOption {
+    /** A full-screen task (taking a mock): no sidebar, top bar or bottom bar. */
+    focus?: boolean;
+  }
+}
+
 /** Signed-in layout (frontend-spec 4): sidebar, top bar, banners; on a phone a drawer + bottom bar. */
 export function AppShell() {
   const [palette, setPalette] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [help, setHelp] = useState(false);
   const navigate = useNavigate();
+  const focus = useRouterState({ select: (r) => r.matches.some((m) => m.staticData.focus) });
   useNotifyStream(true);
   useEffect(startActivity, []);
 
@@ -54,6 +62,14 @@ export function AppShell() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navigate]);
+
+  if (focus) {
+    return (
+      <main id="main" className="flex min-h-full flex-col">
+        <Outlet />
+      </main>
+    );
+  }
 
   return (
     <div className="flex min-h-full">

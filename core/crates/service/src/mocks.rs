@@ -167,8 +167,11 @@ async fn item_views(conn: &mut MySqlConnection, m: &MockRow, items: &[ItemRow], 
         let v = views.get(&it.question_version_id).ok_or(AppError::NotFound)?;
         let outcome = it.outcome.as_deref().and_then(Outcome::from_db);
         let review = ItemReview { outcome, revealed: it.revealed, self_shown: it.self_shown, fixed: it.fixed_in_review };
-        let graded_phase = matches!(MockStatus::from_db(&m.status), MockStatus::Graded | MockStatus::Reviewed);
-        let visible = with_results && graded_phase && mock::key_visible(&review, m.reveal_all);
+        let status = MockStatus::from_db(&m.status);
+        let graded_phase = matches!(status, MockStatus::Graded | MockStatus::Reviewed);
+        // An open answer waiting for your own grade shows its model answer: you grade against it.
+        let to_self_grade = matches!(status, MockStatus::Submitted | MockStatus::Grading) && it.qtype == "Open" && it.outcome.is_none();
+        let visible = with_results && ((graded_phase && mock::key_visible(&review, m.reveal_all)) || to_self_grade);
         let order: Vec<String> = it.option_order.as_ref().and_then(|j| serde_json::from_value(j.0.clone()).ok()).unwrap_or_default();
         let options = v.options.as_ref().map(|opts| {
             let by_id: HashMap<&str, &crate::bank::OptionView> = opts.iter().map(|o| (o.id.as_str(), o)).collect();

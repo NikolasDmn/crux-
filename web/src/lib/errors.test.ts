@@ -29,6 +29,7 @@ describe("messageFor", () => {
   it("uses the server message for unknown codes and a network line for fetch failures", () => {
     expect(messageFor(err(400, "brand_new_code"))).toBe("server text");
     expect(messageFor(new TypeError("Failed to fetch"))).toMatch(/connection/);
+    expect(messageFor(new TypeError("Cannot read properties of undefined (reading 'mock')"))).not.toMatch(/connection/);
     expect(messageFor("??")).toMatch(/our side/);
   });
 });

@@ -19,6 +19,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppFlashRouteImport } from './routes/_app/flash'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
+import { Route as AppInsightRouteImport } from './routes/_app/insight'
 import { Route as AppNextRouteImport } from './routes/_app/next'
 import { Route as AppPlanRouteImport } from './routes/_app/plan'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
@@ -29,7 +30,6 @@ import { Route as AppCoursesNewRouteImport } from './routes/_app/courses.new'
 import { Route as AppWeekIndexRouteImport } from './routes/_app/week.index'
 import { Route as AppWeekIsoWeekRouteImport } from './routes/_app/week.$isoWeek'
 import { Route as AppCCourseIdIndexRouteImport } from './routes/_app/c.$courseId.index'
-import { Route as AppCCourseIdBankRouteImport } from './routes/_app/c.$courseId.bank'
 import { Route as AppCCourseIdCardsRouteImport } from './routes/_app/c.$courseId.cards'
 import { Route as AppCCourseIdExamsRouteImport } from './routes/_app/c.$courseId.exams'
 import { Route as AppCCourseIdLecturesRouteImport } from './routes/_app/c.$courseId.lectures'
@@ -37,8 +37,13 @@ import { Route as AppCCourseIdMocksRouteImport } from './routes/_app/c.$courseId
 import { Route as AppCCourseIdPapersRouteImport } from './routes/_app/c.$courseId.papers'
 import { Route as AppCCourseIdPlanRouteImport } from './routes/_app/c.$courseId.plan'
 import { Route as AppCCourseIdSettingsRouteImport } from './routes/_app/c.$courseId.settings'
+import { Route as AppMockMockIdIndexRouteImport } from './routes/_app/mock.$mockId.index'
+import { Route as AppMockMockIdResultRouteImport } from './routes/_app/mock.$mockId.result'
+import { Route as AppCCourseIdBankIndexRouteImport } from './routes/_app/c.$courseId.bank.index'
+import { Route as AppCCourseIdBankNewRouteImport } from './routes/_app/c.$courseId.bank.new'
 import { Route as AppCCourseIdLComponentIdRouteImport } from './routes/_app/c.$courseId.l.$componentId'
 import { Route as AppCCourseIdMMaterialIdRouteImport } from './routes/_app/c.$courseId.m.$materialId'
+import { Route as AppCCourseIdQQuestionIdRouteImport } from './routes/_app/c.$courseId.q.$questionId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -87,6 +92,11 @@ const AppFlashRoute = AppFlashRouteImport.update({
 const AppInboxRoute = AppInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInsightRoute = AppInsightRouteImport.update({
+  id: '/insight',
+  path: '/insight',
   getParentRoute: () => AppRoute,
 } as any)
 const AppNextRoute = AppNextRouteImport.update({
@@ -139,11 +149,6 @@ const AppCCourseIdIndexRoute = AppCCourseIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppCCourseIdRoute,
 } as any)
-const AppCCourseIdBankRoute = AppCCourseIdBankRouteImport.update({
-  id: '/bank',
-  path: '/bank',
-  getParentRoute: () => AppCCourseIdRoute,
-} as any)
 const AppCCourseIdCardsRoute = AppCCourseIdCardsRouteImport.update({
   id: '/cards',
   path: '/cards',
@@ -179,6 +184,26 @@ const AppCCourseIdSettingsRoute = AppCCourseIdSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppCCourseIdRoute,
 } as any)
+const AppMockMockIdIndexRoute = AppMockMockIdIndexRouteImport.update({
+  id: '/mock/$mockId/',
+  path: '/mock/$mockId/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMockMockIdResultRoute = AppMockMockIdResultRouteImport.update({
+  id: '/mock/$mockId/result',
+  path: '/mock/$mockId/result',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCCourseIdBankIndexRoute = AppCCourseIdBankIndexRouteImport.update({
+  id: '/bank/',
+  path: '/bank/',
+  getParentRoute: () => AppCCourseIdRoute,
+} as any)
+const AppCCourseIdBankNewRoute = AppCCourseIdBankNewRouteImport.update({
+  id: '/bank/new',
+  path: '/bank/new',
+  getParentRoute: () => AppCCourseIdRoute,
+} as any)
 const AppCCourseIdLComponentIdRoute =
   AppCCourseIdLComponentIdRouteImport.update({
     id: '/l/$componentId',
@@ -188,6 +213,11 @@ const AppCCourseIdLComponentIdRoute =
 const AppCCourseIdMMaterialIdRoute = AppCCourseIdMMaterialIdRouteImport.update({
   id: '/m/$materialId',
   path: '/m/$materialId',
+  getParentRoute: () => AppCCourseIdRoute,
+} as any)
+const AppCCourseIdQQuestionIdRoute = AppCCourseIdQQuestionIdRouteImport.update({
+  id: '/q/$questionId',
+  path: '/q/$questionId',
   getParentRoute: () => AppCCourseIdRoute,
 } as any)
 
@@ -201,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AppAdminRoute
   '/flash': typeof AppFlashRoute
   '/inbox': typeof AppInboxRoute
+  '/insight': typeof AppInsightRoute
   '/next': typeof AppNextRoute
   '/plan': typeof AppPlanRoute
   '/settings': typeof AppSettingsRoute
@@ -210,7 +241,6 @@ export interface FileRoutesByFullPath {
   '/courses/new': typeof AppCoursesNewRoute
   '/week/$isoWeek': typeof AppWeekIsoWeekRoute
   '/week/': typeof AppWeekIndexRoute
-  '/c/$courseId/bank': typeof AppCCourseIdBankRoute
   '/c/$courseId/cards': typeof AppCCourseIdCardsRoute
   '/c/$courseId/exams': typeof AppCCourseIdExamsRoute
   '/c/$courseId/lectures': typeof AppCCourseIdLecturesRoute
@@ -218,9 +248,14 @@ export interface FileRoutesByFullPath {
   '/c/$courseId/papers': typeof AppCCourseIdPapersRoute
   '/c/$courseId/plan': typeof AppCCourseIdPlanRoute
   '/c/$courseId/settings': typeof AppCCourseIdSettingsRoute
+  '/mock/$mockId/result': typeof AppMockMockIdResultRoute
   '/c/$courseId/': typeof AppCCourseIdIndexRoute
+  '/mock/$mockId/': typeof AppMockMockIdIndexRoute
+  '/c/$courseId/bank/new': typeof AppCCourseIdBankNewRoute
   '/c/$courseId/l/$componentId': typeof AppCCourseIdLComponentIdRoute
   '/c/$courseId/m/$materialId': typeof AppCCourseIdMMaterialIdRoute
+  '/c/$courseId/q/$questionId': typeof AppCCourseIdQQuestionIdRoute
+  '/c/$courseId/bank/': typeof AppCCourseIdBankIndexRoute
 }
 export interface FileRoutesByTo {
   '/forgot': typeof ForgotRoute
@@ -231,6 +266,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AppAdminRoute
   '/flash': typeof AppFlashRoute
   '/inbox': typeof AppInboxRoute
+  '/insight': typeof AppInsightRoute
   '/next': typeof AppNextRoute
   '/plan': typeof AppPlanRoute
   '/settings': typeof AppSettingsRoute
@@ -240,7 +276,6 @@ export interface FileRoutesByTo {
   '/courses/new': typeof AppCoursesNewRoute
   '/week/$isoWeek': typeof AppWeekIsoWeekRoute
   '/week': typeof AppWeekIndexRoute
-  '/c/$courseId/bank': typeof AppCCourseIdBankRoute
   '/c/$courseId/cards': typeof AppCCourseIdCardsRoute
   '/c/$courseId/exams': typeof AppCCourseIdExamsRoute
   '/c/$courseId/lectures': typeof AppCCourseIdLecturesRoute
@@ -248,9 +283,14 @@ export interface FileRoutesByTo {
   '/c/$courseId/papers': typeof AppCCourseIdPapersRoute
   '/c/$courseId/plan': typeof AppCCourseIdPlanRoute
   '/c/$courseId/settings': typeof AppCCourseIdSettingsRoute
+  '/mock/$mockId/result': typeof AppMockMockIdResultRoute
   '/c/$courseId': typeof AppCCourseIdIndexRoute
+  '/mock/$mockId': typeof AppMockMockIdIndexRoute
+  '/c/$courseId/bank/new': typeof AppCCourseIdBankNewRoute
   '/c/$courseId/l/$componentId': typeof AppCCourseIdLComponentIdRoute
   '/c/$courseId/m/$materialId': typeof AppCCourseIdMMaterialIdRoute
+  '/c/$courseId/q/$questionId': typeof AppCCourseIdQQuestionIdRoute
+  '/c/$courseId/bank': typeof AppCCourseIdBankIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -263,6 +303,7 @@ export interface FileRoutesById {
   '/_app/admin': typeof AppAdminRoute
   '/_app/flash': typeof AppFlashRoute
   '/_app/inbox': typeof AppInboxRoute
+  '/_app/insight': typeof AppInsightRoute
   '/_app/next': typeof AppNextRoute
   '/_app/plan': typeof AppPlanRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -273,7 +314,6 @@ export interface FileRoutesById {
   '/_app/courses/new': typeof AppCoursesNewRoute
   '/_app/week/$isoWeek': typeof AppWeekIsoWeekRoute
   '/_app/week/': typeof AppWeekIndexRoute
-  '/_app/c/$courseId/bank': typeof AppCCourseIdBankRoute
   '/_app/c/$courseId/cards': typeof AppCCourseIdCardsRoute
   '/_app/c/$courseId/exams': typeof AppCCourseIdExamsRoute
   '/_app/c/$courseId/lectures': typeof AppCCourseIdLecturesRoute
@@ -281,9 +321,14 @@ export interface FileRoutesById {
   '/_app/c/$courseId/papers': typeof AppCCourseIdPapersRoute
   '/_app/c/$courseId/plan': typeof AppCCourseIdPlanRoute
   '/_app/c/$courseId/settings': typeof AppCCourseIdSettingsRoute
+  '/_app/mock/$mockId/result': typeof AppMockMockIdResultRoute
   '/_app/c/$courseId/': typeof AppCCourseIdIndexRoute
+  '/_app/mock/$mockId/': typeof AppMockMockIdIndexRoute
+  '/_app/c/$courseId/bank/new': typeof AppCCourseIdBankNewRoute
   '/_app/c/$courseId/l/$componentId': typeof AppCCourseIdLComponentIdRoute
   '/_app/c/$courseId/m/$materialId': typeof AppCCourseIdMMaterialIdRoute
+  '/_app/c/$courseId/q/$questionId': typeof AppCCourseIdQQuestionIdRoute
+  '/_app/c/$courseId/bank/': typeof AppCCourseIdBankIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -297,6 +342,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/flash'
     | '/inbox'
+    | '/insight'
     | '/next'
     | '/plan'
     | '/settings'
@@ -306,7 +352,6 @@ export interface FileRouteTypes {
     | '/courses/new'
     | '/week/$isoWeek'
     | '/week/'
-    | '/c/$courseId/bank'
     | '/c/$courseId/cards'
     | '/c/$courseId/exams'
     | '/c/$courseId/lectures'
@@ -314,9 +359,14 @@ export interface FileRouteTypes {
     | '/c/$courseId/papers'
     | '/c/$courseId/plan'
     | '/c/$courseId/settings'
+    | '/mock/$mockId/result'
     | '/c/$courseId/'
+    | '/mock/$mockId/'
+    | '/c/$courseId/bank/new'
     | '/c/$courseId/l/$componentId'
     | '/c/$courseId/m/$materialId'
+    | '/c/$courseId/q/$questionId'
+    | '/c/$courseId/bank/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/forgot'
@@ -327,6 +377,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/flash'
     | '/inbox'
+    | '/insight'
     | '/next'
     | '/plan'
     | '/settings'
@@ -336,7 +387,6 @@ export interface FileRouteTypes {
     | '/courses/new'
     | '/week/$isoWeek'
     | '/week'
-    | '/c/$courseId/bank'
     | '/c/$courseId/cards'
     | '/c/$courseId/exams'
     | '/c/$courseId/lectures'
@@ -344,9 +394,14 @@ export interface FileRouteTypes {
     | '/c/$courseId/papers'
     | '/c/$courseId/plan'
     | '/c/$courseId/settings'
+    | '/mock/$mockId/result'
     | '/c/$courseId'
+    | '/mock/$mockId'
+    | '/c/$courseId/bank/new'
     | '/c/$courseId/l/$componentId'
     | '/c/$courseId/m/$materialId'
+    | '/c/$courseId/q/$questionId'
+    | '/c/$courseId/bank'
   id:
     | '__root__'
     | '/_app'
@@ -358,6 +413,7 @@ export interface FileRouteTypes {
     | '/_app/admin'
     | '/_app/flash'
     | '/_app/inbox'
+    | '/_app/insight'
     | '/_app/next'
     | '/_app/plan'
     | '/_app/settings'
@@ -368,7 +424,6 @@ export interface FileRouteTypes {
     | '/_app/courses/new'
     | '/_app/week/$isoWeek'
     | '/_app/week/'
-    | '/_app/c/$courseId/bank'
     | '/_app/c/$courseId/cards'
     | '/_app/c/$courseId/exams'
     | '/_app/c/$courseId/lectures'
@@ -376,9 +431,14 @@ export interface FileRouteTypes {
     | '/_app/c/$courseId/papers'
     | '/_app/c/$courseId/plan'
     | '/_app/c/$courseId/settings'
+    | '/_app/mock/$mockId/result'
     | '/_app/c/$courseId/'
+    | '/_app/mock/$mockId/'
+    | '/_app/c/$courseId/bank/new'
     | '/_app/c/$courseId/l/$componentId'
     | '/_app/c/$courseId/m/$materialId'
+    | '/_app/c/$courseId/q/$questionId'
+    | '/_app/c/$courseId/bank/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -463,6 +523,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppInboxRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/insight': {
+      id: '/_app/insight'
+      path: '/insight'
+      fullPath: '/insight'
+      preLoaderRoute: typeof AppInsightRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/next': {
       id: '/_app/next'
       path: '/next'
@@ -533,13 +600,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCCourseIdIndexRouteImport
       parentRoute: typeof AppCCourseIdRoute
     }
-    '/_app/c/$courseId/bank': {
-      id: '/_app/c/$courseId/bank'
-      path: '/bank'
-      fullPath: '/c/$courseId/bank'
-      preLoaderRoute: typeof AppCCourseIdBankRouteImport
-      parentRoute: typeof AppCCourseIdRoute
-    }
     '/_app/c/$courseId/cards': {
       id: '/_app/c/$courseId/cards'
       path: '/cards'
@@ -589,6 +649,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCCourseIdSettingsRouteImport
       parentRoute: typeof AppCCourseIdRoute
     }
+    '/_app/mock/$mockId/': {
+      id: '/_app/mock/$mockId/'
+      path: '/mock/$mockId'
+      fullPath: '/mock/$mockId/'
+      preLoaderRoute: typeof AppMockMockIdIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/mock/$mockId/result': {
+      id: '/_app/mock/$mockId/result'
+      path: '/mock/$mockId/result'
+      fullPath: '/mock/$mockId/result'
+      preLoaderRoute: typeof AppMockMockIdResultRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/c/$courseId/bank/': {
+      id: '/_app/c/$courseId/bank/'
+      path: '/bank'
+      fullPath: '/c/$courseId/bank/'
+      preLoaderRoute: typeof AppCCourseIdBankIndexRouteImport
+      parentRoute: typeof AppCCourseIdRoute
+    }
+    '/_app/c/$courseId/bank/new': {
+      id: '/_app/c/$courseId/bank/new'
+      path: '/bank/new'
+      fullPath: '/c/$courseId/bank/new'
+      preLoaderRoute: typeof AppCCourseIdBankNewRouteImport
+      parentRoute: typeof AppCCourseIdRoute
+    }
     '/_app/c/$courseId/l/$componentId': {
       id: '/_app/c/$courseId/l/$componentId'
       path: '/l/$componentId'
@@ -603,11 +691,17 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCCourseIdMMaterialIdRouteImport
       parentRoute: typeof AppCCourseIdRoute
     }
+    '/_app/c/$courseId/q/$questionId': {
+      id: '/_app/c/$courseId/q/$questionId'
+      path: '/q/$questionId'
+      fullPath: '/c/$courseId/q/$questionId'
+      preLoaderRoute: typeof AppCCourseIdQQuestionIdRouteImport
+      parentRoute: typeof AppCCourseIdRoute
+    }
   }
 }
 
 interface AppCCourseIdRouteChildren {
-  AppCCourseIdBankRoute: typeof AppCCourseIdBankRoute
   AppCCourseIdCardsRoute: typeof AppCCourseIdCardsRoute
   AppCCourseIdExamsRoute: typeof AppCCourseIdExamsRoute
   AppCCourseIdLecturesRoute: typeof AppCCourseIdLecturesRoute
@@ -616,12 +710,14 @@ interface AppCCourseIdRouteChildren {
   AppCCourseIdPlanRoute: typeof AppCCourseIdPlanRoute
   AppCCourseIdSettingsRoute: typeof AppCCourseIdSettingsRoute
   AppCCourseIdIndexRoute: typeof AppCCourseIdIndexRoute
+  AppCCourseIdBankNewRoute: typeof AppCCourseIdBankNewRoute
   AppCCourseIdLComponentIdRoute: typeof AppCCourseIdLComponentIdRoute
   AppCCourseIdMMaterialIdRoute: typeof AppCCourseIdMMaterialIdRoute
+  AppCCourseIdQQuestionIdRoute: typeof AppCCourseIdQQuestionIdRoute
+  AppCCourseIdBankIndexRoute: typeof AppCCourseIdBankIndexRoute
 }
 
 const AppCCourseIdRouteChildren: AppCCourseIdRouteChildren = {
-  AppCCourseIdBankRoute: AppCCourseIdBankRoute,
   AppCCourseIdCardsRoute: AppCCourseIdCardsRoute,
   AppCCourseIdExamsRoute: AppCCourseIdExamsRoute,
   AppCCourseIdLecturesRoute: AppCCourseIdLecturesRoute,
@@ -630,8 +726,11 @@ const AppCCourseIdRouteChildren: AppCCourseIdRouteChildren = {
   AppCCourseIdPlanRoute: AppCCourseIdPlanRoute,
   AppCCourseIdSettingsRoute: AppCCourseIdSettingsRoute,
   AppCCourseIdIndexRoute: AppCCourseIdIndexRoute,
+  AppCCourseIdBankNewRoute: AppCCourseIdBankNewRoute,
   AppCCourseIdLComponentIdRoute: AppCCourseIdLComponentIdRoute,
   AppCCourseIdMMaterialIdRoute: AppCCourseIdMMaterialIdRoute,
+  AppCCourseIdQQuestionIdRoute: AppCCourseIdQQuestionIdRoute,
+  AppCCourseIdBankIndexRoute: AppCCourseIdBankIndexRoute,
 }
 
 const AppCCourseIdRouteWithChildren = AppCCourseIdRoute._addFileChildren(
@@ -642,6 +741,7 @@ interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
   AppFlashRoute: typeof AppFlashRoute
   AppInboxRoute: typeof AppInboxRoute
+  AppInsightRoute: typeof AppInsightRoute
   AppNextRoute: typeof AppNextRoute
   AppPlanRoute: typeof AppPlanRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -651,12 +751,15 @@ interface AppRouteChildren {
   AppCoursesNewRoute: typeof AppCoursesNewRoute
   AppWeekIsoWeekRoute: typeof AppWeekIsoWeekRoute
   AppWeekIndexRoute: typeof AppWeekIndexRoute
+  AppMockMockIdResultRoute: typeof AppMockMockIdResultRoute
+  AppMockMockIdIndexRoute: typeof AppMockMockIdIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
   AppFlashRoute: AppFlashRoute,
   AppInboxRoute: AppInboxRoute,
+  AppInsightRoute: AppInsightRoute,
   AppNextRoute: AppNextRoute,
   AppPlanRoute: AppPlanRoute,
   AppSettingsRoute: AppSettingsRoute,
@@ -666,6 +769,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppCoursesNewRoute: AppCoursesNewRoute,
   AppWeekIsoWeekRoute: AppWeekIsoWeekRoute,
   AppWeekIndexRoute: AppWeekIndexRoute,
+  AppMockMockIdResultRoute: AppMockMockIdResultRoute,
+  AppMockMockIdIndexRoute: AppMockMockIdIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

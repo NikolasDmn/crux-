@@ -6,6 +6,7 @@ export const en = {
   "nav.home": "Home",
   "nav.week": "This week",
   "nav.plan": "Plan",
+  "nav.mistakes": "Mistakes",
   "nav.courses": "Courses",
   "nav.newCourse": "New course",
   "nav.trash": "Trash",

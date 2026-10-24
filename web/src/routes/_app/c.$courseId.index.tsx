@@ -7,9 +7,9 @@ import { Skeleton } from "@/components/ui/misc";
 import { ProgressBar } from "@/components/ui/progress";
 import { useUser } from "@/app/auth";
 import { Badge } from "@/components/ui/badge";
-import { SeverityBar, type Severity } from "@/components/ui/severity";
 import { nextExam, useCourse, useDeadlines, useSubscription } from "@/features/courses/api";
 import { deadlineName } from "@/features/deadlines/lib/grades";
+import { TrapsPanel, WeakSpotsPanel } from "@/features/mistakes/components/weak-spots";
 import { useSummary } from "@/features/next/api";
 import { hours } from "@/features/week/lib/summary";
 import { canEdit } from "@/features/courses/lib/roles";
@@ -18,8 +18,7 @@ import { messageFor } from "@/lib/errors";
 import { formatInZone, relativeDays } from "@/lib/time";
 
 // Course overview: subscription, the next exam and its format, lecture progress and hours with the
-// remaining range, the MC first-try trend, top weak spots. The weak-spot table and traps come with
-// step 4.
+// remaining range, the MC first-try trend, the weak spots (with proposals and resolved) and traps.
 export const Route = createFileRoute("/_app/c/$courseId/")({ component: Overview });
 
 function Overview() {
@@ -137,25 +136,8 @@ function Overview() {
             <Trend weeks={summary.data.mcTrend} />
           </Card>
         ) : null}
-        {summary.data ? (
-          <Card className="flex flex-col gap-3">
-            <SectionLabel>Weak spots</SectionLabel>
-            {summary.data.topWeakSpots.length ? (
-              <>
-                {summary.data.topWeakSpots.map((w) => (
-                  <SeverityBar key={w.id} topic={w.topic} severity={w.severity as Severity} />
-                ))}
-                {summary.data.openWeakSpots > summary.data.topWeakSpots.length ? (
-                  <p className="m-0 text-sm text-muted">
-                    and {summary.data.openWeakSpots - summary.data.topWeakSpots.length} more open
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <p className="m-0 text-muted">None open. Misses in practice and mocks turn into weak spots here.</p>
-            )}
-          </Card>
-        ) : null}
+        {subscribed ? <WeakSpotsPanel courseId={courseId} /> : null}
+        {subscribed ? <TrapsPanel courseId={courseId} /> : null}
         <Card className="flex flex-col gap-3">
           <SectionLabel>About</SectionLabel>
           <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
@@ -191,7 +173,7 @@ function Trend({ weeks }: { weeks: { isoWeek: string; rate?: number | null; trie
     <div className="flex flex-col gap-1">
       <div className="flex h-16 items-end gap-1.5" aria-hidden="true">
         {weeks.map((w) => (
-          <div key={w.isoWeek} className="flex h-full flex-1 items-end rounded-sm bg-sunken">
+          <div key={w.isoWeek} className="flex h-full max-w-12 flex-1 items-end rounded-sm bg-sunken">
             {w.rate !== null && w.rate !== undefined ? (
               <div
                 className="w-full rounded-sm bg-[var(--course)]"
@@ -215,7 +197,7 @@ function Trend({ weeks }: { weeks: { isoWeek: string; rate?: number | null; trie
       </table>
       <div className="flex gap-1.5 font-mono text-[11px] text-muted tnum">
         {weeks.map((w) => (
-          <span key={w.isoWeek} className="flex-1 text-center">
+          <span key={w.isoWeek} className="max-w-12 flex-1 text-center">
             {w.rate !== null && w.rate !== undefined ? `${Math.round(w.rate * 100)}` : "–"}
           </span>
         ))}

@@ -6,9 +6,10 @@ import { Tab, TabList, TabPanel, Tabs } from "@/components/ui/tabs";
 import { useCourse } from "@/features/courses/api";
 import { canEdit } from "@/features/courses/lib/roles";
 import { useLectures, useProgress } from "@/features/lectures/api";
+import { LectureQuestions, LectureSessions, LectureSlips } from "@/features/lectures/components/lecture-tabs";
 import { MaterialList } from "@/features/materials/material-list";
 
-// One lecture (frontend-spec 4). Step 2 builds Materials; the other tabs fill in with steps 3–5.
+// One lecture (frontend-spec 4): Materials, Questions, Flashcards (step 5), Slips, Sessions.
 export const Route = createFileRoute("/_app/c/$courseId/l/$componentId")({ component: LecturePage });
 
 function Later({ what, step }: { what: string; step: number }) {
@@ -58,16 +59,16 @@ function LecturePage() {
           <MaterialList courseId={courseId} componentId={componentId} editor={canEdit(course.data?.myRole)} />
         </TabPanel>
         <TabPanel value="questions" className="pt-4">
-          <Later what="Questions" step={4} />
+          <LectureQuestions courseId={courseId} componentId={componentId} />
         </TabPanel>
         <TabPanel value="cards" className="pt-4">
           <Later what="Flashcards" step={5} />
         </TabPanel>
         <TabPanel value="slips" className="pt-4">
-          <Later what="Slips" step={4} />
+          <LectureSlips courseId={courseId} componentId={componentId} />
         </TabPanel>
         <TabPanel value="sessions" className="pt-4">
-          <Later what="Study sessions" step={3} />
+          <LectureSessions courseId={courseId} componentId={componentId} />
         </TabPanel>
       </Tabs>
     </div>

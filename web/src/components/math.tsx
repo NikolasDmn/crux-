@@ -1,3 +1,5 @@
+// KaTeX's stylesheet: it also hides the MathML copy that screen readers read.
+import "katex/dist/katex.min.css";
 import { fromHtmlIsomorphic } from "hast-util-from-html-isomorphic";
 import { toJsxRuntime } from "hast-util-to-jsx-runtime";
 import { useEffect, useMemo, useRef, useState } from "react";

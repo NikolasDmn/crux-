@@ -67,7 +67,7 @@ stranger gets 404 rather than a validation error (spec 4.2); a body that can't b
 | B3-5 | **Right items show their key at once**; misses stay hidden until shown/fixed; Partial counts as a miss in review | Spec 5.4 hides the key "until review"; nothing to hide on a right answer |
 | B3-6 | Slip **proposals are computed**, not stored: a Wrong/Partial item without a slip shows `slipProposed`; confirming = `POST /slips` with the mock + order | No schema change; the user confirms each (spec 5.4) |
 | B3-7 | A Passed/Archived subscription **still opens old mocks** | Spec 4.2 says "active subscription"; archived courses keep their history (5.10) |
-| B3-8 | "Cold" (lecture not studied in the previous 24 h) is approximated by **no answers in that lecture in the 24 h before**, outside the current mock | Study events arrive with milestone 5; then it switches to UserEvents |
+| B3-8 | "Cold" = the lecture wasn't studied in the previous 24 h: **no answers in it** (outside the current mock) **and no material, notes or lecture-focus events on it** (switched to UserEvents 2026-10-24) | Spec 5.6 |
 | B3-9 | Warm-up attempts are always cold | Spec 5.9 |
 | B3-10 | A manual severity change restarts the miss count at the new level | Otherwise 3 misses could jump two levels at once |
 | B3-11 | AI grading mode answers `403 ai_disabled {reason: service_unavailable}` until milestone 8 | The gate isn't there yet |

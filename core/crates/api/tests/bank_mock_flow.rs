@@ -349,3 +349,47 @@ async fn weak_spots_check_resolve_and_reopen() {
     assert_eq!(view["open"][0]["status"], "Reopened");
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn studying_the_lecture_makes_a_practice_pass_warm() {
+    let Some(h) = common::harness().await else { return };
+    let (t, _, _) = signup(&h.app, &h.t.ctx, "reader").await;
+    let c = setup(&h, &t).await;
+    let q = mc(&h, &t, &c, "Median?").await;
+    let spot = call(
+        &h.app,
+        "POST",
+        &format!("/courses/{}/weak-spots", c.id),
+        Some(&t),
+        Some(json!({
+            "topic": "Median", "conceptId": c.concept, "severity": "Low", "coldPassesNeeded": 1
+        })),
+        &[],
+    )
+    .await;
+    assert_eq!(spot.status, StatusCode::CREATED, "{}", spot.json);
+    let practice = |n: u32| json!({"clientId": format!("01COLDCK{:018}", n), "questionId": q["id"], "context": "Practice", "choiceOptionId": option(&q, true), "confidence": "Sure"});
+
+    // Reading the lecture 10 minutes ago: the right answer is warm and doesn't count.
+    let ago = crux_service::time::iso(h.t.ctx.clock.now() - chrono::Duration::minutes(10));
+    let ev = call(&h.app, "POST", "/events", Some(&t), Some(json!({"events": [
+        {"clientId": "01COLDEVENT000000000000001", "type": "lecture.focus", "occurredAt": ago, "componentId": c.l1, "payload": {"seconds": 60}}
+    ]})), &[]).await;
+    assert_eq!(ev.json["accepted"], 1, "{}", ev.json);
+    assert_eq!(call(&h.app, "POST", "/attempts", Some(&t), Some(practice(1)), &[]).await.status, StatusCode::OK);
+    let view = call(&h.app, "GET", &format!("/courses/{}/weak-spots", c.id), Some(&t), None, &[]).await.json;
+    assert_eq!(view["open"][0]["topic"], "Median", "studied in the last 24 h → not a cold pass: {view}");
+
+    // A day and a half later, nothing studied since: cold, and one cold pass resolves it.
+    h.t.clock.advance(chrono::Duration::hours(36));
+    let t = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "reader", "password": "correct horse battery"})), &[])
+        .await
+        .json["accessToken"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(call(&h.app, "POST", "/attempts", Some(&t), Some(practice(2)), &[]).await.status, StatusCode::OK);
+    let view = call(&h.app, "GET", &format!("/courses/{}/weak-spots", c.id), Some(&t), None, &[]).await.json;
+    assert_eq!(view["resolved"][0]["topic"], "Median", "{view}");
+    h.db.drop_db().await;
+}

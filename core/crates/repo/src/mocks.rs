@@ -402,9 +402,8 @@ pub async fn upsert_stat(conn: &mut MySqlConnection, user_id: i64, question_id: 
     Ok(())
 }
 
-/// Was the lecture studied (any answer to its questions) in the window, outside this mock?
-/// Stand-in for "the spot's lecture wasn't studied in the previous 24 h" until study events land
-/// (milestone 5).
+/// Was the lecture studied in the window: an answer to its questions outside this mock, or a
+/// lecture study event on it (material, notes, lecture focus)? "Cold" = not studied (spec 5.6).
 pub async fn studied_between(
     conn: &mut MySqlConnection,
     user_id: i64,
@@ -417,7 +416,9 @@ pub async fn studied_between(
         "SELECT (SELECT COUNT(*) FROM QuestionAttempt a JOIN Question q ON q.Id = a.QuestionId \
                  WHERE a.UserId = ? AND q.CourseComponentId = ? AND a.AnsweredAt >= ? AND a.AnsweredAt < ?) \
               + (SELECT COUNT(*) FROM MockQuestion mq JOIN MockExam m ON m.Id = mq.MockExamId JOIN Question q ON q.Id = mq.QuestionId \
-                 WHERE m.UserId = ? AND q.CourseComponentId = ? AND mq.AnsweredAt >= ? AND mq.AnsweredAt < ? AND (? IS NULL OR m.Id <> ?))",
+                 WHERE m.UserId = ? AND q.CourseComponentId = ? AND mq.AnsweredAt >= ? AND mq.AnsweredAt < ? AND (? IS NULL OR m.Id <> ?)) \
+              + (SELECT COUNT(*) FROM UserEvent e WHERE e.UserId = ? AND e.OccurredAt >= ? AND e.OccurredAt < ? AND e.ComponentId = ? \
+                 AND (e.Type LIKE 'material.%' OR e.Type LIKE 'notes.%' OR e.Type LIKE 'lecture.%'))",
     )
     .bind(user_id)
     .bind(component_id)
@@ -429,6 +430,10 @@ pub async fn studied_between(
     .bind(to)
     .bind(except_mock)
     .bind(except_mock)
+    .bind(user_id)
+    .bind(from)
+    .bind(to)
+    .bind(component_id)
     .fetch_one(conn)
     .await?;
     Ok(n > 0)

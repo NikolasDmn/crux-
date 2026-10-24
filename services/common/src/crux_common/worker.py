@@ -5,6 +5,7 @@ import logging
 import signal
 import socket
 from collections.abc import Callable, Coroutine, Sequence
+from functools import partial
 from typing import Any
 
 from redis.asyncio import Redis
@@ -23,6 +24,26 @@ log = logging.getLogger("crux.worker")
 
 #: Extra loops a service runs in its worker (e.g. notify's dispatcher): get sessions + the stop event.
 ExtraTask = Callable[[async_sessionmaker[AsyncSession], asyncio.Event], Coroutine[Any, Any, None]]
+
+
+RESTART_DELAY_SECONDS = 5.0
+
+
+async def supervise(
+    name: str, start: Callable[[], Coroutine[Any, Any, None]], stop: asyncio.Event, delay: float = RESTART_DELAY_SECONDS
+) -> None:
+    """Runs a worker loop; if it crashes (a dependency not up yet, a bug), log and restart it after a
+    pause, so one failing loop never stops the others (relay, consumers, jobs)."""
+    while not stop.is_set():
+        try:
+            await start()
+            return
+        except Exception as e:
+            log.error("worker loop crashed; restarting", extra={"loop": name, "error": repr(e), "alert": True})
+            try:
+                await asyncio.wait_for(stop.wait(), timeout=delay)
+            except TimeoutError:
+                pass
 
 
 async def run_worker(settings: CommonSettings, handlers: Sequence[Handler], extra: Sequence[ExtraTask] = ()) -> None:
@@ -45,11 +66,20 @@ async def run_worker(settings: CommonSettings, handlers: Sequence[Handler], extr
         except NotImplementedError:  # Windows dev
             pass
 
-    tasks = [asyncio.create_task(relay.run(sessions, bus, settings.service_name, stop))]
-    tasks += [
-        asyncio.create_task(run_consumer(sessions, bus, contracts, group, consumer_name, h, stop)) for h in handlers
+    tasks = [
+        asyncio.create_task(supervise("relay", partial(relay.run, sessions, bus, settings.service_name, stop), stop))
     ]
-    tasks += [asyncio.create_task(t(sessions, stop)) for t in extra]
+    tasks += [
+        asyncio.create_task(
+            supervise(
+                type(h).__name__, partial(run_consumer, sessions, bus, contracts, group, consumer_name, h, stop), stop
+            )
+        )
+        for h in handlers
+    ]
+    tasks += [
+        asyncio.create_task(supervise(getattr(t, "__name__", "task"), partial(t, sessions, stop), stop)) for t in extra
+    ]
     log.info("worker started", extra={"handlers": [type(h).__name__ for h in handlers]})
     await asyncio.gather(*tasks)
     await redis.aclose()

@@ -40,6 +40,10 @@ pub async fn component(conn: &mut MySqlConnection, public_id: &str) -> RepoResul
     Ok(sqlx::query_as(&format!("{COMPONENT_SELECT} WHERE PublicId = ?")).bind(public_id).fetch_optional(conn).await?)
 }
 
+pub async fn component_ref(conn: &mut MySqlConnection, id: i64) -> RepoResult<Option<String>> {
+    Ok(sqlx::query_scalar("SELECT PublicId FROM CourseComponent WHERE Id = ?").bind(id).fetch_optional(conn).await?)
+}
+
 pub async fn component_ids_by_public(conn: &mut MySqlConnection, course_id: i64, refs: &[String]) -> RepoResult<Vec<(i64, String)>> {
     if refs.is_empty() {
         return Ok(Vec::new());

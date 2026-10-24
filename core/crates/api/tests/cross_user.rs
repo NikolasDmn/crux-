@@ -20,6 +20,11 @@ struct Fixture {
     material: String,
     paper: String,
     invite: String,
+    question: String,
+    mock: String,
+    slip: String,
+    weak_spot: String,
+    trap: String,
 }
 
 async fn fixture(h: &common::Harness, alice: &str, n: usize) -> Fixture {
@@ -43,7 +48,31 @@ async fn fixture(h: &common::Harness, alice: &str, n: usize) -> Fixture {
         .await
         .json;
     let i = call(&h.app, "POST", "/invites", Some(alice), Some(json!({})), &[]).await.json;
+    let q = call(
+        &h.app,
+        "POST",
+        &format!("/courses/{course}/questions"),
+        Some(alice),
+        Some(json!({
+            "componentId": component, "type": "MC",
+            "content": {"prompt": "Q", "options": [{"text": "a", "isCorrect": true}, {"text": "b", "isCorrect": false}]}
+        })),
+        &[],
+    )
+    .await
+    .json;
+    let mock = call(&h.app, "POST", &format!("/courses/{course}/mocks"), Some(alice), Some(json!({})), &[]).await.json;
+    let slip = call(&h.app, "POST", "/slips", Some(alice), Some(json!({"courseId": course, "type": "Sign", "description": "minus"})), &[])
+        .await
+        .json;
+    let spot = call(&h.app, "POST", &format!("/courses/{course}/weak-spots"), Some(alice), Some(json!({"topic": "T"})), &[]).await.json;
+    let trap = call(&h.app, "POST", &format!("/courses/{course}/traps"), Some(alice), Some(json!({"text": "careful"})), &[]).await.json;
     Fixture {
+        question: q["id"].as_str().expect("question fixture").to_string(),
+        mock: mock["id"].as_str().expect("mock fixture").to_string(),
+        slip: slip["id"].as_str().expect("slip fixture").to_string(),
+        weak_spot: spot["id"].as_str().expect("weak spot fixture").to_string(),
+        trap: trap["id"].as_str().expect("trap fixture").to_string(),
         course,
         component,
         material: m["id"].as_str().unwrap().to_string(),
@@ -57,6 +86,11 @@ fn fixture_path(path: &str, f: &Fixture, member_id: &str) -> Option<String> {
     let p = match path {
         "/invites/{id}" => path.replace("{id}", &f.invite),
         p if p.starts_with("/courses/{id}/members/{memberId}") => p.replace("{id}", &f.course).replace("{memberId}", member_id),
+        p if p.starts_with("/courses/{id}/traps/{trapId}") => p.replace("{id}", &f.course).replace("{trapId}", &f.trap),
+        p if p.starts_with("/questions/{id}") => p.replace("{id}", &f.question),
+        p if p.starts_with("/mocks/{id}") => p.replace("{id}", &f.mock).replace("{order}", "1"),
+        p if p.starts_with("/slips/{id}") => p.replace("{id}", &f.slip),
+        p if p.starts_with("/weak-spots/{id}") => p.replace("{id}", &f.weak_spot),
         p if p.starts_with("/courses/{id}") => p.replace("{id}", &f.course),
         p if p.starts_with("/course-invitations/{courseId}") => p.replace("{courseId}", &f.course),
         p if p.starts_with("/components/{id}") => p.replace("{id}", &f.component),
@@ -77,6 +111,15 @@ fn body_for_path(method: &str, path: &str) -> Option<Value> {
     match (method, path) {
         ("POST", "/courses/{id}/concepts") => Some(json!({"name": "Probability"})),
         ("POST", "/courses/{id}/members") => Some(json!({"usernameOrEmail": "nobody-here", "role": "Viewer"})),
+        ("POST", "/courses/{id}/questions") => {
+            Some(json!({"componentId": "01AAAAAAAAAAAAAAAAAAAAAAAA", "type": "Open", "content": {"prompt": "x"}}))
+        }
+        ("POST", "/courses/{id}/weak-spots") => Some(json!({"topic": "x"})),
+        ("POST", "/courses/{id}/traps") => Some(json!({"text": "x"})),
+        ("POST", "/mocks/{id}/questions/{order}/grade") => Some(json!({"outcome": "Right"})),
+        ("POST", "/questions/{id}/image-crop") => {
+            Some(json!({"fileId": "01AAAAAAAAAAAAAAAAAAAAAAAA", "page": 1, "box": {"x": 0, "y": 0, "w": 1, "h": 1}}))
+        }
         _ => body_for(method),
     }
 }
@@ -123,6 +166,8 @@ async fn cross_user_access_is_404() {
     for (n, (method, path)) in ops.iter().enumerate() {
         let policy = policy_of(method, path).unwrap();
         let placeholder = path
+            .replace("{order}", "1")
+            .replace("{trapId}", "01AAAAAAAAAAAAAAAAAAAAAAAA")
             .replace("{id}", "01AAAAAAAAAAAAAAAAAAAAAAAA")
             .replace("{code}", "free")
             .replace("{memberId}", "01AAAAAAAAAAAAAAAAAAAAAAAA")
@@ -176,8 +221,21 @@ async fn cross_user_access_is_404() {
             assert_eq!(r.status, StatusCode::NOT_FOUND, "{method} {path}: an Editor can't use a Manage route");
         }
 
+        // Per-user resources: even a member of alice's course gets 404 (review section 2).
+        if policy == Policy::Mine || policy == Policy::Subscribed {
+            share(&h, &alice, &f.course, ("vera", &viewer), "Viewer").await;
+            let r = call(&h.app, method, &target, Some(&viewer), body_for_path(method, path), headers_for(method)).await;
+            assert_eq!(
+                r.status,
+                StatusCode::NOT_FOUND,
+                "{method} {path}: a course member must not reach alice's own data (or need a subscription)"
+            );
+        }
+
         // And alice isn't refused her own (bodies are empty, so 422 is fine; 404 is not).
-        if !path.starts_with("/course-invitations") {
+        // (Invitations have none to accept; the fixture question is already in the bank, so there's
+        // nothing to promote. Both are covered in their own flow tests.)
+        if !path.starts_with("/course-invitations") && !path.ends_with("/promote") {
             let r = call(&h.app, method, &target, Some(&alice), body_for_path(method, path), headers_for(method)).await;
             assert_ne!(r.status, StatusCode::NOT_FOUND, "{method} {target}: alice can reach her own");
         }

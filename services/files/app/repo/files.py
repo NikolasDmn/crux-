@@ -131,6 +131,21 @@ async def insert_original(session: AsyncSession, **values: Any) -> int:
     return int(pk[0])
 
 
+async def insert_derived(session: AsyncSession, **values: Any) -> int:
+    """A crop or thumbnail made from a clean original: born Active, Clean, nothing to extract."""
+    result = cast(
+        CursorResult[Any],
+        await session.execute(
+            insert(stored_file).values(
+                Status="Active", ScanStatus="Clean", ExtractStatus="NotNeeded", RowVersion=0, **values
+            )
+        ),
+    )
+    pk = result.inserted_primary_key
+    assert pk is not None
+    return int(pk[0])
+
+
 async def set_status(session: AsyncSession, file_id: int, current: str, target: str, **other: Any) -> None:
     """The only writer of StoredFile.Status. `other` sets accompanying columns (StorageKey, …)."""
     file_state.transition(current, target)

@@ -58,7 +58,11 @@ pub fn transition(from: MockStatus, to: MockStatus) -> Result<MockStatus, MockEr
         (from, to),
         (Draft, InProgress) | (InProgress, Submitted) | (Submitted, Grading) | (Submitted, Graded) | (Grading, Graded) | (Graded, Reviewed)
     );
-    if ok { Ok(to) } else { Err(MockError::WrongState) }
+    if ok {
+        Ok(to)
+    } else {
+        Err(MockError::WrongState)
+    }
 }
 
 /// When answers stop being accepted: start + limit + grace. None = untimed.

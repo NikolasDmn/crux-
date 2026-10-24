@@ -22,6 +22,7 @@ x-python-env: &python-env
 
 services:
   gateway:
+    restart: unless-stopped
     image: caddy:2.8
     ports: ["${CRUX_HTTP_PORT:-8000}:80"]
     volumes:
@@ -33,6 +34,7 @@ services:
     depends_on: [core, files, notify]
 
   mysql:
+    restart: unless-stopped
     image: mysql:8.0.40
     command:
       - --default-time-zone=+00:00
@@ -50,6 +52,7 @@ services:
       retries: 30
 
   redis:
+    restart: unless-stopped
     image: redis:7.4
     ports: ["${CRUX_REDIS_PORT:-6379}:6379"]
     healthcheck:
@@ -59,6 +62,7 @@ services:
   # S3-compatible object store (spec 1 names MinIO; its images are no longer published, see
   # OPEN-QUESTIONS.md S-7). Credentials live in seaweedfs/s3.json and must match CRUX_S3_*.
   s3:
+    restart: unless-stopped
     image: chrislusf/seaweedfs:3.80
     command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024
     ports: ["${CRUX_S3_PORT:-8333}:8333"]
@@ -67,14 +71,17 @@ services:
       - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
 
   clamav:
+    restart: unless-stopped
     image: clamav/clamav:1.4
     profiles: ["full"]
 
   mailpit:
+    restart: unless-stopped
     image: axllent/mailpit:v1.20
     ports: ["8025:8025"]
 
   core:
+    restart: unless-stopped
     build: {context: .., dockerfile: core/Dockerfile}
     environment:
       CRUX_ENV: ${CRUX_ENV:-dev}
@@ -92,6 +99,7 @@ services:
       redis: {condition: service_healthy}
 
   core-jobs:
+    restart: unless-stopped
     build: {context: .., dockerfile: core/Dockerfile}
     command: ["crux-core", "jobs"]
     environment:
@@ -104,6 +112,7 @@ services:
     depends_on: [core]
 
   files:
+    restart: unless-stopped
     build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: files}}
     environment:
       <<: *python-env
@@ -112,17 +121,20 @@ services:
     depends_on:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}
+      s3: {condition: service_started}
 
   files-worker:
+    restart: unless-stopped
     build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: files}}
     command: ["python", "-m", "app.jobs"]
     environment:
       <<: *python-env
       CRUX_DATABASE_URL: mysql+aiomysql://crux_files:${CRUX_FILES_DB_PASSWORD:-crux-files}@mysql:3306/crux_files
       CRUX_SERVICE_NAME: files
-    depends_on: [files]
+    depends_on: [files, s3]
 
   notify:
+    restart: unless-stopped
     build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: notify}}
     environment:
       <<: *python-env
@@ -134,6 +146,7 @@ services:
       redis: {condition: service_healthy}
 
   notify-worker:
+    restart: unless-stopped
     build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: notify}}
     command: ["python", "-m", "app.jobs"]
     environment:
@@ -145,6 +158,7 @@ services:
     depends_on: [notify]
 
   ai:
+    restart: unless-stopped
     profiles: ["ai"]
     build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: ai}}
     environment:
@@ -157,6 +171,7 @@ services:
       redis: {condition: service_healthy}
 
   ai-worker:
+    restart: unless-stopped
     profiles: ["ai"]
     build: {context: .., dockerfile: services/Dockerfile, args: {SERVICE: ai}}
     command: ["python", "-m", "app.jobs"]

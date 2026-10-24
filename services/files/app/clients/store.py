@@ -20,6 +20,7 @@ class ObjectStore(Protocol):
     async def size(self, key: str) -> int | None: ...
     def read(self, key: str) -> AsyncIterator[bytes]: ...
     async def delete(self, key: str) -> None: ...
+    async def put_bytes(self, key: str, data: bytes, content_type: str) -> None: ...
 
 
 async def sha256_and_head(store: ObjectStore, key: str, head_len: int = 8) -> tuple[str, bytes, int]:
@@ -56,7 +57,15 @@ class S3Store:
             try:
                 self._s3.head_bucket(Bucket=self.bucket)
             except ClientError:
-                self._s3.create_bucket(Bucket=self.bucket)
+                try:
+                    self._s3.create_bucket(Bucket=self.bucket)
+                except ClientError as e:
+                    # Another process created it in between: that's the outcome we wanted.
+                    if e.response.get("Error", {}).get("Code") not in (
+                        "BucketAlreadyExists",
+                        "BucketAlreadyOwnedByYou",
+                    ):
+                        raise
 
         await asyncio.to_thread(run)
 
@@ -100,6 +109,11 @@ class S3Store:
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(lambda: self._s3.delete_object(Bucket=self.bucket, Key=key))
 
+    async def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
+        await asyncio.to_thread(
+            lambda: self._s3.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
+        )
+
 
 @dataclass
 class MemoryStore:
@@ -130,3 +144,6 @@ class MemoryStore:
 
     async def delete(self, key: str) -> None:
         self.objects.pop(key, None)
+
+    async def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
+        self.objects[key] = data

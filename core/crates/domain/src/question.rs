@@ -144,7 +144,7 @@ pub fn validate_version(qt: QuestionType, v: &VersionInput, source: &str) -> Val
                 if !n.value.is_finite() {
                     e.push("numeric.value", "invalid", "Give a number.");
                 }
-                if !(n.tolerance >= 0.0 && n.tolerance.is_finite()) {
+                if !n.tolerance.is_finite() || n.tolerance < 0.0 {
                     e.push("numeric.tolerance", "invalid", "Tolerance must be 0 or more.");
                 }
                 if !matches!(n.tolerance_kind.as_str(), "Absolute" | "Relative") {
@@ -164,7 +164,7 @@ pub fn validate_version(qt: QuestionType, v: &VersionInput, source: &str) -> Val
                 e.push("type", "mismatch", "An open question has a model answer / rubric only.");
             }
             if let Some(rows) = v.open.as_ref().and_then(|o| o.rubric.as_ref()) {
-                if rows.iter().any(|r| r.criterion.trim().is_empty() || !(r.points >= 0.0)) {
+                if rows.iter().any(|r| r.criterion.trim().is_empty() || !r.points.is_finite() || r.points < 0.0) {
                     e.push("open.rubric", "invalid", "Each rubric row needs a criterion and points ≥ 0.");
                 }
             }
@@ -223,7 +223,14 @@ mod tests {
     fn keys_must_match_the_type() {
         let numeric_on_mc = VersionInput {
             options: Some(vec![opt("a", true), opt("b", false)]),
-            numeric: Some(NumericKey { value: 1.0, tolerance: 0.0, tolerance_kind: "Absolute".into(), unit: None, unit_required: false, model_answer: None }),
+            numeric: Some(NumericKey {
+                value: 1.0,
+                tolerance: 0.0,
+                tolerance_kind: "Absolute".into(),
+                unit: None,
+                unit_required: false,
+                model_answer: None,
+            }),
             ..base()
         };
         assert!(validate_version(QuestionType::MC, &numeric_on_mc, "Manual").0.iter().any(|f| f.code == "mismatch"));
@@ -234,7 +241,14 @@ mod tests {
     #[test]
     fn numeric_key_rules() {
         let n = |tol: f64, kind: &str, unit_required: bool| VersionInput {
-            numeric: Some(NumericKey { value: 9.81, tolerance: tol, tolerance_kind: kind.into(), unit: None, unit_required, model_answer: None }),
+            numeric: Some(NumericKey {
+                value: 9.81,
+                tolerance: tol,
+                tolerance_kind: kind.into(),
+                unit: None,
+                unit_required,
+                model_answer: None,
+            }),
             ..base()
         };
         assert!(validate_version(QuestionType::Numeric, &n(0.01, "Relative", false), "Manual").is_empty());

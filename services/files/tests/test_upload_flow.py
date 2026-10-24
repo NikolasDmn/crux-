@@ -231,3 +231,23 @@ def row_time():  # type: ignore[no-untyped-def]
     from datetime import datetime
 
     return datetime(2000, 1, 1)
+
+
+async def test_crop_makes_an_independent_question_image() -> None:
+    async with env() as (deps, store, _):
+        f = await upload(deps, store, OWNER, make_pdf(["A diagram would be here."]), course=COURSE)
+        await drain(deps)
+        crop = await svc.create_crop(
+            deps, f.id, svc.CropInput(page=1, box=svc.CropBox(x=50, y=40, w=200, h=60), course_ref=COURSE)
+        )
+        assert (crop["purpose"], crop["mimeType"], crop["courseRef"], crop["scanStatus"]) == (
+            "QuestionImage",
+            "image/png",
+            COURSE,
+            "Clean",
+        )
+        png_key = next(k for k in store.objects if k.startswith("crops/"))
+        assert store.objects[png_key].startswith(b"\x89PNG")
+        assert "file.crop_created" in await topics(deps)
+        with pytest.raises(FileRejected):
+            await svc.create_crop(deps, f.id, svc.CropInput(page=9, box=svc.CropBox(x=0, y=0, w=10, h=10)))

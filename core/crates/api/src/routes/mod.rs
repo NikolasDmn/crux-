@@ -1,11 +1,14 @@
 pub mod admin;
 pub mod auth;
+pub mod bank;
 pub mod catalog;
 pub mod courses;
 pub mod health;
 pub mod internal;
 pub mod invites;
 pub mod me;
+pub mod mistakes;
+pub mod mocks;
 pub mod sse;
 
 use utoipa_axum::router::OpenApiRouter;
@@ -54,6 +57,31 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(catalog::patch_material, catalog::archive_material))
         .routes(routes!(catalog::list_papers, catalog::create_paper))
         .routes(routes!(catalog::patch_paper))
+        .routes(routes!(bank::list, bank::create))
+        .routes(routes!(bank::get, bank::patch))
+        .routes(routes!(bank::versions))
+        .routes(routes!(bank::archive))
+        .routes(routes!(bank::approve))
+        .routes(routes!(bank::promote))
+        .routes(routes!(bank::image_crop))
+        .routes(routes!(mocks::build, mocks::list))
+        .routes(routes!(mocks::get))
+        .routes(routes!(mocks::start))
+        .routes(routes!(mocks::submit))
+        .routes(routes!(mocks::answer))
+        .routes(routes!(mocks::grade))
+        .routes(routes!(mocks::show_answer))
+        .routes(routes!(mocks::fixed))
+        .routes(routes!(mocks::result))
+        .routes(routes!(mocks::attempt))
+        .routes(routes!(mistakes::list_slips, mistakes::create_slip))
+        .routes(routes!(mistakes::patch_slip))
+        .routes(routes!(mistakes::list_weak_spots, mistakes::create_weak_spot))
+        .routes(routes!(mistakes::patch_weak_spot))
+        .routes(routes!(mistakes::list_traps, mistakes::create_trap))
+        .routes(routes!(mistakes::retire_trap))
+        .routes(routes!(mistakes::patterns))
+        .routes(routes!(mistakes::confidence))
 }
 
 /// `?limit=&cursor=` (spec 3.1).

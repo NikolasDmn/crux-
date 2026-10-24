@@ -72,3 +72,13 @@ api GET "/files/$file/pages/2/text" | grep -q "confidence intervals" || fail "pa
 dl=$(api GET "/files/$file/url" | j '["url"]')
 curl -fsS "$dl" | head -c 5 | grep -q '%PDF-' || fail "download through the signed URL"
 echo "ok   material $material, page text, signed download"
+
+# ---------- milestone 3 ----------
+q=$(api POST "/courses/$course/questions" "{\"componentId\":\"$lecture\",\"type\":\"MC\",\"content\":{\"prompt\":\"A p-value is…\",\"options\":[{\"text\":\"P(data at least this extreme | H0)\",\"isCorrect\":true},{\"text\":\"P(H0 is true)\",\"isCorrect\":false}]}}")
+right=$(echo "$q" | python3 -c "import json,sys; print([o['id'] for o in json.load(sys.stdin)['current']['options'] if o['isCorrect']][0])")
+mock=$(api POST "/courses/$course/mocks" '{"n":5}' | j '["id"]')
+api POST "/mocks/$mock/start" >/dev/null
+api PUT "/mocks/$mock/questions/1/answer" "{\"choiceOptionId\":\"$right\",\"confidence\":\"Sure\"}" >/dev/null
+score=$(api POST "/mocks/$mock/submit" | j '["status"] + " " + str(d["score"]) + "/" + str(d["maxScore"])')
+[ "$score" = "Graded 1.0/1.0" ] || fail "mock result: $score"
+echo "ok   mock built, answered, auto-graded ($score)"

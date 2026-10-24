@@ -18,6 +18,11 @@ pub enum Policy {
     Edit,
     /// `can_manage_course`: Owner only.
     Manage,
+    /// A per-user resource (mock, slip, weak spot, trap): only its user, whatever their role on
+    /// the course (review section 2: a subscription never shows other subscribers' mocks).
+    Mine,
+    /// Needs the caller's own subscription to the course.
+    Subscribed,
 }
 
 /// `(METHOD, path, policy)`. Paths are as the router sees them (after `/api/v1` is stripped).
@@ -76,6 +81,37 @@ pub const ROUTES: &[(&str, &str, Policy)] = &[
     ("GET", "/courses/{id}/papers", Policy::Read),
     ("POST", "/courses/{id}/papers", Policy::Edit),
     ("PATCH", "/papers/{id}", Policy::Edit),
+    ("GET", "/courses/{id}/questions", Policy::Read),
+    ("POST", "/courses/{id}/questions", Policy::Read),
+    ("GET", "/questions/{id}", Policy::Read),
+    ("PATCH", "/questions/{id}", Policy::Edit),
+    ("GET", "/questions/{id}/versions", Policy::Read),
+    ("POST", "/questions/{id}/archive", Policy::Edit),
+    ("POST", "/questions/{id}/approve", Policy::Edit),
+    ("POST", "/questions/{id}/promote", Policy::Edit),
+    ("POST", "/questions/{id}/image-crop", Policy::Edit),
+    ("POST", "/courses/{id}/mocks", Policy::Subscribed),
+    ("GET", "/courses/{id}/mocks", Policy::Subscribed),
+    ("GET", "/mocks/{id}", Policy::Mine),
+    ("POST", "/mocks/{id}/start", Policy::Mine),
+    ("POST", "/mocks/{id}/submit", Policy::Mine),
+    ("PUT", "/mocks/{id}/questions/{order}/answer", Policy::Mine),
+    ("POST", "/mocks/{id}/questions/{order}/grade", Policy::Mine),
+    ("POST", "/mocks/{id}/questions/{order}/show-answer", Policy::Mine),
+    ("POST", "/mocks/{id}/questions/{order}/fixed", Policy::Mine),
+    ("GET", "/mocks/{id}/result", Policy::Mine),
+    ("POST", "/attempts", Policy::Owns),
+    ("GET", "/slips", Policy::Owns),
+    ("POST", "/slips", Policy::Owns),
+    ("PATCH", "/slips/{id}", Policy::Mine),
+    ("GET", "/courses/{id}/weak-spots", Policy::Read),
+    ("POST", "/courses/{id}/weak-spots", Policy::Read),
+    ("PATCH", "/weak-spots/{id}", Policy::Mine),
+    ("GET", "/courses/{id}/traps", Policy::Read),
+    ("POST", "/courses/{id}/traps", Policy::Read),
+    ("DELETE", "/courses/{id}/traps/{trapId}", Policy::Mine),
+    ("GET", "/insight/patterns", Policy::Owns),
+    ("GET", "/courses/{id}/stats/confidence", Policy::Read),
 ];
 
 pub fn policy_of(method: &str, path: &str) -> Option<Policy> {
@@ -127,7 +163,8 @@ mod tests {
     fn signed_in_routes_declare_bearer_security() {
         let api = crate::openapi_doc();
         for (path, item) in &api.paths.paths {
-            for (m, op) in [("GET", &item.get), ("POST", &item.post), ("PATCH", &item.patch), ("DELETE", &item.delete)] {
+            for (m, op) in [("GET", &item.get), ("POST", &item.post), ("PUT", &item.put), ("PATCH", &item.patch), ("DELETE", &item.delete)]
+            {
                 let Some(op) = op else { continue };
                 let needs_auth = policy_of(m, path).is_some_and(|p| p != Policy::Public);
                 assert_eq!(op.security.is_some(), needs_auth, "{m} {path}: security annotation must match the policy");

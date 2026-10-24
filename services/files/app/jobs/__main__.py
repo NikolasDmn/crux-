@@ -29,9 +29,25 @@ def _deps(sessions: async_sessionmaker[AsyncSession]) -> Deps:
     )
 
 
+STORE_WAIT_SECONDS = 120
+
+
+async def wait_for_store(deps: Deps) -> None:
+    """The object store may still be booting when the worker starts (compose starts them together)."""
+    for attempt in range(STORE_WAIT_SECONDS):
+        try:
+            await deps.store.ensure_bucket()
+            return
+        except Exception as e:
+            if attempt == 0:
+                log.info("waiting for the object store", extra={"error": repr(e)})
+            await asyncio.sleep(1)
+    await deps.store.ensure_bucket()  # last try: let it raise
+
+
 async def job_loop(sessions: async_sessionmaker[AsyncSession], stop: asyncio.Event) -> None:
     deps = _deps(sessions)
-    await deps.store.ensure_bucket()
+    await wait_for_store(deps)
     last_sweep = 0.0
     while not stop.is_set():
         try:

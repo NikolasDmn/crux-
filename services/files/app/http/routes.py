@@ -107,6 +107,15 @@ async def file_events(file_id: str, ticket: str, request: Request) -> StreamingR
 internal = APIRouter(prefix="/internal/v1", tags=["internal"])
 
 
+@internal.post("/files/{file_id}/crops")
+async def internal_crop(file_id: str, body: svc.CropInput, request: Request) -> dict[str, object]:
+    """For core: render a question image from a page region (spec 6.1 step 6). Service token required."""
+    from crux_common.auth import service_caller
+
+    await service_caller(request)
+    return await svc.create_crop(deps(request), file_id, body)
+
+
 @internal.get("/files/{file_id}")
 async def internal_file(file_id: str, request: Request) -> dict[str, object]:
     """For core (spec 15 internal table): file state, ownership and course. Service token required."""

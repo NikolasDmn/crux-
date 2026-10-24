@@ -2,17 +2,23 @@
 //! (spec 2.1). Returns view types, never repo rows.
 
 pub mod admin;
+pub mod attempts;
 pub mod auth;
+pub mod bank;
 pub mod catalog;
 pub mod contracts;
 pub mod courses;
 pub mod ctx;
+pub mod deadlines;
 pub mod error;
 pub mod events;
 pub mod invites;
 pub mod jwt;
 pub mod me;
+pub mod mistakes;
+pub mod mocks;
 pub mod password;
+pub mod practice;
 pub mod ratelimit;
 pub mod sse;
 pub mod time;

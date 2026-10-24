@@ -135,7 +135,11 @@ pub fn grade_numeric(rule: &NumericRule, answer: Option<f64>, unit: Option<&str>
             (Some(want), Some(got)) => normalize_unit(want) == normalize_unit(got),
             _ => false,
         };
-    if within && unit_ok { Outcome::Right } else { Outcome::Wrong }
+    if within && unit_ok {
+        Outcome::Right
+    } else {
+        Outcome::Wrong
+    }
 }
 
 /// MC: chosen option correct → Right; none chosen → Blank.
@@ -159,7 +163,11 @@ pub fn self_grade(outcome: Outcome, max_grade: f64) -> f64 {
 
 /// Clamp an AI-suggested grade to [0, max] (spec 7.5).
 pub fn clamp_grade(grade: f64, max: f64) -> f64 {
-    if grade.is_nan() { 0.0 } else { grade.clamp(0.0, max) }
+    if grade.is_nan() {
+        0.0
+    } else {
+        grade.clamp(0.0, max)
+    }
 }
 
 #[cfg(test)]

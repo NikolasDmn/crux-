@@ -11,3 +11,12 @@ ALTER TABLE Trap            ADD COLUMN PublicId CHAR(26) NULL AFTER Id, ADD UNIQ
 -- Spec 5.3 counts a guess as a miss ("wrong, blank or a guess"). The read model keeps the last
 -- answer's confidence so "misses only" can find guessed-right questions too.
 ALTER TABLE UserQuestionStat ADD COLUMN LastConfidence ENUM('Sure','Unsure','Guess') NULL AFTER LastOutcome;
+
+-- WeakSpot rules apply check by check (crux_domain::weakspot::apply); the two counters the rules
+-- need live on the row so a user editing Severity doesn't break a replay from the start.
+ALTER TABLE WeakSpot
+    ADD COLUMN MissesAtLevel TINYINT NOT NULL DEFAULT 0 AFTER ColdPassesNeeded,
+    ADD COLUMN ColdPassRun   TINYINT NOT NULL DEFAULT 0 AFTER MissesAtLevel;
+
+-- Deadlines are addressed by the API (mock builder `deadlineId`, milestone 5 routes).
+ALTER TABLE Deadline ADD COLUMN PublicId CHAR(26) NULL AFTER Id, ADD UNIQUE KEY uq_deadline_public (PublicId);

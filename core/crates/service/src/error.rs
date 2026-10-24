@@ -23,6 +23,11 @@ pub enum AppError {
     EmailUnverified,
     #[error("rate limited")]
     RateLimited { retry_after_secs: u64 },
+    /// Spec 3.1: `details.reason` ∈ user_off, feature_off, course_off, material_blocked, no_key, service_unavailable.
+    #[error("AI is off here")]
+    AiDisabled { reason: &'static str },
+    #[error("time is over")]
+    MockTimeOver,
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }

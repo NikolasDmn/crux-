@@ -141,12 +141,14 @@ pub fn build(candidates: &[Candidate], opts: &BuildOptions, seed: u64) -> Built 
                 let open: Vec<&Candidate> = comp.iter().copied().filter(|c| c.is_open).collect();
                 let open_take = row.open_count.min(row.question_count);
                 let mut chosen = sample_spread(&mut rng, &open, open_take, opts.go_easy);
-                let rest: Vec<&Candidate> = comp.iter().copied().filter(|c| !chosen.iter().any(|x| x.question_id == c.question_id)).collect();
+                let rest: Vec<&Candidate> =
+                    comp.iter().copied().filter(|c| !chosen.iter().any(|x| x.question_id == c.question_id)).collect();
                 let others: Vec<&Candidate> = rest.iter().copied().filter(|c| !c.is_open).collect();
                 let need = row.question_count - chosen.len();
                 let mut fill = sample_spread(&mut rng, &others, need, opts.go_easy);
                 if fill.len() < need {
-                    let leftovers: Vec<&Candidate> = rest.iter().copied().filter(|c| c.is_open && !fill.iter().any(|x| x.question_id == c.question_id)).collect();
+                    let leftovers: Vec<&Candidate> =
+                        rest.iter().copied().filter(|c| c.is_open && !fill.iter().any(|x| x.question_id == c.question_id)).collect();
                     fill.extend(sample_spread(&mut rng, &leftovers, need - fill.len(), opts.go_easy));
                 }
                 chosen.extend(fill);
@@ -206,7 +208,16 @@ mod tests {
     use super::*;
 
     fn c(id: i64, comp: i64) -> Candidate {
-        Candidate { question_id: id, family: id, component_id: comp, primary_concept: None, is_open: false, attempts: 0, rights: 0, last_was_miss: false }
+        Candidate {
+            question_id: id,
+            family: id,
+            component_id: comp,
+            primary_concept: None,
+            is_open: false,
+            attempts: 0,
+            rights: 0,
+            last_was_miss: false,
+        }
     }
 
     #[test]
@@ -258,7 +269,10 @@ mod tests {
         let mut pool: Vec<Candidate> = (1..=6).map(|i| c(i, 1)).collect();
         pool[0].is_open = true;
         pool.extend((7..=8).map(|i| c(i, 2)));
-        let layout = vec![LayoutRow { component_id: 1, question_count: 3, open_count: 2 }, LayoutRow { component_id: 2, question_count: 4, open_count: 0 }];
+        let layout = vec![
+            LayoutRow { component_id: 1, question_count: 3, open_count: 2 },
+            LayoutRow { component_id: 2, question_count: 4, open_count: 0 },
+        ];
         let b = build(&pool, &BuildOptions { layout: Some(layout), ..Default::default() }, 3);
         assert!(b.question_ids.contains(&1), "the one open question is used");
         assert_eq!(b.question_ids.iter().filter(|id| **id <= 6).count(), 3, "short on open: filled with MC");
@@ -270,7 +284,8 @@ mod tests {
         // 1 missed question among 50; over many seeds it's picked far more often than chance.
         let mut pool: Vec<Candidate> = (1..=50).map(|i| c(i, 1)).collect();
         pool[0].attempts = 1;
-        let hits = (0..400).filter(|s| build(&pool, &BuildOptions { n: Some(5), ..Default::default() }, *s).question_ids.contains(&1)).count();
+        let hits =
+            (0..400).filter(|s| build(&pool, &BuildOptions { n: Some(5), ..Default::default() }, *s).question_ids.contains(&1)).count();
         // Unweighted: 5/50 × 400 = 40. Weight ×2 roughly doubles it.
         assert!((60..=110).contains(&hits), "picked {hits}/400; expected about 80");
     }

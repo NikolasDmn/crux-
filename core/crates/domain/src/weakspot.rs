@@ -52,6 +52,14 @@ pub enum WsStatus {
 }
 
 impl WsStatus {
+    pub fn from_db(s: &str) -> Self {
+        match s {
+            "Resolved" => WsStatus::Resolved,
+            "Reopened" => WsStatus::Reopened,
+            _ => WsStatus::Open,
+        }
+    }
+
     pub fn as_db(self) -> &'static str {
         match self {
             WsStatus::Open => "Open",
@@ -76,39 +84,57 @@ pub struct WsState {
     pub resolved_at: Option<DateTime<Utc>>,
 }
 
-/// Rules 5.6:
+/// A spot's rule state: what's stored on the row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Progress {
+    pub status: WsStatus,
+    pub severity: Severity,
+    pub resolved_at: Option<DateTime<Utc>>,
+    pub misses_at_level: u8,
+    pub cold_run: u8,
+}
+
+impl Progress {
+    pub fn new(severity: Severity) -> Self {
+        Progress { status: WsStatus::Open, severity, resolved_at: None, misses_at_level: 0, cold_run: 0 }
+    }
+}
+
+/// Rules 5.6, one check at a time:
 /// - Resolved when the last `cold_passes_needed` cold checks all passed (a miss resets the run).
 /// - A miss on a resolved spot reopens it.
 /// - Severity goes up one level after 3 misses at the same level.
-pub fn replay(initial: Severity, cold_passes_needed: u8, checks: &[Check]) -> WsState {
-    let mut state = WsState { status: WsStatus::Open, severity: initial, resolved_at: None };
-    let mut misses_at_level = 0;
-    let mut cold_run = 0u8;
-    let mut ordered = checks.to_vec();
-    ordered.sort_by_key(|c| c.at);
-    for c in ordered {
-        if c.passed {
-            if c.cold {
-                cold_run = cold_run.saturating_add(1);
-            }
-            if cold_run >= cold_passes_needed.max(1) && state.status != WsStatus::Resolved {
-                state.status = WsStatus::Resolved;
-                state.resolved_at = Some(c.at);
-            }
-        } else {
-            cold_run = 0;
-            misses_at_level += 1;
-            if misses_at_level >= 3 {
-                state.severity = state.severity.up();
-                misses_at_level = 0;
-            }
-            if state.status == WsStatus::Resolved {
-                state.status = WsStatus::Reopened;
-                state.resolved_at = None;
-            }
+pub fn apply(p: Progress, cold_passes_needed: u8, c: &Check) -> Progress {
+    let mut p = p;
+    if c.passed {
+        if c.cold {
+            p.cold_run = p.cold_run.saturating_add(1);
+        }
+        if p.cold_run >= cold_passes_needed.max(1) && p.status != WsStatus::Resolved {
+            p.status = WsStatus::Resolved;
+            p.resolved_at = Some(c.at);
+        }
+    } else {
+        p.cold_run = 0;
+        p.misses_at_level += 1;
+        if p.misses_at_level >= 3 {
+            p.severity = p.severity.up();
+            p.misses_at_level = 0;
+        }
+        if p.status == WsStatus::Resolved {
+            p.status = WsStatus::Reopened;
+            p.resolved_at = None;
         }
     }
-    state
+    p
+}
+
+/// A whole history, oldest first.
+pub fn replay(initial: Severity, cold_passes_needed: u8, checks: &[Check]) -> WsState {
+    let mut ordered = checks.to_vec();
+    ordered.sort_by_key(|c| c.at);
+    let p = ordered.iter().fold(Progress::new(initial), |p, c| apply(p, cold_passes_needed, c));
+    WsState { status: p.status, severity: p.severity, resolved_at: p.resolved_at }
 }
 
 /// The OPEN line (spec 5.6): open spots by severity Critical → Low, then most recently seen.
@@ -153,8 +179,15 @@ pub struct Stat {
 }
 
 impl Stat {
-    pub const EMPTY: Stat =
-        Stat { attempts: 0, rights: 0, sure_wrongs: 0, last_outcome: None, last_confidence: None, last_answered_at: None, first_right_at: None };
+    pub const EMPTY: Stat = Stat {
+        attempts: 0,
+        rights: 0,
+        sure_wrongs: 0,
+        last_outcome: None,
+        last_confidence: None,
+        last_answered_at: None,
+        first_right_at: None,
+    };
 
     pub fn apply(self, outcome: Outcome, confidence: Option<Confidence>, at: DateTime<Utc>) -> Stat {
         let solid_right = outcome == Outcome::Right && confidence != Some(Confidence::Guess);

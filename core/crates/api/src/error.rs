@@ -46,6 +46,8 @@ pub fn status_and_code(e: &AppError) -> (StatusCode, &'static str) {
         AppError::InviteInvalid { .. } => (StatusCode::FORBIDDEN, "invite_invalid"),
         AppError::EmailUnverified => (StatusCode::FORBIDDEN, "email_unverified"),
         AppError::RateLimited { .. } => (StatusCode::TOO_MANY_REQUESTS, "rate_limited"),
+        AppError::AiDisabled { .. } => (StatusCode::FORBIDDEN, "ai_disabled"),
+        AppError::MockTimeOver => (StatusCode::CONFLICT, "mock_time_over"),
         AppError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal"),
     }
 }
@@ -64,6 +66,8 @@ impl IntoResponse for ApiError {
             AppError::RateLimited { retry_after_secs } => {
                 ("Too many attempts. Try again later.".into(), Some(json!({ "retryAfterSecs": retry_after_secs })))
             }
+            AppError::AiDisabled { reason } => ("AI is off here.".into(), Some(json!({ "reason": reason }))),
+            AppError::MockTimeOver => ("Time is over for this mock.".into(), None),
             AppError::Internal(e) => {
                 tracing::error!(error = %e, request_id = request_id.as_deref().unwrap_or(""), "internal error");
                 ("Something went wrong.".into(), None)

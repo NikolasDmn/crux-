@@ -56,6 +56,28 @@ stranger gets 404 rather than a validation error (spec 4.2); a body that can't b
 | B2-6 | Breached list: SecLists **`100k-most-used-passwords-NCSC.txt`** (the "top 100k" file the spec meant has moved), filtered to ≥ 10 chars → 9,126 entries | Offline fallback for HIBP (Q-auth-3) |
 | B2-7 | `file.infected` is a **non-transactional** `notify.requested` (in-app once milestone 6 lands) | It's about a user's own upload; not an account email |
 
+## Milestone 3 build choices (bank, mocks, mistakes)
+
+| # | Choice | Why / where |
+|---|---|---|
+| B3-1 | Core migration 0005 adds PublicIds to QuestionVersion, MCOption, Slip, Trap, Deadline; `UserQuestionStat.LastConfidence`; `WeakSpot.MissesAtLevel` + `ColdPassRun` | The API addresses all of them; rules need the counters |
+| B3-2 | **Editors can see and approve the course bank's drafts** | Spec 4.2 shows drafts only to their owner; then nobody could approve bank drafts |
+| B3-3 | Readers may add **private** questions; bank questions need Editor | Spec 15 says "read / edit" for POST questions |
+| B3-4 | **A guessed right answer doesn't count as a Right** (stats, go-easy, "untested") and doesn't resolve slips or pass weak-spot checks | Spec 5.3 counts a guess as a miss |
+| B3-5 | **Right items show their key at once**; misses stay hidden until shown/fixed; Partial counts as a miss in review | Spec 5.4 hides the key "until review"; nothing to hide on a right answer |
+| B3-6 | Slip **proposals are computed**, not stored: a Wrong/Partial item without a slip shows `slipProposed`; confirming = `POST /slips` with the mock + order | No schema change; the user confirms each (spec 5.4) |
+| B3-7 | A Passed/Archived subscription **still opens old mocks** | Spec 4.2 says "active subscription"; archived courses keep their history (5.10) |
+| B3-8 | "Cold" (lecture not studied in the previous 24 h) is approximated by **no answers in that lecture in the 24 h before**, outside the current mock | Study events arrive with milestone 5; then it switches to UserEvents |
+| B3-9 | Warm-up attempts are always cold | Spec 5.9 |
+| B3-10 | A manual severity change restarts the miss count at the new level | Otherwise 3 misses could jump two levels at once |
+| B3-11 | AI grading mode answers `403 ai_disabled {reason: service_unavailable}` until milestone 8 | The gate isn't there yet |
+| B3-12 | Answers don't use If-Match (the last save wins per item) | The client saves on every change (debounced); version checks would conflict constantly. Mock-level state changes are serialized by a row lock |
+| B3-13 | Crops count against the source file's owner's quota | Spec says nothing; thumbnails count, crops are similar |
+| B3-14 | New routes: `DELETE /courses/{id}/traps/{trapId}` | Spec 15's DELETE on `/traps` doesn't say which |
+
+Infra fixes found by the cold-start check: worker loops are **supervised** (a crash restarts that loop, not the worker),
+files waits for the object store, and every compose service has `restart: unless-stopped`.
+
 ## Product / behaviour
 
 | # | Question | Built meanwhile |

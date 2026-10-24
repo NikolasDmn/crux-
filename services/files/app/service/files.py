@@ -1,5 +1,6 @@
 """Uploads, downloads, page text, quota view (backend-spec 6.1, 6.2 quota view)."""
 
+import hashlib
 import logging
 from datetime import timedelta
 from typing import Any
@@ -320,3 +321,98 @@ async def patch_storage_settings(deps: Deps, user: Principal, inp: StorageSettin
 
 async def emit_event(deps: Deps, s: Any, topic: str, aggregate: str, payload: dict[str, Any]) -> None:
     await emit(s, deps.contracts, topic, aggregate, payload)
+
+
+class CropBox(Camel):
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class CropInput(Camel):
+    page: int
+    box: CropBox
+    course_ref: str | None = None
+
+
+CROP_ZOOM = 2.0
+MAX_CROP_PIXELS = 40_000_000
+
+
+def render_crop(pdf: bytes, page: int, box: CropBox) -> bytes:
+    """Spec 6.1 step 6: the region at 2x as PNG. Raises ValueError for a bad page or box."""
+    import pymupdf
+
+    with pymupdf.open(stream=pdf, filetype="pdf") as doc:  # type: ignore[no-untyped-call]
+        if not 1 <= page <= doc.page_count:
+            raise ValueError("page out of range")
+        p = doc[page - 1]
+        clip = pymupdf.Rect(box.x, box.y, box.x + box.w, box.y + box.h) & p.rect  # type: ignore[no-untyped-call]
+        if clip.is_empty or clip.width * clip.height * CROP_ZOOM**2 > MAX_CROP_PIXELS:
+            raise ValueError("box outside the page or too large")
+        pix = p.get_pixmap(matrix=pymupdf.Matrix(CROP_ZOOM, CROP_ZOOM), clip=clip)  # type: ignore[no-untyped-call]
+        data: bytes = pix.tobytes("png")
+        return data
+
+
+async def create_crop(deps: Deps, source_ref: str, inp: CropInput) -> dict[str, Any]:
+    """Called by core (internal). The crop is its own object: it survives its original being purged
+    (spec 6.2) and counts against the same owner's quota."""
+    import asyncio
+
+    async with deps.sessions() as s:
+        src = await repo.by_public_id(s, source_ref)
+    if (
+        src is None
+        or src.Purpose != "Original"
+        or src.Status not in ("Active", "PendingPurge")
+        or src.ScanStatus != "Clean"
+    ):
+        raise NotFound("The source PDF isn't available.")
+    data = b"".join([c async for c in deps.store.read(src.StorageKey)])
+    try:
+        png = await asyncio.to_thread(render_crop, data, inp.page, inp.box)
+    except ValueError as e:
+        raise FileRejected(str(e), {"reason": "crop"}) from e
+    public_id = new_id()
+    key = f"crops/{src.OwnerUserRef}/{public_id}.png"
+    async with transaction(deps.sessions) as s:
+        if not await storage.reserve(s, src.OwnerUserRef, len(png)):
+            q = await storage.get(s, src.OwnerUserRef)
+            raise QuotaExceeded(details={"usedBytes": q.UsedBytes if q else 0, "quotaBytes": q.QuotaBytes if q else 0})
+        await deps.store.put_bytes(key, png, "image/png")
+        await storage.settle(s, src.OwnerUserRef, len(png))
+        file_id = await repo.insert_derived(
+            s,
+            PublicId=public_id,
+            OwnerUserRef=src.OwnerUserRef,
+            UploadedByUserRef=src.UploadedByUserRef,
+            CourseRef=inp.course_ref or src.CourseRef,
+            Purpose="QuestionImage",
+            DerivedFromFileId=src.Id,
+            SourcePage=inp.page,
+            CropBox=inp.box.model_dump(),
+            StorageKey=key,
+            FileName=f"{src.FileName.rsplit('.', 1)[0]}-p{inp.page}.png"[:255],
+            MimeType="image/png",
+            SizeBytes=len(png),
+            Sha256=hashlib.sha256(png).hexdigest(),
+            UploadedAt=utcnow(),
+        )
+        await emit(
+            s,
+            deps.contracts,
+            "file.crop_created",
+            public_id,
+            {"fileRef": public_id, "derivedFromRef": src.PublicId, "page": inp.page, "cropBox": inp.box.model_dump()},
+        )
+        row = await repo.by_id(s, file_id)
+    assert row is not None
+    v = view(row)
+    return {
+        **v.model_dump(by_alias=True),
+        "ownerRef": row.OwnerUserRef,
+        "uploadedByRef": row.UploadedByUserRef,
+        "courseRef": row.CourseRef,
+    }

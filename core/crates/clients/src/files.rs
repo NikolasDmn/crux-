@@ -39,6 +39,17 @@ impl FileInfo {
 pub trait FilesApi: Send + Sync {
     /// `None` = no such file (or it was deleted).
     async fn get_file(&self, service_token: &str, on_behalf_of: &str, file_ref: &str) -> Result<Option<FileInfo>, ClientError>;
+    /// Spec 6.1 step 6: render a page region at 2× as a PNG question image. `[x, y, w, h]` in PDF
+    /// points. The crop belongs to the course and survives its original (spec 6.2).
+    async fn crop(
+        &self,
+        service_token: &str,
+        on_behalf_of: &str,
+        file_ref: &str,
+        page: i32,
+        crop_box: [f64; 4],
+        course_ref: &str,
+    ) -> Result<FileInfo, ClientError>;
 }
 
 pub struct HttpFiles {
@@ -77,6 +88,31 @@ impl FilesApi for HttpFiles {
         }
         Err(last.expect("an error").into())
     }
+
+    async fn crop(
+        &self,
+        service_token: &str,
+        on_behalf_of: &str,
+        file_ref: &str,
+        page: i32,
+        crop_box: [f64; 4],
+        course_ref: &str,
+    ) -> Result<FileInfo, ClientError> {
+        let resp = self
+            .http
+            .post(format!("{}/internal/v1/files/{}/crops", self.base, file_ref))
+            .timeout(Duration::from_secs(30))
+            .bearer_auth(service_token)
+            .header("x-on-behalf-of", on_behalf_of)
+            .json(&serde_json::json!({
+                "page": page,
+                "box": {"x": crop_box[0], "y": crop_box[1], "w": crop_box[2], "h": crop_box[3]},
+                "courseRef": course_ref,
+            }))
+            .send()
+            .await?;
+        Ok(resp.error_for_status()?.json().await?)
+    }
 }
 
 /// Test double.
@@ -95,5 +131,18 @@ impl MemoryFiles {
 impl FilesApi for MemoryFiles {
     async fn get_file(&self, _token: &str, _on_behalf_of: &str, file_ref: &str) -> Result<Option<FileInfo>, ClientError> {
         Ok(self.files.lock().unwrap().get(file_ref).cloned())
+    }
+
+    async fn crop(&self, _t: &str, _o: &str, file_ref: &str, page: i32, _b: [f64; 4], course_ref: &str) -> Result<FileInfo, ClientError> {
+        let source = self.files.lock().unwrap().get(file_ref).cloned().ok_or_else(|| ClientError::Other("no such file".into()))?;
+        let crop = FileInfo {
+            id: format!("01CROP{:020}", page),
+            purpose: "QuestionImage".into(),
+            course_ref: Some(course_ref.into()),
+            file_name: format!("crop-p{page}.png"),
+            ..source
+        };
+        self.put(crop.clone());
+        Ok(crop)
     }
 }

@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod bus;
 pub mod clock;
 pub mod files;

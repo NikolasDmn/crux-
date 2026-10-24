@@ -314,8 +314,8 @@ pub async fn build(ctx: &Ctx, actor: &Actor, course_ref: &str, input: MockInput)
     let course = subscribed_course(&mut tx, actor, course_ref).await?;
     e.into_result()?;
     if mode == "AI" {
-        // AI grading arrives with milestone 8; until the ai service answers, AI is unavailable.
-        return Err(AppError::AiDisabled { reason: "service_unavailable" });
+        // Spec 7.1: AI grading needs the gate (consent, a key, the course allowing AI).
+        crate::ai::gate(ctx, actor, "Grading", Some(&course.public_id)).await?;
     }
     let settings = crux_repo::settings::get(&mut tx, actor.user_id).await?.ok_or(AppError::NotFound)?;
     let components = match &input.component_ids {

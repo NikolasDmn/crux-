@@ -180,6 +180,7 @@ async fn build_ctx(cli: &Cli, pool: crux_repo::MySqlPool) -> anyhow::Result<Ctx>
         kv: Arc::new(kv),
         keys: Arc::new(JwtKeys::from_pkcs8_pem(&pem)?),
         files: Arc::new(crux_clients::files::HttpFiles::new(&cli.files_url)),
+        ai: Arc::new(crux_clients::ai::HttpAi::new(&cli.ai_url)),
         breach_check: (!cli.hibp_url.is_empty())
             .then(|| Arc::new(crux_clients::pwned::Hibp::new(&cli.hibp_url)) as Arc<dyn crux_clients::pwned::BreachCheck>),
         breached_passwords: Arc::new(load_breached_passwords(&breached)),

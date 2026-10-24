@@ -18,6 +18,7 @@ pub fn router() -> Router<AppState> {
         .route("/internal/v1/service-token", post(service_token))
         .route("/internal/v1/access", get(access))
         .route("/internal/v1/access/file-ref", get(file_ref_access))
+        .route("/internal/v1/ai/materials", get(ai_materials))
 }
 
 #[derive(Deserialize)]
@@ -50,6 +51,22 @@ async fn file_ref_access(
 ) -> ApiResult<Json<serde_json::Value>> {
     let allowed = crux_service::catalog::file_ref_access(&state.ctx, &q.user, &q.file_ref).await?;
     Ok(Json(serde_json::json!({ "allowed": allowed })))
+}
+
+#[derive(Deserialize)]
+struct AiMaterialsQuery {
+    user: String,
+    refs: String,
+}
+
+/// Spec 7.1 gate: AiAllowed / excluded / file of each material, for materials the user can read.
+async fn ai_materials(
+    State(state): State<AppState>,
+    _svc: Service,
+    Query(q): Query<AiMaterialsQuery>,
+) -> ApiResult<Json<Vec<crux_service::ai::AiMaterial>>> {
+    let refs: Vec<String> = q.refs.split(',').filter(|r| !r.is_empty()).map(String::from).collect();
+    Ok(Json(crux_service::ai::materials(&state.ctx, &q.user, &refs).await?))
 }
 
 /// Public keys for verifying access and service tokens. Public data; cache for a few minutes.

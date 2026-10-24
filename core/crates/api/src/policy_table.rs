@@ -40,6 +40,7 @@ pub const ROUTES: &[(&str, &str, Policy)] = &[
     ("GET", "/me/settings", Policy::Owns),
     ("PATCH", "/me/settings", Policy::Owns),
     ("GET", "/me/tier", Policy::Owns),
+    ("GET", "/me/ai-allowed", Policy::Owns),
     ("POST", "/invites", Policy::VerifiedEmail),
     ("GET", "/invites", Policy::Owns),
     ("DELETE", "/invites/{id}", Policy::Owns),

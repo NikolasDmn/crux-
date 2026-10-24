@@ -74,12 +74,14 @@ pub struct TestCtx {
     pub ctx: Ctx,
     pub clock: Arc<ManualClock>,
     pub files: Arc<MemoryFiles>,
+    pub ai: Arc<crux_clients::ai::MemoryAi>,
 }
 
 /// A Ctx on the test database with a hand-moved clock, in-memory Redis and a fresh signing key.
 pub fn test_ctx(pool: MySqlPool) -> TestCtx {
     let clock = Arc::new(ManualClock::new(Utc.with_ymd_and_hms(2026, 10, 23, 12, 0, 0).unwrap()));
     let files = Arc::new(MemoryFiles::default());
+    let ai = Arc::new(crux_clients::ai::MemoryAi::default());
     let breached: HashSet<String> = ["password123456".to_string()].into();
     let ctx = Ctx {
         pool,
@@ -88,11 +90,12 @@ pub fn test_ctx(pool: MySqlPool) -> TestCtx {
         kv: Arc::new(MemoryKv::default()),
         keys: Arc::new(JwtKeys::from_pkcs8_pem(&JwtKeys::generate_pem()).unwrap()),
         files: files.clone(),
+        ai: ai.clone(),
         breach_check: None,
         breached_passwords: Arc::new(breached),
         config: Arc::new(Config { app_base_url: "http://crux.test".into(), service_secret: "test-service-secret".into() }),
     };
-    TestCtx { ctx, clock, files }
+    TestCtx { ctx, clock, files, ai }
 }
 
 /// Creates an invite straight in the DB and returns its code.

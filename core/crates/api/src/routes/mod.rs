@@ -36,6 +36,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(me::get_me, me::patch_me))
         .routes(routes!(me::get_settings, me::patch_settings))
         .routes(routes!(me::get_tier))
+        .routes(routes!(me::ai_allowed))
         .routes(routes!(invites::create, invites::list))
         .routes(routes!(invites::revoke))
         .routes(routes!(sse::ticket))

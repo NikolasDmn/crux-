@@ -8,6 +8,17 @@ use crate::error::{ApiResult, ErrorBody};
 use crate::extract::{Auth, IfMatch, JsonBody};
 use crate::AppState;
 
+/// Whether an AI feature is available to you (here, or in a course): show or hide AI controls.
+#[utoipa::path(get, path = "/me/ai-allowed", tag = "me", security(("bearer" = [])), params(crux_service::ai::AllowedQuery),
+    responses((status = 200, body = crux_service::ai::AllowedView), (status = 404, body = crate::error::ErrorBody), (status = 422, body = crate::error::ErrorBody)))]
+pub async fn ai_allowed(
+    axum::extract::State(s): axum::extract::State<AppState>,
+    crate::extract::Auth(a): crate::extract::Auth,
+    axum::extract::Query(q): axum::extract::Query<crux_service::ai::AllowedQuery>,
+) -> crate::error::ApiResult<axum::Json<crux_service::ai::AllowedView>> {
+    Ok(axum::Json(crux_service::ai::allowed(&s.ctx, &a, q).await?))
+}
+
 #[utoipa::path(get, path = "/me", tag = "me", security(("bearer" = [])),
     responses((status = 200, body = UserView), (status = 401, body = ErrorBody)))]
 pub async fn get_me(State(state): State<AppState>, Auth(actor): Auth) -> ApiResult<Json<UserView>> {

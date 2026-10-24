@@ -3,7 +3,9 @@ name = "crux-ai"
 version = "0.1.0"
 description = "AI settings + consent, keys, tutors, gate, budget, runs, chat, grading, import, generation (backend-spec 7)."
 requires-python = ">=3.12,<3.13"
-dependencies = ["crux-common"]
+# anthropic: the official SDK for the Anthropic adapter; other providers go over httpx.
+# cryptography: envelope encryption of user keys (spec 7.2). boto3: transcripts in the object store.
+dependencies = ["crux-common", "anthropic>=2.3,<3", "cryptography>=43", "boto3>=1.35", "tzdata>=2024.1"]
 
 [tool.uv.sources]
 crux-common = { workspace = true }

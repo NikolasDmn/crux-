@@ -3,6 +3,7 @@
 
 pub mod activity;
 pub mod admin;
+pub mod ai;
 pub mod attempts;
 pub mod auth;
 pub mod bank;

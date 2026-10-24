@@ -1,0 +1,53 @@
+{
+  "$comment": "UserEvent types (backend-spec 5.11). client: accepted by POST /events. server: written by core itself. A breaking payload change adds a new type name (e.g. material.page.v2); payloads stay small (≤ 2 KB).",
+  "version": 1,
+  "types": {
+    "material.open": {
+      "source": "client",
+      "description": "Opened a material (slides, notes, video, link).",
+      "payload": {"type": "object", "properties": {"materialId": {"type": "string", "maxLength": 26}}, "additionalProperties": false}
+    },
+    "material.page": {
+      "source": "client",
+      "description": "Turned to a page of a material.",
+      "payload": {"type": "object", "properties": {"materialId": {"type": "string", "maxLength": 26}, "page": {"type": "integer", "minimum": 1}}, "required": ["page"], "additionalProperties": false}
+    },
+    "material.close": {
+      "source": "client",
+      "description": "Left a material.",
+      "payload": {"type": "object", "properties": {"materialId": {"type": "string", "maxLength": 26}, "seconds": {"type": "integer", "minimum": 0}}, "additionalProperties": false}
+    },
+    "notes.step": {
+      "source": "client",
+      "description": "Moved to a step of a notes walkthrough.",
+      "payload": {"type": "object", "properties": {"materialId": {"type": "string", "maxLength": 26}, "step": {"type": "integer", "minimum": 0}, "of": {"type": "integer", "minimum": 1}}, "required": ["step"], "additionalProperties": false}
+    },
+    "lecture.focus": {
+      "source": "client",
+      "description": "Heartbeat while a lecture page is visible (sent at most once a minute).",
+      "payload": {"type": "object", "properties": {"seconds": {"type": "integer", "minimum": 0, "maximum": 3600}}, "additionalProperties": false}
+    },
+    "flash.view": {
+      "source": "client",
+      "description": "Looked through flashcards without rating them.",
+      "payload": {"type": "object", "properties": {"flashcardId": {"type": "string", "maxLength": 26}}, "additionalProperties": false}
+    },
+    "review.open": {
+      "source": "client",
+      "description": "Opened a graded mock's review.",
+      "payload": {"type": "object", "properties": {"mockId": {"type": "string", "maxLength": 26}}, "additionalProperties": false}
+    },
+    "mock.start": {"source": "server", "description": "Started a mock."},
+    "mock.answer": {"source": "server", "description": "Saved an answer in a mock."},
+    "mock.submit": {"source": "server", "description": "Submitted a mock."},
+    "mock.graded": {"source": "server", "description": "One mock item graded (questionType, outcome, firstTry)."},
+    "mock.reviewed": {"source": "server", "description": "Finished reviewing a mock."},
+    "attempt": {"source": "server", "description": "A practice/notes/warm-up answer (questionType, outcome, firstTry, context)."},
+    "flash.review": {"source": "server", "description": "Rated a flashcard."},
+    "plan.move": {"source": "server", "description": "Moved a plan entry."},
+    "next.step_done": {"source": "server", "description": "Finished a step of Take me there."},
+    "ai.ask": {"source": "server", "description": "Asked the tutor (relayed from the ai service)."},
+    "admin.user_read": {"source": "server", "description": "An admin looked at the account."},
+    "admin.user_update": {"source": "server", "description": "An admin changed the account."}
+  }
+}

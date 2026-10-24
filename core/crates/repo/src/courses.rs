@@ -177,10 +177,30 @@ pub async fn due_for_purge(conn: &mut MySqlConnection, archived_before: DateTime
         .await?)
 }
 
-/// Hard delete of a trashed course. Catalog rows cascade; per-user rows that RESTRICT (milestones
-/// 3+) are removed by the purge job before this call.
+/// Hard delete of a trashed course. Catalog rows cascade; the per-user and bank rows that RESTRICT
+/// (slips, weak spots, plan, sessions, mocks, attempts, cards, questions) go first, in FK order.
 pub async fn hard_delete(conn: &mut MySqlConnection, id: i64) -> RepoResult<()> {
-    sqlx::query("DELETE FROM CourseSubscription WHERE CourseId = ?").bind(id).execute(&mut *conn).await?;
+    let steps = [
+        "DELETE FROM Slip WHERE CourseId = ?",
+        "DELETE FROM WeakSpot WHERE CourseId = ?",
+        "UPDATE StudyPlanEntry SET MovedToId = NULL WHERE CourseId = ?",
+        "DELETE FROM StudyPlanEntry WHERE CourseId = ?",
+        "DELETE FROM StudySession WHERE CourseId = ?",
+        "DELETE FROM MockExam WHERE CourseId = ?",
+        "DELETE a FROM QuestionAttempt a JOIN Question q ON q.Id = a.QuestionId WHERE q.CourseId = ?",
+        "DELETE FROM Flashcard WHERE CourseId = ?",
+        "UPDATE Question SET CurrentVersionId = NULL WHERE CourseId = ?",
+        "DELETE FROM Question WHERE CourseId = ?",
+        "DELETE FROM CourseSubscription WHERE CourseId = ?",
+    ];
+    let live: Option<i64> =
+        sqlx::query_scalar("SELECT Id FROM Course WHERE Id = ? AND ArchivedAt IS NOT NULL").bind(id).fetch_optional(&mut *conn).await?;
+    if live.is_none() {
+        return Ok(());
+    }
+    for sql in steps {
+        sqlx::query(sql).bind(id).execute(&mut *conn).await?;
+    }
     sqlx::query("DELETE FROM Course WHERE Id = ? AND ArchivedAt IS NOT NULL").bind(id).execute(conn).await?;
     Ok(())
 }

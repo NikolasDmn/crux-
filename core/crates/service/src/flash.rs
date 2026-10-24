@@ -518,6 +518,19 @@ pub async fn review(ctx: &Ctx, actor: &Actor, batch: ReviewBatch) -> AppResult<R
             },
         )
         .await?;
+        // Answering a warm-up-flagged card clears its flag (spec 5.9).
+        repo::set_warmup_flag(&mut tx, actor.user_id, card.id, None).await?;
+        crate::activity::server_event(
+            &mut tx,
+            actor.user_id,
+            r.reviewed_at.min(now),
+            "flash.review",
+            Some(card.course_id),
+            Some(card.component_id),
+            Some(("Flashcard", card.id)),
+            serde_json::json!({ "rating": r.rating, "stale": reviewed.stale, "stateBefore": before.state }),
+        )
+        .await?;
         let sure_wrong = r.rating == 1 && r.confidence.as_deref() == Some("Sure");
         if !reviewed.stale && (reviewed.lapsed || sure_wrong) {
             proposals.push(SlipProposal {

@@ -1,6 +1,7 @@
 //! Use cases: one function per action, one transaction per use case, authorization calls inside
 //! (spec 2.1). Returns view types, never repo rows.
 
+pub mod activity;
 pub mod admin;
 pub mod attempts;
 pub mod auth;
@@ -18,10 +19,13 @@ pub mod jwt;
 pub mod me;
 pub mod mistakes;
 pub mod mocks;
+pub mod next;
 pub mod password;
+pub mod plan;
 pub mod practice;
 pub mod ratelimit;
 pub mod sse;
+pub mod stats;
 pub mod time;
 pub mod views;
 

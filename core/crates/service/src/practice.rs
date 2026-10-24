@@ -62,6 +62,33 @@ pub async fn record(conn: &mut MySqlConnection, a: &Answered) -> AppResult<()> {
     let after = before.apply(a.outcome, a.confidence, a.at);
     mocks::upsert_stat(conn, a.user_id, a.question_id, &stat_to_row(&after)).await?;
 
+    // The answer as a user event: sessions, WeekSummary's first-try MC rate (spec 5.11).
+    let qtype = bank::question_by_id(conn, a.question_id).await?.map(|q| q.qtype).unwrap_or_default();
+    let (event_type, extra) = match a.source {
+        Source::Mock { order, .. } => ("mock.graded", serde_json::json!({ "order": order })),
+        Source::Attempt { .. } => ("attempt", serde_json::json!({})),
+    };
+    let mut payload = serde_json::json!({
+        "questionType": qtype,
+        "outcome": a.outcome.as_db(),
+        "firstTry": before.attempts == 0,
+        "confidence": a.confidence.map(|c| c.as_db()),
+    });
+    if let (Some(p), Some(x)) = (payload.as_object_mut(), extra.as_object()) {
+        p.extend(x.clone());
+    }
+    crate::activity::server_event(
+        conn,
+        a.user_id,
+        a.at,
+        event_type,
+        Some(a.course_id),
+        Some(a.component_id),
+        Some(("Question", a.question_id)),
+        payload,
+    )
+    .await?;
+
     // 2. Slips on this question resolve when it's answered right (spec 5.6). A guess isn't proof.
     if a.outcome == Outcome::Right && a.confidence != Some(Confidence::Guess) {
         mistakes::resolve_slips_for_question(conn, a.user_id, a.question_id, a.at).await?;

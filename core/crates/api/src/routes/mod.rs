@@ -3,6 +3,7 @@ pub mod auth;
 pub mod bank;
 pub mod catalog;
 pub mod courses;
+pub mod deadlines;
 pub mod flash;
 pub mod health;
 pub mod internal;
@@ -10,7 +11,9 @@ pub mod invites;
 pub mod me;
 pub mod mistakes;
 pub mod mocks;
+pub mod plan;
 pub mod sse;
+pub mod time;
 
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
@@ -91,6 +94,21 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(flash::custom))
         .routes(routes!(flash::reviews))
         .routes(routes!(flash::by_code))
+        .routes(routes!(time::events))
+        .routes(routes!(time::list_sessions, time::create_session))
+        .routes(routes!(time::progress, time::patch_progress))
+        .routes(routes!(time::week))
+        .routes(routes!(time::summary))
+        .routes(routes!(deadlines::list, deadlines::create))
+        .routes(routes!(deadlines::patch))
+        .routes(routes!(deadlines::layout))
+        .routes(routes!(plan::list))
+        .routes(routes!(plan::rebuild))
+        .routes(routes!(plan::create_entry))
+        .routes(routes!(plan::patch_entry, plan::delete_entry))
+        .routes(routes!(plan::next))
+        .routes(routes!(plan::advance))
+        .routes(routes!(plan::warmup))
 }
 
 /// `?limit=&cursor=` (spec 3.1).

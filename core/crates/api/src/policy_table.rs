@@ -122,6 +122,26 @@ pub const ROUTES: &[(&str, &str, Policy)] = &[
     ("POST", "/flash/custom", Policy::Owns),
     ("POST", "/flash/reviews", Policy::Owns),
     ("GET", "/flash/cards", Policy::Owns),
+    ("POST", "/events", Policy::Owns),
+    ("GET", "/sessions", Policy::Owns),
+    ("POST", "/sessions", Policy::Owns),
+    // Your own progress, on a course you can read.
+    ("GET", "/courses/{id}/progress", Policy::Read),
+    ("PATCH", "/courses/{id}/progress", Policy::Read),
+    ("GET", "/week", Policy::Owns),
+    ("GET", "/courses/{id}/stats/summary", Policy::Read),
+    ("GET", "/courses/{id}/deadlines", Policy::Subscribed),
+    ("POST", "/courses/{id}/deadlines", Policy::Subscribed),
+    ("PATCH", "/deadlines/{id}", Policy::Mine),
+    ("PUT", "/deadlines/{id}/layout", Policy::Mine),
+    ("GET", "/plan", Policy::Owns),
+    ("POST", "/plan/rebuild", Policy::Owns),
+    ("POST", "/plan/entries", Policy::Owns),
+    ("PATCH", "/plan/entries/{id}", Policy::Mine),
+    ("DELETE", "/plan/entries/{id}", Policy::Mine),
+    ("GET", "/next", Policy::Owns),
+    ("POST", "/next/advance", Policy::Owns),
+    ("GET", "/courses/{id}/warmup", Policy::Subscribed),
 ];
 
 pub fn policy_of(method: &str, path: &str) -> Option<Policy> {

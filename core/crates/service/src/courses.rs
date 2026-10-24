@@ -324,6 +324,8 @@ pub async fn subscribe(ctx: &Ctx, actor: &Actor, course_ref: &str, input: Subscr
         courses::set_subscription_status(&mut tx, actor.user_id, c.id, "Archived").await?;
     }
     crate::flash::on_subscription_status(&mut tx, actor.user_id, c.id, status == "Archived").await?;
+    // A course added or archived changes the plan (spec 5.8).
+    crate::plan::rebuild_in(&mut tx, ctx, actor.user_id).await?;
     let fresh = courses::by_internal_id(&mut tx, actor.user_id, c.id).await?.ok_or(AppError::NotFound)?;
     tx.commit().await?;
     Ok(CourseView::from(&fresh))
@@ -333,6 +335,7 @@ pub async fn unsubscribe(ctx: &Ctx, actor: &Actor, course_ref: &str) -> AppResul
     let mut tx = crux_repo::begin(&ctx.pool).await?;
     let c = readable(&mut tx, actor, course_ref).await?;
     courses::unsubscribe(&mut tx, actor.user_id, c.id).await?;
+    crate::plan::rebuild_in(&mut tx, ctx, actor.user_id).await?;
     tx.commit().await?;
     Ok(())
 }

@@ -205,7 +205,22 @@ async fn run_jobs(cli: &Cli, ctx: Ctx, shutdown: tokio::sync::watch::Receiver<bo
         let ctx = purge_ctx.clone();
         async move { crux_service::courses::purge_trashed(&ctx).await }
     }));
-    let _ = tokio::join!(relay, tokens, trash);
+    let derive_ctx = ctx.clone();
+    let derive = tokio::spawn(crux_jobs::daily_at("sessions.derive", 2, shutdown.clone(), move || {
+        let ctx = derive_ctx.clone();
+        async move { crux_service::activity::derive_all(&ctx).await }
+    }));
+    let weeks_ctx = ctx.clone();
+    let weeks = tokio::spawn(crux_jobs::daily_at("readmodels.rebuild", 3, shutdown.clone(), move || {
+        let ctx = weeks_ctx.clone();
+        async move { crux_service::stats::rebuild_all(&ctx).await }
+    }));
+    let tick_ctx = ctx.clone();
+    let tick = tokio::spawn(crux_jobs::every("deadlines.tick", Duration::from_secs(15 * 60), shutdown.clone(), move || {
+        let ctx = tick_ctx.clone();
+        async move { crux_service::deadlines::tick(&ctx).await }
+    }));
+    let _ = tokio::join!(relay, tokens, trash, derive, weeks, tick);
     Ok(())
 }
 

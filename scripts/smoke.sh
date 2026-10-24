@@ -2,7 +2,7 @@
 # Smoke test against a running stack: health of every service through the gateway, signup with an
 # invite, /me, user.created reaching files and notify (M1); then a course with a lecture, a PDF
 # uploaded to its pre-signed URL through the gateway, scanned, extracted, attached as a material,
-# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4).
+# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5).
 # Usage: scripts/smoke.sh [base-url]   (default http://localhost:8000)
 set -euo pipefail
 
@@ -99,3 +99,16 @@ rid=$(python3 -c "import random,string; print('01'+''.join(random.choice('012345
 st=$(api POST /flash/reviews "{\"reviews\":[{\"clientId\":\"$rid\",\"flashcardId\":\"$cardid\",\"rating\":3,\"reviewedAt\":\"$now\"}]}" | j '["results"][0]["status"] + "/" + d["results"][0]["card"]["progress"]["state"]')
 [ "$st" = "applied/Review" ] || fail "flash review: $st"
 echo "ok   flashcard $code reviewed ($st)"
+
+# ---------- milestone 5 ----------
+exam_at=$(date -u -d '+10 days' +%Y-%m-%dT08:00:00.000Z)
+api POST "/courses/$course/deadlines" "{\"type\":\"Exam\",\"startsAt\":\"$exam_at\",\"durationMin\":90}" >/dev/null || fail "create exam"
+planned=$(api GET "/plan?to=$exam_at" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))")
+[ "$planned" -gt 0 ] || fail "no plan entries after adding an exam"
+eid=$(python3 -c "import random; print('01'+''.join(random.choice('0123456789ABCDEFGHJKMNPQRSTVWXYZ') for _ in range(24)))")
+acc=$(api POST /events "{\"events\":[{\"clientId\":\"$eid\",\"type\":\"material.page\",\"occurredAt\":\"$now\",\"componentId\":\"$lecture\",\"payload\":{\"page\":1}}]}" | j '["accepted"]')
+[ "$acc" = 1 ] || fail "event not accepted"
+reason=$(api GET /next | j '["reason"]')
+case "$reason" in SMK*) ;; *) fail "/next reason: $reason" ;; esac
+api GET /week | grep -q '"isoWeek"' || fail "/week"
+echo "ok   exam planned ($planned entries), event accepted, /next: $reason"

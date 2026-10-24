@@ -26,6 +26,8 @@ struct Fixture {
     weak_spot: String,
     trap: String,
     card: String,
+    deadline: String,
+    entry: String,
 }
 
 async fn fixture(h: &common::Harness, alice: &str, n: usize) -> Fixture {
@@ -78,7 +80,29 @@ async fn fixture(h: &common::Harness, alice: &str, n: usize) -> Fixture {
     )
     .await
     .json;
+    let deadline = call(
+        &h.app,
+        "POST",
+        &format!("/courses/{course}/deadlines"),
+        Some(alice),
+        Some(json!({"type": "Exam", "startsAt": "2026-12-01T09:00:00Z"})),
+        &[],
+    )
+    .await
+    .json;
+    let entry = call(
+        &h.app,
+        "POST",
+        "/plan/entries",
+        Some(alice),
+        Some(json!({"courseId": course, "description": "Read L1", "startAt": "2026-11-02T09:00:00Z", "endAt": "2026-11-02T10:00:00Z"})),
+        &[],
+    )
+    .await
+    .json;
     Fixture {
+        deadline: deadline["id"].as_str().expect("deadline fixture").to_string(),
+        entry: entry["id"].as_str().expect("plan entry fixture").to_string(),
         question: q["id"].as_str().expect("question fixture").to_string(),
         mock: mock["id"].as_str().expect("mock fixture").to_string(),
         slip: slip["id"].as_str().expect("slip fixture").to_string(),
@@ -104,6 +128,8 @@ fn fixture_path(path: &str, f: &Fixture, member_id: &str) -> Option<String> {
         p if p.starts_with("/slips/{id}") => p.replace("{id}", &f.slip),
         p if p.starts_with("/weak-spots/{id}") => p.replace("{id}", &f.weak_spot),
         p if p.starts_with("/flashcards/{id}") => p.replace("{id}", &f.card),
+        p if p.starts_with("/deadlines/{id}") => p.replace("{id}", &f.deadline),
+        p if p.starts_with("/plan/entries/{id}") => p.replace("{id}", &f.entry),
         p if p.starts_with("/courses/{id}") => p.replace("{id}", &f.course),
         p if p.starts_with("/course-invitations/{courseId}") => p.replace("{courseId}", &f.course),
         p if p.starts_with("/components/{id}") => p.replace("{id}", &f.component),
@@ -132,6 +158,9 @@ fn body_for_path(method: &str, path: &str) -> Option<Value> {
         ("POST", "/courses/{id}/flashcards") => Some(json!({"componentId": "01AAAAAAAAAAAAAAAAAAAAAAAA", "front": "x", "back": "y"})),
         ("POST", "/flashcards/{id}/warmup-flag") => Some(json!({"flagged": true})),
         ("POST", "/flashcards/{id}/suspend") => Some(json!({"suspended": true})),
+        ("POST", "/courses/{id}/deadlines") => Some(json!({"startsAt": "2026-12-01T09:00:00Z"})),
+        ("PUT", "/deadlines/{id}/layout") => Some(json!({"components": []})),
+        ("PATCH", "/courses/{id}/progress") => Some(json!({"componentId": "01AAAAAAAAAAAAAAAAAAAAAAAA"})),
         ("POST", "/mocks/{id}/questions/{order}/grade") => Some(json!({"outcome": "Right"})),
         ("POST", "/questions/{id}/image-crop") => {
             Some(json!({"fileId": "01AAAAAAAAAAAAAAAAAAAAAAAA", "page": 1, "box": {"x": 0, "y": 0, "w": 1, "h": 1}}))

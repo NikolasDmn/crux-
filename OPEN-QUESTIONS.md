@@ -95,6 +95,32 @@ files waits for the object store, and every compose service has `restart: unless
 | B4-11 | Reviews don't add weak-spot checks yet (cards aren't linked to concepts) | Revisit if cards get concepts |
 | B4-12 | New routes: `PATCH /flashcards/{id}`, `POST /flashcards/{id}/suspend`, `GET /flash/cards?code=` | Spec 15 lists warmup-flag only; editing and suspending were described in 5.5 without routes |
 
+## Milestone 5 build choices (time, plan, next)
+
+| # | Choice | Why / where |
+|---|---|---|
+| B5-1 | Core migration 0006: `StudySession.PublicId`; `StudyPlanEntry.Kind` (Lecture/Revision/Mock/Other) + `PinnedAt`; `Deadline.EveRequestedAt` / `CheckInRequestedAt`; new `WeekSummary(UserId, IsoWeek, Data JSON, RebuiltAt)` | /next needs an entry's kind; pins need a flag; the 15-min tick must not re-request reminders |
+| B5-2 | The user-event registry is **one file**, `contracts/user-events/registry.json`: each type is `client` or `server`, client types carry a payload JSON Schema. `POST /events` accepts client types only and rejects per item (`unknown_type`, `server_only`, `bad_payload`, `unknown_course`, `unknown_component`) instead of failing the batch | Offline batches must drain; server types can't be faked |
+| B5-3 | Client `entityId`s are PublicIds, so they ride in `payload.entity`; `UserEvent.EntityId` holds internal ids for server events | The column is BIGINT |
+| B5-4 | A lecture without an estimate is planned as **1.5 h**; a lecture's remaining time = estimate − hours already studied on it (at least 30 min while not Done) | Spec only sums estimates |
+| B5-5 | Plan layout: study window **09:00–22:00 local**, blocks from 09:00 (or now, rounded up to 15 min), 30-min minimum block; horizon = the last exam (14 days with no exam, 120 max). The **timed mock is on the 2nd day before** the exam, revision the day before; spare final-week time goes to revision; a contested revision day goes to the earlier exam; lecture hours that land in the final week (or don't fit) are reported as "X h short" in `changeSummary` | Spec gives the rules, not the times |
+| B5-6 | Pins: any edit sets `PinnedAt`. **Moving** = the old entry becomes `Moved` with `MovedToId` → a new pinned entry (returned). DELETE removes your own entries; on a planner entry it **skips and pins** it so a rebuild doesn't bring it back. A rebuild **keeps identical entries** (same ids) and replaces only what changed | Stable ids for the calendar UI |
+| B5-7 | Rebuilds run synchronously in the same transaction on: deadline create/edit, subscribe/archive/unsubscribe, a lecture marked Done (or un-Done) | Spec lists the triggers |
+| B5-8 | "Fell a day behind" = entries still Planned that ended before the user's local midnight → `Skipped`, then a rebuild. Checked inside `deadlines.tick` (every 15 min) rather than once a night | Fires once per day per user wherever their midnight is |
+| B5-9 | Remaining hours: ±25% until 3 lectures are done; then estimate × actual/estimate ratio (clamped 0.25–4) **±10%** | Spec says "scaled" without a range |
+| B5-10 | On track (WeekSummary, per course with an upcoming exam) = studied ≥ **80%** of the hours planned so far this week | Spec doesn't define it |
+| B5-11 | `/next` target course: today's first Planned entry → else the nearest-exam course with an unfinished lecture (InProgress first) → else a course with due cards → else the first active course. Steps also carry `planEntryId` and `componentId`; exams awaiting a result come in a separate `checkIns` list | Spec's step list has no "check-in" kind |
+| B5-12 | `POST /next/advance` is stateless: the client sends the step's `kind`, target and `planEntryId` (+ `skipped`). A done plan step marks its entry Done | No server-side step state |
+| B5-13 | Warm-up: max 3 items; flagged cards first (not suspended); then one **approved** question per open weak spot **that has a concept** (topic-only spots have nothing to ask). The card's mini-lesson text is empty until the AI tutor (M8). Any flashcard review clears the flag | Spec 5.9 |
+| B5-14 | Derived sessions are also rebuilt **on read** (`/sessions`, recent `/week`, course summary) for the last 2 days. Kind = majority event family (material/notes/lecture → Lecture, attempt → Practice, mock → Mock, flash → Flashcards, review → Review, ai → AiChat); ties → the first kind; sessions cap at 23 h | Spec: nightly + on demand |
+| B5-15 | `WeekSummary` is rebuilt on read for the current and previous week (and any week not stored yet); older weeks come from the nightly build. First-try MC = the user's first ever answer to an MC question (a guessed Right isn't a right) | Spec 5.11 |
+| B5-16 | Pass rule: the deadline's PassMark, else the scale's PassValue; Letter scales use the label's `pass` flag; Pass/Fail uses the text. A **pass** → subscription Passed + final grade + cards suspended (`CourseArchived`), out of plan, /next and warm-ups. A **fail** records the final grade with Passed = false and keeps the subscription Active; `offerResit` while no resit points at the exam. A grade needs status Done; leaving Done drops the grade | Spec 5.10 |
+| B5-17 | Reminders: moving an exam resets its reminder flags; the eve reminder goes only before the exam starts; the check-in up to 24 h after 17:00 local | Spec 5.10 |
+| B5-18 | `/courses/{id}/progress` uses policy Read (your own progress on a course you can read); deadlines need a subscription; warm-up needs an **Active** one | Spec says "owns" / "subscription" |
+| B5-19 | Nightly jobs at fixed UTC hours: `sessions.derive` 02:00, `readmodels.rebuild` 03:00. The `UserQuestionStat` drift check is **not built yet** (planned for M9) | |
+| B5-20 | New route: `POST /plan/entries` (spec 15 lists only `/plan/entries/{id}`) | Users add their own entries |
+| B5-21 | Fix found while testing: purging a trashed course now deletes its slips, weak spots, plan, sessions, mocks, attempts, cards and questions first (they RESTRICT) | Purge would have failed for any course used since M3 |
+
 ## Product / behaviour
 
 | # | Question | Built meanwhile |

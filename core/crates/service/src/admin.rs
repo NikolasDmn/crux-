@@ -39,6 +39,8 @@ async fn audit(
             client_id: None,
             occurred_at: ctx.clock.now(),
             event_type: kind,
+            course_id: None,
+            component_id: None,
             entity_type: Some("User"),
             entity_id: Some(subject_user_id),
             payload: Some(payload),

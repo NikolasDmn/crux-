@@ -1,6 +1,6 @@
 # Crux: frontend spec
 
-> Version 1.1, 2026-10-24. Audience: an engineering agent that builds the web app from this document plus `backend-spec.md` (the API it calls) and `OPEN-QUESTIONS.md` (the backend as built: where it differs from `backend-spec.md`, that file wins). 1.1 follows the finished backend (M1–M9) and the decisions of 2026-10-23/24; changed rows say so. **Section 3 (Design) is intentionally empty**: Nick fills it in a separate frontend design thread. Until then, build with unstyled shadcn/ui defaults and the token names in 3.1, so restyling later changes only tokens and component skins, never screen code.
+> Version 1.1, 2026-10-24. Audience: an engineering agent that builds the web app from this document plus `backend-spec.md` (the API it calls) and `OPEN-QUESTIONS.md` (the backend as built: where it differs from `backend-spec.md`, that file wins). 1.1 follows the finished backend (M1–M9) and the decisions of 2026-10-23/24; changed rows say so. Section 3 (Design) was filled on 2026-10-24 from the design proposal and the widget picks.
 
 ## 0. Decisions (Nick, 2026-10-23)
 
@@ -15,7 +15,7 @@
 | PDF | pdf.js (`pdfjs-dist`) viewer with text selection → "Ask AI about this" |
 | Theme | Light and dark with a toggle (system / light / dark) |
 | Layout | Desktop-first with a left sidebar. More than usable on a phone: mocks, flashcards and "Take me there" are fully usable at 360 px wide |
-| Feel | Calm and minimal, like Notion or Linear (details in section 3, empty for now) |
+| Feel | Calm and minimal, like Notion or Linear (section 3) |
 | Language | English only. All strings go through one `t()` helper with English keys, so translation can be added later without touching components |
 | Accessibility | WCAG 2.2 AA |
 | Browsers | Latest 2 versions of Chrome, Firefox, Safari and Edge; iOS Safari and Android Chrome |
@@ -132,32 +132,93 @@ Two mechanisms (changed in 1.1):
 - Touch targets are at least 24×24 px (44 px on the mobile mock and flashcard screens).
 - Respect `prefers-reduced-motion`.
 
-## 3. Design (EMPTY: to be filled in the frontend design thread)
+## 3. Design (Nick, 2026-10-24)
 
-> Nick, 2026-10-23: "for the design, leave that for now empty, I will create a new thread with the front end step to populate it."
+**Ink on warm paper.** The grounds come from the mark (`#fafaf9` / `#161618`), text and primary controls are ink, and colour appears only as a thin accent per course. Calm and dense like Linear: 14 px body, 1 px borders, no shadows on resting surfaces. Reference artboards: the [design canvas](https://claude.ai/artifact/X8pYXTTwxkHCjjNkFgoP79) (foundations, components, Home, mock and flashcards on a phone); the widget choices below were picked in the [widget playground](https://claude.ai/artifact/WciAeo2MAQbsTFUGtL9CNU).
 
-### 3.1 Token names (fixed now, values later)
+### 3.1 Tokens
 
-Build every component with these CSS variables only, so the design thread can set the values without touching code:
+Build every component with these CSS variables only. Light values on `:root`, dark on `[data-theme="dark"]` (the toggle sets `data-theme` on `<html>`; "system" follows `prefers-color-scheme`, so the dark values are also applied under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }`).
+
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `--bg` | `#fafaf9` | `#161618` | page ground |
+| `--surface` | `#ffffff` | `#1c1c1f` | cards, inputs, panels |
+| `--surface-sunken` | `#efeeea` | `#232327` | selected nav row, tracks, chips |
+| `--surface-raised` | `#ffffff` | `#232327` | popovers, dialogs, toasts (with `--shadow`) |
+| `--border` | `#e6e5e1` | `#2e2e33` | every 1 px border and divider |
+| `--text` | `#1c1c1a` | `#f2f2ef` | body text |
+| `--text-muted` | `#6b6a65` | `#a3a29d` | secondary text (≥ 4.5:1 on `--bg` and `--surface`) |
+| `--primary` | `#1c1c1a` | `#f2f2ef` | primary buttons, selected states (ink) |
+| `--primary-text` | `#fafaf9` | `#161618` | text on `--primary` |
+| `--danger`, `--danger-bg`, `--danger-text` | `#c4321f`, `#fdecea`, `#a8281a` | `#ff6b5b`, `#3a1b17`, `#ff8a7d` | wrong, destructive, errors |
+| `--warning`, `--warning-bg`, `--warning-text` | `#a15c00`, `#fdf3e3`, `#8a4b00` | `#f0b45a`, `#3a2a12`, `#f0b45a` | short, breached, pending |
+| `--success`, `--success-bg`, `--success-text` | `#1f7a4d`, `#e7f4ec`, `#17603c` | `#4cc38a`, `#13301f`, `#6fd6a3` | right, done |
+| `--info-bg`, `--info-text` | `#e9edfb`, `#2a47b8` | `#1b2240`, `#9db1ff` | duplicates, neutral notices |
+| `--focus-ring` | `#c4520a` | `#ff8a3d` | 2 px outline, 2 px offset, on `:focus-visible` |
+| `--course`, `--course-soft` | per course (below) | per course | the course accent and its tint |
+| `--shadow` | `0 8px 24px rgb(28 28 26 / .10)` | `0 8px 24px rgb(0 0 0 / .45)` | raised layers only |
+
+**Course colours** (`Course.Color`; the picker offers these eight, default Orange):
+
+| Name | `--course` | `--course-soft` light / dark |
+|---|---|---|
+| Orange | `#f76b15` | `#fde7d9` / `#3a2416` |
+| Blue | `#3e63dd` | `#e1e7fb` / `#1b2240` |
+| Teal | `#12a594` | `#d9f2ee` / `#10302c` |
+| Purple | `#8e4ec6` | `#ede1f7` / `#2a1d38` |
+| Pink | `#d6409f` | `#fae0ef` / `#3a1a2e` |
+| Green | `#30a46c` | `#dcf2e5` / `#13301f` |
+| Amber | `#e2a336` | `#fbefd6` / `#36290f` |
+| Slate | `#8b8d98` | `#ececee` / `#26272b` |
+
+`--course` is set on the course layout root (5.2). It is used only for the sidebar dot, the tab underline, progress fills, plan block edges, chart series and the dot in the mark; text never uses it (`lib/color.ts` picks `#1c1c1a` or `#ffffff` for anything drawn on it, by contrast).
 
 ```css
-/* colour */      --bg, --surface, --surface-raised, --border, --text, --text-muted,
-                  --primary, --primary-text, --danger, --warning, --success, --focus-ring,
-                  --course (set per course at runtime, see 5.2)
-/* type */        --font-sans, --font-mono, --text-xs .. --text-2xl
-/* space/shape */ --space-1 .. --space-8, --radius-sm, --radius-md, --radius-lg
-/* motion */      --duration-fast, --duration-base, --ease-standard
+/* type */        --font-sans: Geist, ui-sans-serif, system-ui, sans-serif;
+                  --font-mono: "Geist Mono", ui-monospace, monospace;
+                  --text-xs 12px · --text-sm 13px · --text-base 14px · --text-md 16px · --text-lg 20px · --text-xl 24px · --text-2xl 32px
+/* space */       --space-1 4px · --space-2 8px · --space-3 12px · --space-4 16px · --space-5 20px · --space-6 24px · --space-7 32px · --space-8 48px
+/* shape */       --radius-sm 4px · --radius-md 8px · --radius-lg 12px (cards); pills 999px
+/* motion */      --duration-fast 120ms · --duration-base 200ms · --ease-standard cubic-bezier(0.2, 0, 0, 1)
 ```
-
-Light values go on `:root` and dark values on `[data-theme="dark"]`. The theme toggle sets `data-theme` on `<html>`; "system" follows `prefers-color-scheme`.
 
 ### 3.2 Visual language
 
-*To be written: palette, type scale, spacing, component skins, iconography, motion, empty states, illustration.*
+- **Type:** Geist 400/500/600 (bundled from `@fontsource-variable/geist` and `@fontsource-variable/geist-mono`; no font CDN, so the CSP stays `self`), Geist Mono for card codes, times, hours, scores and countdowns (`font-variant-numeric: tabular-nums`). Body 14 px / 1.5; headings 600 with −0.01 to −0.02 em tracking and `text-wrap: balance`; section labels 12 px 500 uppercase, +0.06 em, muted. On phone screens (mocks, flashcards) question and card text is 16–22 px.
+- **Surfaces:** cards are `--surface` with a 1 px `--border` and `--radius-lg` (picked: *Border*). Only popovers, dialogs, the command palette and toasts are raised (`--surface-raised` + `--shadow`). Nothing else gets a shadow, gradient or coloured side rail.
+- **Icons:** Lucide (`lucide-react`), 16 px, stroke 1.75, `currentColor`. No emoji anywhere.
+- **Density:** controls 36 px high (32 px in toolbars and tables), touch targets 44 px on the phone screens; sidebar 248 px; content max width 1200 px with 40 px side padding (16 px on a phone).
+- **Motion:** state changes fade or slide over `--duration-fast`; panels and dialogs over `--duration-base`; nothing animates on page load; everything respects `prefers-reduced-motion`.
+- **Copy:** plain, short, the user's words ("Free up space", "Take me there"); numbers with units ("6 h short", "exam in 10 d").
 
-### 3.3 Screen layouts
+### 3.3 Component skins (picked 2026-10-24)
 
-*To be written: wireframes or mockups for each screen in section 4.*
+| Widget | Skin |
+|---|---|
+| Primary button | **Ink:** `--primary` fill, `--primary-text`, 36 px, `--radius-md`. Secondary: `--surface` with `--border`. Ghost: transparent. Destructive: `--danger` fill, white text, only for the final confirm |
+| Card | **Border:** `--surface`, 1 px `--border`, `--radius-lg`, 20 px padding |
+| Sidebar course item | **Dot + countdown:** 8 px `--course` dot, course code, mono countdown to the next exam right-aligned and muted; the current course row on `--surface-sunken` |
+| Progress | **Thin bar:** 6 px track on `--surface-sunken`, `--course` fill, a label row above (count left, mono hours right) |
+| Multiple-choice option | **Row with key:** full-width row, 1 px `--border`, a 22–26 px key square showing the shortcut digit; selected = 2 px `--text` border and an ink key |
+| Confidence | **Segmented control:** one bordered group of Sure / Unsure / Guess, the selected segment on `--surface-sunken` (ink on the phone mock screen for contrast) |
+| Flashcard rating | **Four with intervals**, each with its own icon and a soft semantic tint so the feeling reads at a glance (Nick's note): Again `rotate-ccw` on `--danger-bg`/`--danger-text`, Hard `trending-down` on `--warning-bg`/`--warning-text`, Good `check` on `--success-bg`/`--success-text`, Easy `zap` on `--info-bg`/`--info-text`; the next interval in mono under the label; keys 1–4. Same shape and weight for all four |
+| Badges | **Square tags:** `--radius-sm`, 22 px, 11–12 px 500; status words uppercase with +0.04 em (`DRAFT`, `DUPLICATE`, `GENERATED`), codes in mono (`BSA017`); tints from the semantic tokens (`--info-*` for duplicates, `--warning-*` for disputed, `--surface-sunken` otherwise) |
+| Undo toast | **Ink toast:** bottom-centre (bottom-left on desktop), `--primary` ground, `--primary-text`, an outlined Undo button in the same colour, `--shadow`; 6 s, paused on hover and focus |
+| Empty states | Three patterns, each for its own place (Nick: "I could say yes to all of these"): **text + action** for empty lists (one line on what goes there, one button); **dashed drop box** wherever files can be added (materials, imports, papers); **first-run checklist** on Home for a new user (create the course, add the exam date, upload the slides; each step links to the screen that does it and ticks itself when done) |
+| Plan block | **Colour edge:** `--surface` block with a 3 px `--course` left edge and 1 px `--border` on the other sides; mono time range above the title; pinned entries show a pin icon |
+| Weak-spot severity | **Bar + word:** the word (Low / Medium / High) right-aligned, a 4 px bar under the topic, `--danger` for High, `--warning` for Medium, `--text-muted` for Low |
+| Banners | full-width row on `--surface` with a 1 px border and a status dot (verify email), or on `--danger-bg` / `--warning-bg` with the matching text token (pending deletion, "X h short") |
+| Inputs | 36 px, `--surface`, 1 px `--border`, `--radius-md`; error = `--danger` border + message below in `--danger-text`; the breached-password warning uses the warning tokens and an inline "Use it anyway" link |
+| Tabs | text tabs with a 2 px `--course` underline on the active one (outside a course: `--text`) |
+
+### 3.4 Screen layouts
+
+- **Shell:** the 248 px sidebar (mark, Take me there as an ink button, Home, This week, pending invitations as small cards with Accept / Decline, the course list, "+ New course", a muted Trash link, then Flashcards with the due count, Inbox with an ink unread count, Settings at the bottom); the top bar holds breadcrumbs, search (opens the palette, shows `⌘K`), the theme toggle and the avatar menu.
+- **Home:** greeting + date; a two-column-wide ink **Take me there** card (next steps in one sentence, Start); the check-in card beside it; banners ("X h short"); Today and Exams side by side; course cards in an auto-fit grid (min 280 px); the recurring-mistakes row. A new user sees the first-run checklist instead.
+- **Mock (phone):** header with close, course and "Question n of N", a mono countdown pill; a 3 px `--course` progress line; question text 17 px; option rows with keys; the confidence control; a footer with Flag, All questions and an ink Next.
+- **Flashcards (phone):** header with the remaining count; a segmented progress line (`--course` for done, ink for current); the card fills the screen (front, then the answer under a divider); Show answer as one ink button, then the four rating buttons; "Include in my next warm-up" below.
+- Other screens follow the same parts: section headers + bordered cards, data tables with 32 px rows and sticky headers, side panels (Ask AI) at 420 px.
 
 ## 4. Screens and routes
 

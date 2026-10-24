@@ -139,3 +139,30 @@ async def internal_file(file_id: str, request: Request) -> dict[str, object]:
         "uploadedByRef": row.UploadedByUserRef,
         "courseRef": row.CourseRef,
     }
+
+
+@internal.get("/chunks/search")
+async def internal_search(request: Request, files: str, q: str, k: int = 8) -> list[dict[str, object]]:
+    """For ai (spec 7.4): the top-k chunks of these files for a query (FULLTEXT). Service token."""
+    from crux_common.auth import service_caller
+
+    await service_caller(request)
+    refs = [f for f in files.split(",") if f][:200]
+    async with deps(request).sessions() as s:
+        rows = await repo.search_chunks(s, refs, q, max(1, min(k, 50)))
+    return [{"fileRef": r.FileRef, "chunkNo": r.ChunkNo, "pageNo": r.PageNo, "text": r.Text} for r in rows]
+
+
+@internal.get("/files/{file_id}/chunks")
+async def internal_chunks(file_id: str, request: Request, pages: str = "") -> list[dict[str, object]]:
+    """For ai: a file's chunks (all, or some pages). Service token."""
+    from crux_common.auth import service_caller
+
+    await service_caller(request)
+    wanted = [int(p) for p in pages.split(",") if p.isdigit()] or None
+    async with deps(request).sessions() as s:
+        row = await repo.by_public_id(s, file_id)
+        if row is None:
+            raise NotFound()
+        rows = await repo.chunks_of(s, row.Id, wanted)
+    return [{"fileRef": file_id, "chunkNo": r.ChunkNo, "pageNo": r.PageNo, "text": r.Text} for r in rows]

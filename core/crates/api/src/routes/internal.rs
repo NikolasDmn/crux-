@@ -19,6 +19,7 @@ pub fn router() -> Router<AppState> {
         .route("/internal/v1/access", get(access))
         .route("/internal/v1/access/file-ref", get(file_ref_access))
         .route("/internal/v1/ai/materials", get(ai_materials))
+        .route("/internal/v1/context/user", post(ai_context))
 }
 
 #[derive(Deserialize)]
@@ -67,6 +68,15 @@ async fn ai_materials(
 ) -> ApiResult<Json<Vec<crux_service::ai::AiMaterial>>> {
     let refs: Vec<String> = q.refs.split(',').filter(|r| !r.is_empty()).map(String::from).collect();
     Ok(Json(crux_service::ai::materials(&state.ctx, &q.user, &refs).await?))
+}
+
+/// Spec 7.4 block 6: what the AI context builder may put in a prompt for this user and course.
+async fn ai_context(
+    State(state): State<AppState>,
+    _svc: Service,
+    JsonBody(req): JsonBody<crux_service::ai::ContextRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
+    Ok(Json(crux_service::ai::context(&state.ctx, req).await?))
 }
 
 /// Public keys for verifying access and service tokens. Public data; cache for a few minutes.

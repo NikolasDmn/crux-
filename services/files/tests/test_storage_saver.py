@@ -107,3 +107,18 @@ async def test_auto_purge_and_thumbnails() -> None:
             active = (await s.execute(select(stored_file).where(stored_file.c.Status == "Active"))).all()
         assert active == []
         assert (await svc.storage_view(deps, OWNER)).used_bytes == 0
+
+
+async def test_chunk_search_for_ai() -> None:
+    async with env() as (deps, store, _):
+        a = await upload(
+            deps, store, OWNER, make_pdf(["Regression fits a line to data.", "Residuals measure the error of the fit."])
+        )
+        b = await upload(deps, store, OWNER, make_pdf(["Probability of independent events multiplies."]), name="b.pdf")
+        await drain(deps)
+        async with deps.sessions() as s:
+            hits = await repo.search_chunks(s, [a.id, b.id], "residuals error", 5)
+            assert [(h.FileRef, h.PageNo) for h in hits][:1] == [(a.id, 2)]
+            assert await repo.search_chunks(s, [b.id], "residuals", 5) == []
+            row = await repo.by_public_id(s, a.id)
+            assert [c.PageNo for c in await repo.chunks_of(s, row.Id, [1])] == [1]

@@ -1,8 +1,9 @@
 """Public routes under /api/v1/ai (spec 15), and the internal gate."""
 
 from fastapi import APIRouter, Request, Response
+from fastapi.responses import StreamingResponse
 
-from app.service import account, runtime, tutors
+from app.service import account, chat, runtime, tutors
 from app.service.deps import Deps
 from crux_common.auth import Caller, User
 
@@ -90,6 +91,47 @@ async def put_course_settings(
     course_id: str, body: account.CourseSettingsInput, user: User, request: Request
 ) -> account.CourseSettingsView:
     return await account.put_course_settings(deps(request), user, course_id, body)
+
+
+# ---------- chat ----------
+
+
+@router.get("/conversations", response_model=list[chat.ConversationView], response_model_by_alias=True)
+async def list_conversations(
+    user: User,
+    request: Request,
+    courseId: str | None = None,
+    scope: str | None = None,
+    materialId: str | None = None,
+) -> list[chat.ConversationView]:
+    return await chat.list_conversations(deps(request), user, courseId, scope, materialId)
+
+
+@router.post("/conversations", response_model=chat.ConversationView, response_model_by_alias=True, status_code=201)
+async def create_conversation(body: chat.ConversationInput, user: User, request: Request) -> chat.ConversationView:
+    return await chat.create_conversation(deps(request), user, body)
+
+
+@router.get("/conversations/{conversation_id}", response_model=chat.ConversationView, response_model_by_alias=True)
+async def get_conversation(conversation_id: str, user: User, request: Request) -> chat.ConversationView:
+    return await chat.get_conversation(deps(request), user, conversation_id)
+
+
+@router.post("/conversations/{conversation_id}/messages")
+async def send_message(conversation_id: str, body: chat.SendInput, user: User, request: Request) -> StreamingResponse:
+    """SSE: `delta` {text}, `citation` {fileId, page, chunkNo, quote}, then `done` {messageId} or
+    `error`. Gate, budget and access errors are plain HTTP errors before the stream starts."""
+    d = deps(request)
+    prep = await chat.prepare(d, user, conversation_id, body)
+    return StreamingResponse(
+        chat.stream_reply(d, user, body, prep), media_type="text/event-stream", headers={"cache-control": "no-cache"}
+    )
+
+
+@router.post("/messages/{message_id}/feedback", status_code=204)
+async def message_feedback(message_id: int, body: chat.FeedbackInput, user: User, request: Request) -> Response:
+    await chat.feedback(deps(request), user, message_id, body)
+    return Response(status_code=204)
 
 
 # ---------- internal ----------

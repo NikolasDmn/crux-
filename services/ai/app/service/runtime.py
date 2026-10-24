@@ -1,6 +1,7 @@
 """The gate before every model call (spec 7.1), and runs with reserve-then-settle budgeting (7.2)."""
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any, cast
 
 from sqlalchemy import select, update
@@ -161,7 +162,13 @@ async def start_run(
 
 
 async def finish_run(
-    deps: Deps, run_id: int, used: Usage | None, *, error: str | None = None, transcript_ref: str | None = None
+    deps: Deps,
+    run_id: int,
+    used: Usage | None,
+    *,
+    error: str | None = None,
+    transcript_ref: str | None = None,
+    retain_days: int = 90,
 ) -> int:
     """Settles: the reservation goes, the actual cost is spent. Returns the cost."""
     now = utcnow()
@@ -181,7 +188,7 @@ async def finish_run(
                 Error=error,
                 FinishedAt=now,
                 TranscriptRef=transcript_ref,
-                RetainUntil=None,
+                RetainUntil=now + timedelta(days=retain_days) if transcript_ref else None,
             )
         )
         await s.execute(

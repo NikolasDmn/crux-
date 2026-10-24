@@ -23,6 +23,7 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.dialects.mysql import insert
+from sqlalchemy.dialects.mysql import match as mysql_match
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -344,3 +345,34 @@ async def purgeable_by_course(session: AsyncSession, owner_ref: str) -> dict[str
         .group_by(stored_file.c.CourseRef)
     )
     return {r.CourseRef: (int(r.Purgeable), int(r.Pending)) for r in await session.execute(stmt)}
+
+
+# ---------- chunks for ai (internal) ----------
+
+
+async def search_chunks(session: AsyncSession, file_refs: list[str], query: str, k: int) -> list[Any]:
+    """Spec 7.4 retrieval without embeddings: MySQL FULLTEXT over the given files' chunks."""
+    if not file_refs or not query.strip():
+        return []
+    score = mysql_match(file_chunk.c.Heading, file_chunk.c.Text, against=query[:500]).in_natural_language_mode()
+    stmt = (
+        select(
+            stored_file.c.PublicId.label("FileRef"),
+            file_chunk.c.ChunkNo,
+            file_chunk.c.PageNo,
+            file_chunk.c.Text,
+            score.label("Score"),
+        )
+        .select_from(file_chunk.join(stored_file, stored_file.c.Id == file_chunk.c.FileId))
+        .where(stored_file.c.PublicId.in_(file_refs), score > 0)
+        .order_by(score.desc())
+        .limit(k)
+    )
+    return list((await session.execute(stmt)).all())
+
+
+async def chunks_of(session: AsyncSession, file_id: int, pages: list[int] | None) -> list[Any]:
+    stmt = select(file_chunk.c.ChunkNo, file_chunk.c.PageNo, file_chunk.c.Text).where(file_chunk.c.FileId == file_id)
+    if pages:
+        stmt = stmt.where(file_chunk.c.PageNo.in_(pages))
+    return list((await session.execute(stmt.order_by(file_chunk.c.ChunkNo).limit(200))).all())

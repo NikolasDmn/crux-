@@ -108,6 +108,13 @@ async fn cards_reviews_queue_and_archive() {
     // Queue: two new cards.
     let q = call(&h.app, "GET", "/flash/queue", Some(&vera), None, &[]).await.json;
     assert_eq!((q["dueCount"].as_i64(), q["newCount"].as_i64()), (Some(0), Some(2)), "{q}");
+    // Each card carries the intervals its rating buttons show: Again soonest, Easy latest.
+    let next = q["nextDue"].as_array().unwrap();
+    assert_eq!(next.len(), 2, "{q}");
+    let n = &next[0];
+    let secs = |k: &str| n[k].as_i64().unwrap();
+    assert!(secs("again") < secs("good") && secs("good") <= secs("easy") && secs("hard") <= secs("good"), "{n}");
+    assert!(secs("again") > 0 && secs("again") < 3600, "a new card's Again comes back within the hour: {n}");
 
     // Offline batch, sent out of order: Good 10 days ago, then Again (Sure) yesterday = a lapse.
     let b = review(

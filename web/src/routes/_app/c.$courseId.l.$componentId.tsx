@@ -7,14 +7,11 @@ import { useCourse } from "@/features/courses/api";
 import { canEdit } from "@/features/courses/lib/roles";
 import { useLectures, useProgress } from "@/features/lectures/api";
 import { LectureQuestions, LectureSessions, LectureSlips } from "@/features/lectures/components/lecture-tabs";
+import { CardTable } from "@/features/flash/components/card-table";
 import { MaterialList } from "@/features/materials/material-list";
 
-// One lecture (frontend-spec 4): Materials, Questions, Flashcards (step 5), Slips, Sessions.
+// One lecture (frontend-spec 4): Materials, Questions, Flashcards, Slips, Sessions.
 export const Route = createFileRoute("/_app/c/$courseId/l/$componentId")({ component: LecturePage });
-
-function Later({ what, step }: { what: string; step: number }) {
-  return <EmptyList title={`${what} arrive with build step ${step}`} />;
-}
 
 function LecturePage() {
   const { courseId, componentId } = Route.useParams();
@@ -62,7 +59,7 @@ function LecturePage() {
           <LectureQuestions courseId={courseId} componentId={componentId} />
         </TabPanel>
         <TabPanel value="cards" className="pt-4">
-          <Later what="Flashcards" step={5} />
+          <CardTable courseId={courseId} componentId={componentId} />
         </TabPanel>
         <TabPanel value="slips" className="pt-4">
           <LectureSlips courseId={courseId} componentId={componentId} />

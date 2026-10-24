@@ -17,7 +17,6 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppAdminRouteImport } from './routes/_app/admin'
-import { Route as AppFlashRouteImport } from './routes/_app/flash'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AppInsightRouteImport } from './routes/_app/insight'
 import { Route as AppNextRouteImport } from './routes/_app/next'
@@ -27,6 +26,8 @@ import { Route as AppTrashRouteImport } from './routes/_app/trash'
 import { Route as DevUiRouteImport } from './routes/dev.ui'
 import { Route as AppCCourseIdRouteImport } from './routes/_app/c.$courseId'
 import { Route as AppCoursesNewRouteImport } from './routes/_app/courses.new'
+import { Route as AppFlashIndexRouteImport } from './routes/_app/flash.index'
+import { Route as AppFlashReviewRouteImport } from './routes/_app/flash.review'
 import { Route as AppWeekIndexRouteImport } from './routes/_app/week.index'
 import { Route as AppWeekIsoWeekRouteImport } from './routes/_app/week.$isoWeek'
 import { Route as AppCCourseIdIndexRouteImport } from './routes/_app/c.$courseId.index'
@@ -84,11 +85,6 @@ const AppAdminRoute = AppAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AppRoute,
 } as any)
-const AppFlashRoute = AppFlashRouteImport.update({
-  id: '/flash',
-  path: '/flash',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppInboxRoute = AppInboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
@@ -132,6 +128,16 @@ const AppCCourseIdRoute = AppCCourseIdRouteImport.update({
 const AppCoursesNewRoute = AppCoursesNewRouteImport.update({
   id: '/courses/new',
   path: '/courses/new',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFlashIndexRoute = AppFlashIndexRouteImport.update({
+  id: '/flash/',
+  path: '/flash/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFlashReviewRoute = AppFlashReviewRouteImport.update({
+  id: '/flash/review',
+  path: '/flash/review',
   getParentRoute: () => AppRoute,
 } as any)
 const AppWeekIndexRoute = AppWeekIndexRouteImport.update({
@@ -229,7 +235,6 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/verify': typeof VerifyRoute
   '/admin': typeof AppAdminRoute
-  '/flash': typeof AppFlashRoute
   '/inbox': typeof AppInboxRoute
   '/insight': typeof AppInsightRoute
   '/next': typeof AppNextRoute
@@ -239,7 +244,9 @@ export interface FileRoutesByFullPath {
   '/dev/ui': typeof DevUiRoute
   '/c/$courseId': typeof AppCCourseIdRouteWithChildren
   '/courses/new': typeof AppCoursesNewRoute
+  '/flash/review': typeof AppFlashReviewRoute
   '/week/$isoWeek': typeof AppWeekIsoWeekRoute
+  '/flash/': typeof AppFlashIndexRoute
   '/week/': typeof AppWeekIndexRoute
   '/c/$courseId/cards': typeof AppCCourseIdCardsRoute
   '/c/$courseId/exams': typeof AppCCourseIdExamsRoute
@@ -264,7 +271,6 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/verify': typeof VerifyRoute
   '/admin': typeof AppAdminRoute
-  '/flash': typeof AppFlashRoute
   '/inbox': typeof AppInboxRoute
   '/insight': typeof AppInsightRoute
   '/next': typeof AppNextRoute
@@ -274,7 +280,9 @@ export interface FileRoutesByTo {
   '/dev/ui': typeof DevUiRoute
   '/': typeof AppIndexRoute
   '/courses/new': typeof AppCoursesNewRoute
+  '/flash/review': typeof AppFlashReviewRoute
   '/week/$isoWeek': typeof AppWeekIsoWeekRoute
+  '/flash': typeof AppFlashIndexRoute
   '/week': typeof AppWeekIndexRoute
   '/c/$courseId/cards': typeof AppCCourseIdCardsRoute
   '/c/$courseId/exams': typeof AppCCourseIdExamsRoute
@@ -301,7 +309,6 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/verify': typeof VerifyRoute
   '/_app/admin': typeof AppAdminRoute
-  '/_app/flash': typeof AppFlashRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/insight': typeof AppInsightRoute
   '/_app/next': typeof AppNextRoute
@@ -312,7 +319,9 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/c/$courseId': typeof AppCCourseIdRouteWithChildren
   '/_app/courses/new': typeof AppCoursesNewRoute
+  '/_app/flash/review': typeof AppFlashReviewRoute
   '/_app/week/$isoWeek': typeof AppWeekIsoWeekRoute
+  '/_app/flash/': typeof AppFlashIndexRoute
   '/_app/week/': typeof AppWeekIndexRoute
   '/_app/c/$courseId/cards': typeof AppCCourseIdCardsRoute
   '/_app/c/$courseId/exams': typeof AppCCourseIdExamsRoute
@@ -340,7 +349,6 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify'
     | '/admin'
-    | '/flash'
     | '/inbox'
     | '/insight'
     | '/next'
@@ -350,7 +358,9 @@ export interface FileRouteTypes {
     | '/dev/ui'
     | '/c/$courseId'
     | '/courses/new'
+    | '/flash/review'
     | '/week/$isoWeek'
+    | '/flash/'
     | '/week/'
     | '/c/$courseId/cards'
     | '/c/$courseId/exams'
@@ -375,7 +385,6 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify'
     | '/admin'
-    | '/flash'
     | '/inbox'
     | '/insight'
     | '/next'
@@ -385,7 +394,9 @@ export interface FileRouteTypes {
     | '/dev/ui'
     | '/'
     | '/courses/new'
+    | '/flash/review'
     | '/week/$isoWeek'
+    | '/flash'
     | '/week'
     | '/c/$courseId/cards'
     | '/c/$courseId/exams'
@@ -411,7 +422,6 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify'
     | '/_app/admin'
-    | '/_app/flash'
     | '/_app/inbox'
     | '/_app/insight'
     | '/_app/next'
@@ -422,7 +432,9 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/c/$courseId'
     | '/_app/courses/new'
+    | '/_app/flash/review'
     | '/_app/week/$isoWeek'
+    | '/_app/flash/'
     | '/_app/week/'
     | '/_app/c/$courseId/cards'
     | '/_app/c/$courseId/exams'
@@ -509,13 +521,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/flash': {
-      id: '/_app/flash'
-      path: '/flash'
-      fullPath: '/flash'
-      preLoaderRoute: typeof AppFlashRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/inbox': {
       id: '/_app/inbox'
       path: '/inbox'
@@ -577,6 +582,20 @@ declare module '@tanstack/react-router' {
       path: '/courses/new'
       fullPath: '/courses/new'
       preLoaderRoute: typeof AppCoursesNewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/flash/': {
+      id: '/_app/flash/'
+      path: '/flash'
+      fullPath: '/flash/'
+      preLoaderRoute: typeof AppFlashIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/flash/review': {
+      id: '/_app/flash/review'
+      path: '/flash/review'
+      fullPath: '/flash/review'
+      preLoaderRoute: typeof AppFlashReviewRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/week/': {
@@ -739,7 +758,6 @@ const AppCCourseIdRouteWithChildren = AppCCourseIdRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRoute
-  AppFlashRoute: typeof AppFlashRoute
   AppInboxRoute: typeof AppInboxRoute
   AppInsightRoute: typeof AppInsightRoute
   AppNextRoute: typeof AppNextRoute
@@ -749,7 +767,9 @@ interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
   AppCCourseIdRoute: typeof AppCCourseIdRouteWithChildren
   AppCoursesNewRoute: typeof AppCoursesNewRoute
+  AppFlashReviewRoute: typeof AppFlashReviewRoute
   AppWeekIsoWeekRoute: typeof AppWeekIsoWeekRoute
+  AppFlashIndexRoute: typeof AppFlashIndexRoute
   AppWeekIndexRoute: typeof AppWeekIndexRoute
   AppMockMockIdResultRoute: typeof AppMockMockIdResultRoute
   AppMockMockIdIndexRoute: typeof AppMockMockIdIndexRoute
@@ -757,7 +777,6 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRoute,
-  AppFlashRoute: AppFlashRoute,
   AppInboxRoute: AppInboxRoute,
   AppInsightRoute: AppInsightRoute,
   AppNextRoute: AppNextRoute,
@@ -767,7 +786,9 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppCCourseIdRoute: AppCCourseIdRouteWithChildren,
   AppCoursesNewRoute: AppCoursesNewRoute,
+  AppFlashReviewRoute: AppFlashReviewRoute,
   AppWeekIsoWeekRoute: AppWeekIsoWeekRoute,
+  AppFlashIndexRoute: AppFlashIndexRoute,
   AppWeekIndexRoute: AppWeekIndexRoute,
   AppMockMockIdResultRoute: AppMockMockIdResultRoute,
   AppMockMockIdIndexRoute: AppMockMockIdIndexRoute,

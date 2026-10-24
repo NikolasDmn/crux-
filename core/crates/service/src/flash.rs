@@ -1,7 +1,7 @@
 //! Flashcards (backend-spec 5.5): course cards and personal cards, FSRS scheduling through
 //! crux_domain::fsrs, the daily queue, custom sets and offline review batches.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
@@ -310,6 +310,32 @@ pub struct QueueView {
     pub new_count: usize,
     /// New cards still allowed today after this queue (FlashNewPerDay in your time zone).
     pub new_left_today: i64,
+    /// For each card, when it would be due again after each rating (the buttons' intervals).
+    pub next_due: Vec<NextDue>,
+}
+
+/// Seconds from now until the card is due again, per rating, as a review right now would set it
+/// (FSRS with your retention, capped at the course's next exam).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct NextDue {
+    pub card_id: String,
+    pub again: i64,
+    pub hard: i64,
+    pub good: i64,
+    pub easy: i64,
+}
+
+fn card_of_row(r: &CardRow) -> Card {
+    Card {
+        state: CardState::from_db(r.state.as_deref().unwrap_or("New")),
+        stability: r.stability,
+        difficulty: r.difficulty,
+        due_at: r.due_at,
+        last_reviewed_at: r.last_reviewed_at,
+        reps: r.reps.unwrap_or(0),
+        lapses: r.lapses.unwrap_or(0),
+    }
 }
 
 pub async fn queue(ctx: &Ctx, actor: &Actor, q: QueueQuery) -> AppResult<QueueView> {
@@ -324,11 +350,31 @@ pub async fn queue(ctx: &Ctx, actor: &Actor, q: QueueQuery) -> AppResult<QueueVi
     let seen = repo::new_seen_since(&mut conn, actor.user_id, fsrs::local_day_start(now, p.tz)).await?;
     let left = fsrs::new_cards_left(p.new_per_day, seen);
     let fresh = repo::new_cards(&mut conn, actor.user_id, &course_ids, left).await?;
+    let mut exams: HashMap<i64, Option<DateTime<Utc>>> = HashMap::new();
+    let mut next_due = Vec::with_capacity(due.len() + fresh.len());
+    for r in due.iter().chain(fresh.iter()) {
+        let exam = match exams.get(&r.course_id) {
+            Some(e) => *e,
+            None => {
+                let e = repo::next_exam(&mut conn, actor.user_id, r.course_id, now).await?;
+                exams.insert(r.course_id, e);
+                e
+            }
+        };
+        let card = card_of_row(r);
+        let mut secs = [0i64; 4];
+        for (i, rating) in (1u8..=4).enumerate() {
+            let reviewed = fsrs::review(&card, rating, now, p.retention, p.tz, exam).map_err(|err| anyhow::anyhow!("fsrs: {err}"))?;
+            secs[i] = reviewed.card.due_at.map(|d| (d - now).num_seconds().max(0)).unwrap_or(0);
+        }
+        next_due.push(NextDue { card_id: r.public_id.clone(), again: secs[0], hard: secs[1], good: secs[2], easy: secs[3] });
+    }
     Ok(QueueView {
         due_count: due.len(),
         new_count: fresh.len(),
         new_left_today: left - fresh.len() as i64,
         cards: due.iter().chain(fresh.iter()).map(CardView::from).collect(),
+        next_due,
     })
 }
 

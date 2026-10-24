@@ -50,5 +50,10 @@ export function typingIn(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el || !el.tagName) return false;
   const tag = el.tagName.toLowerCase();
-  return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable === true;
+  if (tag === "input") {
+    // Checkboxes, radios and buttons take no typing: the shortcuts still apply there.
+    const type = ((el as HTMLInputElement).type || "text").toLowerCase();
+    return !["checkbox", "radio", "button", "submit", "reset", "range", "color", "file"].includes(type);
+  }
+  return tag === "textarea" || tag === "select" || el.isContentEditable === true;
 }

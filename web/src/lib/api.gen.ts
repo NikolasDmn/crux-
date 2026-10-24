@@ -3672,6 +3672,21 @@ export interface components {
             /** Spentmicrousd */
             spentMicroUsd: number;
         };
+        /**
+         * @description Seconds from now until the card is due again, per rating, as a review right now would set it
+         *     (FSRS with your retention, capped at the course's next exam).
+         */
+        NextDue: {
+            /** Format: int64 */
+            again: number;
+            cardId: string;
+            /** Format: int64 */
+            easy: number;
+            /** Format: int64 */
+            good: number;
+            /** Format: int64 */
+            hard: number;
+        };
         NextView: {
             /** @description Exams that have started with no result yet: "how did it go?" (spec 5.10). */
             checkIns: components["schemas"]["DeadlineView"][];
@@ -4031,6 +4046,8 @@ export interface components {
              * @description New cards still allowed today after this queue (FlashNewPerDay in your time zone).
              */
             newLeftToday: number;
+            /** @description For each card, when it would be due again after each rating (the buttons' intervals). */
+            nextDue: components["schemas"]["NextDue"][];
         };
         RebuildView: {
             /** @description One line, e.g. "14 sessions planned through Mon 16 Nov (3 new or moved); 1 pinned kept". */

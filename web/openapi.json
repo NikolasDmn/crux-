@@ -4193,6 +4193,38 @@
         "title": "MonthUsage",
         "type": "object"
       },
+      "NextDue": {
+        "description": "Seconds from now until the card is due again, per rating, as a review right now would set it\n(FSRS with your retention, capped at the course's next exam).",
+        "properties": {
+          "again": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "cardId": {
+            "type": "string"
+          },
+          "easy": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "good": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "hard": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cardId",
+          "again",
+          "hard",
+          "good",
+          "easy"
+        ],
+        "type": "object"
+      },
       "NextView": {
         "properties": {
           "checkIns": {
@@ -5560,13 +5592,21 @@
             "description": "New cards still allowed today after this queue (FlashNewPerDay in your time zone).",
             "format": "int64",
             "type": "integer"
+          },
+          "nextDue": {
+            "description": "For each card, when it would be due again after each rating (the buttons' intervals).",
+            "items": {
+              "$ref": "#/components/schemas/NextDue"
+            },
+            "type": "array"
           }
         },
         "required": [
           "cards",
           "dueCount",
           "newCount",
-          "newLeftToday"
+          "newLeftToday",
+          "nextDue"
         ],
         "type": "object"
       },

@@ -44,6 +44,9 @@ it("knows when the user is typing", () => {
   const input = document.createElement("input");
   const div = document.createElement("div");
   expect(typingIn(input)).toBe(true);
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  expect(typingIn(box)).toBe(false);
   expect(typingIn(div)).toBe(false);
   expect(typingIn(null)).toBe(false);
 });

@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Check, ChevronLeft } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -10,6 +11,8 @@ import { Field, Select, Textarea } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/misc";
 import { OptionRow } from "@/components/ui/option-row";
 import { useToast } from "@/components/ui/toast";
+import { getQuestion } from "@/features/bank/api";
+import { CardDialog, type CardDraft } from "@/features/flash/components/card-dialog";
 import { SLIP_TYPES, useLogSlip } from "@/features/mistakes/api";
 import { useResult, useReview, type Item, type Mock } from "@/features/mocks/api";
 import { scoreText } from "@/features/mocks/lib/taking";
@@ -71,7 +74,33 @@ function Result() {
 function ItemCard({ mock, item }: { mock: Mock; item: Item }) {
   const review = useReview(mock.id);
   const toast = useToast();
+  const qc = useQueryClient();
   const [slip, setSlip] = useState(false);
+  const [card, setCard] = useState<CardDraft | null>(null);
+  // A card from a missed question: its lecture, the prompt, and the right answer with the why.
+  const makeCard = async () => {
+    try {
+      const q = await qc.fetchQuery({
+        queryKey: ["question", item.questionId],
+        queryFn: () => getQuestion(item.questionId),
+      });
+      const right = (item.options as { id: string; text: string }[] | null | undefined)?.find(
+        (o) => o.id === k?.correctOptionId,
+      );
+      const answer =
+        right?.text ??
+        (k?.value !== null && k?.value !== undefined
+          ? `${k.value}${k.unit ? ` ${k.unit}` : ""}`
+          : (k?.modelAnswer ?? ""));
+      setCard({
+        componentId: q.componentId,
+        front: item.prompt,
+        back: [answer, k?.explanation].filter(Boolean).join("\n\n"),
+      });
+    } catch (e) {
+      toast({ message: messageFor(e), tone: "danger" });
+    }
+  };
   const k = item.key;
   const miss = !!item.outcome && item.outcome !== "Right";
   const needsGrade = item.type === "Open" && !item.outcome && mock.gradingMode === "Self";
@@ -197,9 +226,15 @@ function ItemCard({ mock, item }: { mock: Mock; item: Item }) {
               Log a slip
             </Button>
           ) : null}
+          {k ? (
+            <Button size="sm" variant="ghost" onClick={() => void makeCard()}>
+              Make a flashcard
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {slip ? <SlipForm mock={mock} item={item} onDone={() => setSlip(false)} /> : null}
+      {card ? <CardDialog courseId={mock.courseId} draft={card} onClose={() => setCard(null)} /> : null}
     </Card>
   );
 }

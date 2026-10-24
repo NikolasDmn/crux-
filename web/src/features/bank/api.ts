@@ -42,6 +42,10 @@ export function useQuestions(courseId: string, f: BankFilters) {
   });
 }
 
+export function getQuestion(id: string) {
+  return unwrap(api.GET("/questions/{id}", { params: { path: { id } } }));
+}
+
 export function useQuestion(id: string | undefined) {
   return useQuery({
     queryKey: keys.question(id ?? ""),

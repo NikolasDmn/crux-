@@ -20,7 +20,16 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  resolve: {
+    alias: [
+      { find: "@", replacement: fileURLToPath(new URL("./src", import.meta.url)) },
+      // MathJax's default SVG font is replaced by the smaller TeX font (src/lib/mathjax-font.ts).
+      {
+        find: /^#default-font\/svg\/default\.js$/,
+        replacement: fileURLToPath(new URL("./src/lib/mathjax-font.ts", import.meta.url)),
+      },
+    ],
+  },
   server: {
     port: 5173,
     proxy: {

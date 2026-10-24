@@ -97,8 +97,8 @@ Two mechanisms (changed in 1.1):
 
 ### 2.4 Content rendering
 
-- `<Markdown>`: `react-markdown` + `remark-math` + `rehype-katex`, sanitised with `rehype-sanitize` (no raw HTML). It is used for every prompt, explanation, card, note and AI message.
-- `<Math>`: KaTeX with `throwOnError: true`. When KaTeX fails, the component lazy-loads MathJax for that expression only.
+- `<Markdown>`: `react-markdown` + `remark-math` + a maths step (`lib/rehype-math.ts`), sanitised with `rehype-sanitize` (no raw HTML). It is used for every prompt, explanation, card, note and AI message. LaTeX delimiters `\(…\)` and `\[…\]` are accepted as well as `$…$` and `$$…$$`.
+- Maths (decided 2026-10-24, brought forward from step 9): KaTeX first; then KaTeX on a repaired copy (`equire` dropped, `align`/`equation`/`gather` and friends rewritten to forms that work inline, labels and tags dropped); then MathJax 4 (TeX in, SVG out, TeX font, lazy-loaded only for a page that needs it; covers `mhchem`, `physics`, `mathtools` and more); if that fails too, the source shows quietly in mono, never as a red error. The same order backs `<TexMath>` for single expressions. MathJax everywhere was considered and rejected: about 7× slower per expression and about 700 KB gzipped against KaTeX's 85 KB.
 - Code blocks: syntax-highlighted with Shiki (lazy-loaded).
 
 ### 2.5 AI is opt-in, everywhere

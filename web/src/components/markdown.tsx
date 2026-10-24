@@ -1,15 +1,18 @@
 import "katex/dist/katex.min.css";
+import type { ComponentProps } from "react";
 import ReactMarkdown from "react-markdown";
-import rehypeKatex from "rehype-katex";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import { MathJaxMath } from "@/components/math";
 import { cn } from "@/lib/cn";
+import { rehypeMath } from "@/lib/rehype-math";
+import { normalizeDelimiters } from "@/lib/tex";
 
 // Every prompt, explanation, card, note and AI message renders through this (frontend-spec 2.4):
-// markdown + $…$ / $$…$$ maths, sanitised (no raw HTML), then KaTeX (with MathML for screen readers).
-// An expression KaTeX rejects shows its source in the danger colour; the MathJax fallback comes
-// with the accessibility pass (build step 9).
+// markdown + maths (`$…$`, `$$…$$`, and LaTeX's `\(…\)` / `\[…\]`), sanitised (no raw HTML).
+// Maths goes to KaTeX (with MathML for screen readers), then KaTeX on a repaired copy, then
+// MathJax, loaded only for a page that needs it; the source shows quietly if all of them fail.
 
 const schema = {
   ...defaultSchema,
@@ -19,17 +22,24 @@ const schema = {
   },
 };
 
+/** rehypeMath's placeholder for maths KaTeX rejected; any other span renders as itself. */
+function Span({ node: _, ...p }: ComponentProps<"span"> & { node?: unknown }) {
+  const tex = (p as Record<string, unknown>)["data-tex"];
+  if (typeof tex === "string") {
+    return <MathJaxMath tex={tex} display={(p as Record<string, unknown>)["data-display"] === "true"} />;
+  }
+  return <span {...p} />;
+}
+
 export function Markdown({ children, className }: { children: string; className?: string }) {
   return (
     <div className={cn("crux-prose", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[
-          [rehypeSanitize, schema],
-          [rehypeKatex, { throwOnError: false, output: "htmlAndMathml" }],
-        ]}
+        rehypePlugins={[[rehypeSanitize, schema], rehypeMath]}
+        components={{ span: Span }}
       >
-        {children}
+        {normalizeDelimiters(children)}
       </ReactMarkdown>
     </div>
   );

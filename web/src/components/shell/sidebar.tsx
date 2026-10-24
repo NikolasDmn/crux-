@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ArrowRight, CalendarDays, Home, Inbox, Layers, Plus, Settings } from "lucide-react";
+import { ArrowRight, CalendarDays, CalendarRange, Home, Inbox, Layers, Plus, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dot, Mark } from "@/components/ui/misc";
@@ -110,6 +110,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </NavLink>
       <NavLink to="/week" icon={<CalendarDays />}>
         {t("nav.week")}
+      </NavLink>
+      <NavLink to="/plan" icon={<CalendarRange />}>
+        {t("nav.plan")}
       </NavLink>
 
       <Invitations />

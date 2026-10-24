@@ -54,3 +54,17 @@ export function browserZone(): string {
     return "Europe/Amsterdam";
   }
 }
+
+/** An instant as a `datetime-local` value ("2026-10-24T09:30") in `tz`. */
+export function toLocalInput(iso: string | Date, tz: string): string {
+  return format(inZone(iso, tz), "yyyy-MM-dd'T'HH:mm");
+}
+
+/** A `datetime-local` value read in `tz`; `null` when empty or invalid. */
+export function fromLocalInput(value: string, tz: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m.map(Number) as [number, number, number, number, number, number];
+  const local = new TZDate(y, mo - 1, d, h, mi, tz);
+  return Number.isNaN(local.getTime()) ? null : new Date(local.getTime());
+}

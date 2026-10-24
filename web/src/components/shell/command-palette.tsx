@@ -3,6 +3,7 @@ import { Command } from "cmdk";
 import {
   ArrowRight,
   CalendarDays,
+  CalendarRange,
   Home,
   Inbox,
   Layers,
@@ -82,6 +83,9 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                 </Item>
                 <Item value="this week" onSelect={() => go("/week")} icon={<CalendarDays />}>
                   {t("nav.week")}
+                </Item>
+                <Item value="plan calendar" onSelect={() => go("/plan")} icon={<CalendarRange />}>
+                  {t("nav.plan")}
                 </Item>
                 <Item value="flashcards" onSelect={() => go("/flash")} icon={<Layers />}>
                   {t("nav.flashcards")}

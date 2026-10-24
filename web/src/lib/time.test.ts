@@ -1,4 +1,13 @@
-import { browserZone, clock, clockOffset, formatInZone, relativeDays, shortUntil } from "./time";
+import {
+  browserZone,
+  clock,
+  clockOffset,
+  formatInZone,
+  fromLocalInput,
+  relativeDays,
+  shortUntil,
+  toLocalInput,
+} from "./time";
 
 describe("time zones", () => {
   it("formats in the user's zone, not the browser's", () => {
@@ -36,5 +45,14 @@ describe("countdowns", () => {
     expect(clockOffset("Sat, 24 Oct 2026 12:00:05 GMT", local)).toBe(5000);
     expect(clockOffset(null, local)).toBe(0);
     expect(clockOffset("garbage", local)).toBe(0);
+  });
+});
+
+describe("datetime-local", () => {
+  it("round-trips through the user's zone", () => {
+    expect(toLocalInput("2026-10-24T07:30:00Z", "Europe/Amsterdam")).toBe("2026-10-24T09:30");
+    expect(fromLocalInput("2026-10-24T09:30", "Europe/Amsterdam")?.toISOString()).toBe("2026-10-24T07:30:00.000Z");
+    expect(fromLocalInput("2026-11-02T09:30", "Europe/Amsterdam")?.toISOString()).toBe("2026-11-02T08:30:00.000Z");
+    expect(fromLocalInput("", "Europe/Amsterdam")).toBeNull();
   });
 });

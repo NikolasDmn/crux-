@@ -20,12 +20,14 @@ import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppFlashRouteImport } from './routes/_app/flash'
 import { Route as AppInboxRouteImport } from './routes/_app/inbox'
 import { Route as AppNextRouteImport } from './routes/_app/next'
+import { Route as AppPlanRouteImport } from './routes/_app/plan'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTrashRouteImport } from './routes/_app/trash'
-import { Route as AppWeekRouteImport } from './routes/_app/week'
 import { Route as DevUiRouteImport } from './routes/dev.ui'
 import { Route as AppCCourseIdRouteImport } from './routes/_app/c.$courseId'
 import { Route as AppCoursesNewRouteImport } from './routes/_app/courses.new'
+import { Route as AppWeekIndexRouteImport } from './routes/_app/week.index'
+import { Route as AppWeekIsoWeekRouteImport } from './routes/_app/week.$isoWeek'
 import { Route as AppCCourseIdIndexRouteImport } from './routes/_app/c.$courseId.index'
 import { Route as AppCCourseIdBankRouteImport } from './routes/_app/c.$courseId.bank'
 import { Route as AppCCourseIdCardsRouteImport } from './routes/_app/c.$courseId.cards'
@@ -92,6 +94,11 @@ const AppNextRoute = AppNextRouteImport.update({
   path: '/next',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPlanRoute = AppPlanRouteImport.update({
+  id: '/plan',
+  path: '/plan',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -100,11 +107,6 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
 const AppTrashRoute = AppTrashRouteImport.update({
   id: '/trash',
   path: '/trash',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppWeekRoute = AppWeekRouteImport.update({
-  id: '/week',
-  path: '/week',
   getParentRoute: () => AppRoute,
 } as any)
 const DevUiRoute = DevUiRouteImport.update({
@@ -120,6 +122,16 @@ const AppCCourseIdRoute = AppCCourseIdRouteImport.update({
 const AppCoursesNewRoute = AppCoursesNewRouteImport.update({
   id: '/courses/new',
   path: '/courses/new',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWeekIndexRoute = AppWeekIndexRouteImport.update({
+  id: '/week/',
+  path: '/week/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppWeekIsoWeekRoute = AppWeekIsoWeekRouteImport.update({
+  id: '/week/$isoWeek',
+  path: '/week/$isoWeek',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCCourseIdIndexRoute = AppCCourseIdIndexRouteImport.update({
@@ -190,12 +202,14 @@ export interface FileRoutesByFullPath {
   '/flash': typeof AppFlashRoute
   '/inbox': typeof AppInboxRoute
   '/next': typeof AppNextRoute
+  '/plan': typeof AppPlanRoute
   '/settings': typeof AppSettingsRoute
   '/trash': typeof AppTrashRoute
-  '/week': typeof AppWeekRoute
   '/dev/ui': typeof DevUiRoute
   '/c/$courseId': typeof AppCCourseIdRouteWithChildren
   '/courses/new': typeof AppCoursesNewRoute
+  '/week/$isoWeek': typeof AppWeekIsoWeekRoute
+  '/week/': typeof AppWeekIndexRoute
   '/c/$courseId/bank': typeof AppCCourseIdBankRoute
   '/c/$courseId/cards': typeof AppCCourseIdCardsRoute
   '/c/$courseId/exams': typeof AppCCourseIdExamsRoute
@@ -218,12 +232,14 @@ export interface FileRoutesByTo {
   '/flash': typeof AppFlashRoute
   '/inbox': typeof AppInboxRoute
   '/next': typeof AppNextRoute
+  '/plan': typeof AppPlanRoute
   '/settings': typeof AppSettingsRoute
   '/trash': typeof AppTrashRoute
-  '/week': typeof AppWeekRoute
   '/dev/ui': typeof DevUiRoute
   '/': typeof AppIndexRoute
   '/courses/new': typeof AppCoursesNewRoute
+  '/week/$isoWeek': typeof AppWeekIsoWeekRoute
+  '/week': typeof AppWeekIndexRoute
   '/c/$courseId/bank': typeof AppCCourseIdBankRoute
   '/c/$courseId/cards': typeof AppCCourseIdCardsRoute
   '/c/$courseId/exams': typeof AppCCourseIdExamsRoute
@@ -248,13 +264,15 @@ export interface FileRoutesById {
   '/_app/flash': typeof AppFlashRoute
   '/_app/inbox': typeof AppInboxRoute
   '/_app/next': typeof AppNextRoute
+  '/_app/plan': typeof AppPlanRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/trash': typeof AppTrashRoute
-  '/_app/week': typeof AppWeekRoute
   '/dev/ui': typeof DevUiRoute
   '/_app/': typeof AppIndexRoute
   '/_app/c/$courseId': typeof AppCCourseIdRouteWithChildren
   '/_app/courses/new': typeof AppCoursesNewRoute
+  '/_app/week/$isoWeek': typeof AppWeekIsoWeekRoute
+  '/_app/week/': typeof AppWeekIndexRoute
   '/_app/c/$courseId/bank': typeof AppCCourseIdBankRoute
   '/_app/c/$courseId/cards': typeof AppCCourseIdCardsRoute
   '/_app/c/$courseId/exams': typeof AppCCourseIdExamsRoute
@@ -280,12 +298,14 @@ export interface FileRouteTypes {
     | '/flash'
     | '/inbox'
     | '/next'
+    | '/plan'
     | '/settings'
     | '/trash'
-    | '/week'
     | '/dev/ui'
     | '/c/$courseId'
     | '/courses/new'
+    | '/week/$isoWeek'
+    | '/week/'
     | '/c/$courseId/bank'
     | '/c/$courseId/cards'
     | '/c/$courseId/exams'
@@ -308,12 +328,14 @@ export interface FileRouteTypes {
     | '/flash'
     | '/inbox'
     | '/next'
+    | '/plan'
     | '/settings'
     | '/trash'
-    | '/week'
     | '/dev/ui'
     | '/'
     | '/courses/new'
+    | '/week/$isoWeek'
+    | '/week'
     | '/c/$courseId/bank'
     | '/c/$courseId/cards'
     | '/c/$courseId/exams'
@@ -337,13 +359,15 @@ export interface FileRouteTypes {
     | '/_app/flash'
     | '/_app/inbox'
     | '/_app/next'
+    | '/_app/plan'
     | '/_app/settings'
     | '/_app/trash'
-    | '/_app/week'
     | '/dev/ui'
     | '/_app/'
     | '/_app/c/$courseId'
     | '/_app/courses/new'
+    | '/_app/week/$isoWeek'
+    | '/_app/week/'
     | '/_app/c/$courseId/bank'
     | '/_app/c/$courseId/cards'
     | '/_app/c/$courseId/exams'
@@ -446,6 +470,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNextRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/plan': {
+      id: '/_app/plan'
+      path: '/plan'
+      fullPath: '/plan'
+      preLoaderRoute: typeof AppPlanRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings': {
       id: '/_app/settings'
       path: '/settings'
@@ -458,13 +489,6 @@ declare module '@tanstack/react-router' {
       path: '/trash'
       fullPath: '/trash'
       preLoaderRoute: typeof AppTrashRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/week': {
-      id: '/_app/week'
-      path: '/week'
-      fullPath: '/week'
-      preLoaderRoute: typeof AppWeekRouteImport
       parentRoute: typeof AppRoute
     }
     '/dev/ui': {
@@ -486,6 +510,20 @@ declare module '@tanstack/react-router' {
       path: '/courses/new'
       fullPath: '/courses/new'
       preLoaderRoute: typeof AppCoursesNewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/week/': {
+      id: '/_app/week/'
+      path: '/week'
+      fullPath: '/week/'
+      preLoaderRoute: typeof AppWeekIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/week/$isoWeek': {
+      id: '/_app/week/$isoWeek'
+      path: '/week/$isoWeek'
+      fullPath: '/week/$isoWeek'
+      preLoaderRoute: typeof AppWeekIsoWeekRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/c/$courseId/': {
@@ -605,12 +643,14 @@ interface AppRouteChildren {
   AppFlashRoute: typeof AppFlashRoute
   AppInboxRoute: typeof AppInboxRoute
   AppNextRoute: typeof AppNextRoute
+  AppPlanRoute: typeof AppPlanRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTrashRoute: typeof AppTrashRoute
-  AppWeekRoute: typeof AppWeekRoute
   AppIndexRoute: typeof AppIndexRoute
   AppCCourseIdRoute: typeof AppCCourseIdRouteWithChildren
   AppCoursesNewRoute: typeof AppCoursesNewRoute
+  AppWeekIsoWeekRoute: typeof AppWeekIsoWeekRoute
+  AppWeekIndexRoute: typeof AppWeekIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -618,12 +658,14 @@ const AppRouteChildren: AppRouteChildren = {
   AppFlashRoute: AppFlashRoute,
   AppInboxRoute: AppInboxRoute,
   AppNextRoute: AppNextRoute,
+  AppPlanRoute: AppPlanRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTrashRoute: AppTrashRoute,
-  AppWeekRoute: AppWeekRoute,
   AppIndexRoute: AppIndexRoute,
   AppCCourseIdRoute: AppCCourseIdRouteWithChildren,
   AppCoursesNewRoute: AppCoursesNewRoute,
+  AppWeekIsoWeekRoute: AppWeekIsoWeekRoute,
+  AppWeekIndexRoute: AppWeekIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

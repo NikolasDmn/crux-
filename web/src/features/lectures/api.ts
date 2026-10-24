@@ -16,6 +16,7 @@ export const keys = {
 export function useLectures(courseId: string) {
   return useQuery({
     queryKey: keys.lectures(courseId),
+    enabled: !!courseId,
     queryFn: async () =>
       (await unwrap(api.GET("/courses/{id}/components", { params: { path: { id: courseId } } }))).sort(
         (a, b) => a.sortOrder - b.sortOrder,

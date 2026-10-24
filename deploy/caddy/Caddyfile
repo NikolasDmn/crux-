@@ -31,7 +31,10 @@
 	# Internal routes are never exposed.
 	# A `handle` block, not a bare `respond`: Caddy runs `handle` before `respond`, so the SPA
 	# catch-all below would otherwise answer /internal/* with index.html.
-	handle /internal/* {
+	# Also under the service prefixes: /api/v1/internal/* and /api/v1/<service>/internal/* would
+	# otherwise reach the services after the prefix is stripped.
+	@internal path_regexp internal ^/(api/v1/([a-z]+/)?)?internal(/|$)
+	handle @internal {
 		respond 404
 	}
 

@@ -33,8 +33,10 @@ echo "ok   /me"
 
 status=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/v1/me")
 [ "$status" = 401 ] || fail "/me without a token gave $status"
-status=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/internal/v1/jwks")
-[ "$status" = 404 ] || fail "internal routes must not be exposed (got $status)"
+for path in /internal/v1/jwks /api/v1/internal/v1/jwks /api/v1/files/internal/v1/files/x /api/v1/notify/internal/v1/x /api/v1/ai/internal/v1/ai-allowed; do
+    status=$(curl -s -o /dev/null -w '%{http_code}' "$BASE$path")
+    [ "$status" = 404 ] || fail "internal routes must not be exposed: $path gave $status"
+done
 echo "ok   auth required, internal routes hidden"
 
 sql() { $COMPOSE exec -T mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD:-crux-root}" -N -e "$1" 2>/dev/null | tr -d '\r'; }

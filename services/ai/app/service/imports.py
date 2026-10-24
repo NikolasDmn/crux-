@@ -13,6 +13,7 @@ from sqlalchemy.engine import CursorResult
 
 from app.clients.core import CoreError
 from app.clients.llm import LlmError
+from app.domain import importing
 from app.repo.tables import course_import, import_file, proposal
 from app.service import runtime
 from app.service.account import Camel
@@ -40,8 +41,10 @@ KINDS = (
     "ExamAids",
 )
 MAX_FILES = 20
-#: The text the model sees per import (spread over the files).
+#: The text the model sees per call; a larger import is read in parts (B8-16).
 TEXT_BUDGET = 60_000
+#: At most this many calls per import (~360,000 characters); the rest is left out and flagged.
+MAX_PARTS = 6
 TERMINAL = ("Applied", "Failed", "Cancelled")
 
 SCHEMA: dict[str, Any] = {
@@ -123,7 +126,9 @@ payloadJson is a JSON object as a string. Shapes:
 - DeadlineComponent {"componentTempKey","questionCount"}  parent: a Deadline
 - PlanEntry {"description","startAt","endAt","kind":"Lecture|Revision|Mock|Other","componentTempKey"}
 - ExamAids {"calculator","cheatSheet","other"}
-Cite sourceFileRef and sourcePage for each proposal. Use confidence Low when unsure, and say why in rationale."""
+Cite sourceFileRef and sourcePage for each proposal. Use confidence Low when unsure, and say why in rationale.
+Large imports come in parts ("part" of "parts" in <request>). From part 2 on, <proposed> lists what earlier
+parts proposed: hang children on those tempKeys, don't propose them again, and give new rows new tempKeys."""
 
 
 class ImportInput(Camel):
@@ -149,6 +154,10 @@ class ImportView(Camel):
     import_past_exams: bool
     files: list[ImportFileView]
     proposal_counts: dict[str, int]
+    #: Model calls the text was read in (large imports are split), once proposed.
+    parts: int | None = None
+    #: True when the files held more text than one import reads (~360,000 characters): the rest was left out.
+    truncated: bool = False
     created_at: str | None
     applied_at: str | None
 
@@ -179,6 +188,8 @@ async def _view(s: Any, r: Any) -> ImportView:
         import_past_exams=bool(r.ImportPastExams),
         files=[ImportFileView(file_id=f.FileRef, detected_kind=f.DetectedKind, status=f.Status) for f in files],
         proposal_counts=counts,
+        parts=r.Parts,
+        truncated=bool(r.Truncated),
         created_at=iso(r.CreatedAt) if r.CreatedAt else None,
         applied_at=iso(r.AppliedAt) if r.AppliedAt else None,
     )
@@ -255,19 +266,9 @@ async def cancel(deps: Deps, user: Principal, import_ref: str) -> ImportView:
 # ---------- the extraction worker ----------
 
 
-async def _file_text(deps: Deps, refs: list[str]) -> str:
-    per_file = max(4000, TEXT_BUDGET // max(1, len(refs)))
-    blocks = []
-    for ref in refs:
-        text, used = [], 0
-        for c in await deps.files.chunks(ref):
-            piece = f"[page {c.get('pageNo')}]\n{c['text']}"
-            if used + len(piece) > per_file:
-                break
-            text.append(piece)
-            used += len(piece)
-        blocks.append(f'<file ref="{ref}">\n' + "\n".join(text).replace("</", "<\\/") + "\n</file>")
-    return "\n\n".join(blocks)
+async def _parts(deps: Deps, refs: list[str]) -> tuple[list[str], bool]:
+    files = [(ref, await deps.files.chunks(ref)) for ref in refs]
+    return importing.split_parts(files, TEXT_BUDGET, MAX_PARTS)
 
 
 def _key_reliability(kind: str, payload: dict[str, Any]) -> None:
@@ -279,6 +280,89 @@ def _key_reliability(kind: str, payload: dict[str, Any]) -> None:
         content["keyReliability"] = "Derived"
     if content.get("keyReliability") not in ("Official", "Derived"):
         content["keyReliability"] = "Derived"
+
+
+#: Payload fields that hold another proposal's tempKey.
+REF_FIELDS = ("componentTempKey", "paperTempKey", "deadlineTempKey")
+
+
+def _remap(p: dict[str, Any], keys: dict[str, str]) -> None:
+    if p.get("parentTempKey") in keys:
+        p["parentTempKey"] = keys[p["parentTempKey"]]
+    payload = p["payload"]
+    for f in REF_FIELDS:
+        if payload.get(f) in keys:
+            payload[f] = keys[payload[f]]
+    if isinstance(payload.get("conceptTempKeys"), list):
+        payload["conceptTempKeys"] = [keys.get(k, k) for k in payload["conceptTempKeys"]]
+
+
+def _summary(kept: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What earlier parts proposed, for the next part: the rows it may hang children on."""
+    out = []
+    for p in kept:
+        if p["kind"] in ("Course", "Component", "Concept", "Paper", "Deadline"):
+            v = p["payload"]
+            out.append(
+                {
+                    "kind": p["kind"],
+                    "tempKey": p["tempKey"],
+                    "code": v.get("code") or v.get("paperKey") or v.get("type"),
+                    "name": v.get("name") or v.get("label") or v.get("title"),
+                }
+            )
+    return out
+
+
+def _collect(
+    raw: dict[str, Any], part_no: int, kept: list[dict[str, Any]], refs: list[str], course_given: bool, past_exams: bool
+) -> None:
+    """Adds one part's valid proposals to `kept`: repeats of earlier proposals are dropped (their
+    children re-pointed at the earlier one); a tempKey an earlier part used is renamed."""
+    taken = {p["tempKey"] for p in kept}
+    keys: dict[str, str] = {}
+    fresh: list[dict[str, Any]] = []
+    for p in raw.get("proposals") or []:
+        kind, key = p.get("kind"), str(p.get("tempKey") or "")[:56]
+        if kind not in KINDS or not key:
+            continue
+        if kind == "Course" and (course_given or any(k["kind"] == "Course" for k in kept + fresh)):
+            continue  # importing into an existing course, or the course is already proposed
+        if kind == "Question" and not past_exams:
+            continue  # past exams -> questions is opt-in (PastExamImport)
+        try:
+            payload = json.loads(p.get("payloadJson") or "{}")
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        _key_reliability(kind, payload)
+        same = next(
+            (k for k in kept + fresh if k["kind"] == kind and importing.same_as(kind, payload, k["payload"])), None
+        )
+        if same is not None:
+            keys[key] = same["tempKey"]
+            continue
+        if any(f["tempKey"] == key for f in fresh):
+            continue  # the same tempKey twice in one reply: the first wins
+        if key in taken:
+            keys[key] = f"p{part_no}.{key}"
+            key = keys[key]
+        fresh.append(
+            {
+                "kind": kind,
+                "tempKey": key,
+                "parentTempKey": p.get("parentTempKey") or None,
+                "payload": payload,
+                "sourceFileRef": p.get("sourceFileRef") if p.get("sourceFileRef") in refs else None,
+                "sourcePage": p.get("sourcePage") or None,
+                "confidence": p.get("confidence") if p.get("confidence") in ("High", "Medium", "Low") else "Medium",
+                "rationale": (p.get("rationale") or "")[:500] or None,
+            }
+        )
+    for f in fresh:
+        _remap(f, keys)
+    kept.extend(fresh)
 
 
 async def run_one(deps: Deps) -> bool:
@@ -307,71 +391,77 @@ async def run_one(deps: Deps) -> bool:
     except AiDisabled:
         await fail("ai_disabled")
         return True
-    text = await _file_text(deps, refs)
-    context = {"course": r.CourseRef, "instructions": r.Instructions, "importPastExams": bool(r.ImportPastExams)}
+    parts, truncated = await _parts(deps, refs)
+    context: dict[str, Any] = {
+        "course": r.CourseRef,
+        "instructions": r.Instructions,
+        "importPastExams": bool(r.ImportPastExams),
+    }
+    catalog: dict[str, Any] = {}
     if r.CourseRef:
         try:
             ctx = await deps.core.context(r.UserRef, r.CourseRef, [], {})
             context["existingCourse"] = ctx.get("course")
+            catalog = await deps.core.call(
+                "GET", f"/internal/v1/ai/import-catalog?user={r.UserRef}&course={r.CourseRef}", r.UserRef
+            )
         except CoreError:
             await fail("course_gone")
             return True
-    user_msg = "<request>\n" + json.dumps(context, ensure_ascii=False) + "\n</request>\n\n" + text
-    try:
-        run_id = await runtime.start_run(
-            deps, g, prompt_version=PROMPT_VERSION, estimate_input_tokens=len(user_msg) // 4, max_output_tokens=16000
-        )
-    except AiBudgetExceeded:
-        await fail("budget")
-        return True
-    provider, key = runtime.provider(deps, g)
-    try:
-        raw, used = await provider.complete_json(
-            key, g.model.id, SYSTEM, [{"role": "user", "content": user_msg}], SCHEMA, 16000
-        )
-    except LlmError as e:
-        await runtime.finish_run(deps, run_id, None, error=str(e))
-        await fail(str(e))
-        return True
-    await runtime.finish_run(deps, run_id, used)
-    detected = {f["fileRef"]: f["kind"] for f in raw.get("files") or [] if f.get("fileRef") in refs}
-    made = 0
-    seen: set[tuple[str, str]] = set()
+    kept: list[dict[str, Any]] = []
+    detected: dict[str, str] = {}
+    run_id = None
+    for n, text in enumerate(parts or [""], start=1):
+        request = {**context, "part": n, "parts": max(1, len(parts))}
+        msg = "<request>\n" + json.dumps(request, ensure_ascii=False) + "\n</request>\n\n"
+        if kept:
+            # Later parts see what earlier ones proposed: reuse those tempKeys, don't repeat them.
+            summary = json.dumps(_summary(kept), ensure_ascii=False).replace("</", "<\\/")
+            msg += "<proposed>\n" + summary + "\n</proposed>\n\n"
+        msg += text
+        try:
+            run_id = await runtime.start_run(
+                deps, g, prompt_version=PROMPT_VERSION, estimate_input_tokens=len(msg) // 4, max_output_tokens=16000
+            )
+        except AiBudgetExceeded:
+            await fail("budget")
+            return True
+        provider, key = runtime.provider(deps, g)
+        try:
+            raw, used = await provider.complete_json(
+                key, g.model.id, SYSTEM, [{"role": "user", "content": msg}], SCHEMA, 16000
+            )
+        except LlmError as e:
+            await runtime.finish_run(deps, run_id, None, error=str(e))
+            await fail(str(e))
+            return True
+        await runtime.finish_run(deps, run_id, used)
+        for f in raw.get("files") or []:
+            if f.get("fileRef") in refs:
+                detected.setdefault(f["fileRef"], f["kind"])
+        _collect(raw, n, kept, refs, bool(r.CourseRef), bool(r.ImportPastExams))
+    if truncated:
+        log.info("import text truncated", extra={"import": r.PublicId, "parts": len(parts)})
     async with transaction(deps.sessions) as s:
-        for p in raw.get("proposals") or []:
-            kind = p.get("kind")
-            if kind not in KINDS or (kind, p.get("tempKey")) in seen or not p.get("tempKey"):
-                continue
-            if kind == "Course" and r.CourseRef:
-                continue  # importing into an existing course
-            if kind == "Question" and not r.ImportPastExams:
-                continue  # past exams -> questions is opt-in (PastExamImport)
-            try:
-                payload = json.loads(p.get("payloadJson") or "{}")
-            except json.JSONDecodeError:
-                continue
-            if not isinstance(payload, dict):
-                continue
-            _key_reliability(kind, payload)
-            seen.add((kind, p["tempKey"]))
+        for p in kept:
             await s.execute(
                 insert(proposal).values(
                     PublicId=new_id(),
                     ImportId=r.Id,
-                    Kind=kind,
-                    TempKey=str(p["tempKey"])[:64],
-                    ParentTempKey=(p.get("parentTempKey") or None),
-                    Payload=payload,
+                    Kind=p["kind"],
+                    TempKey=p["tempKey"][:64],
+                    ParentTempKey=p["parentTempKey"],
+                    Payload=p["payload"],
                     PayloadSchemaVersion=1,
-                    SourceFileRef=p.get("sourceFileRef") if p.get("sourceFileRef") in refs else None,
-                    SourcePage=p.get("sourcePage") or None,
-                    Confidence=p.get("confidence") if p.get("confidence") in ("High", "Medium", "Low") else "Medium",
-                    Rationale=(p.get("rationale") or "")[:500] or None,
+                    SourceFileRef=p["sourceFileRef"],
+                    SourcePage=p["sourcePage"],
+                    Confidence=p["confidence"],
+                    Rationale=p["rationale"],
+                    DuplicateOfRef=importing.duplicate_of(p["kind"], p["payload"], catalog) if catalog else None,
                     Status="Pending",
                     RowVersion=0,
                 )
             )
-            made += 1
         for ref in refs:
             await s.execute(
                 update(import_file)
@@ -379,7 +469,9 @@ async def run_one(deps: Deps) -> bool:
                 .values(Status="Extracted", DetectedKind=detected.get(ref))
             )
         await s.execute(
-            update(course_import).where(course_import.c.Id == r.Id).values(Status="Proposed", AiRunId=run_id)
+            update(course_import)
+            .where(course_import.c.Id == r.Id)
+            .values(Status="Proposed", AiRunId=run_id, Parts=max(1, len(parts)), Truncated=truncated)
         )
         await emit(
             s,
@@ -391,7 +483,7 @@ async def run_one(deps: Deps) -> bool:
                 "kind": "import.ready",
                 "dedupeKey": f"import.ready:{r.PublicId}",
                 "dueAt": iso(utcnow()),
-                "payload": {"importId": r.PublicId, "courseId": r.CourseRef, "count": made},
+                "payload": {"importId": r.PublicId, "courseId": r.CourseRef, "count": len(kept)},
             },
         )
     return True
@@ -411,6 +503,9 @@ class ProposalView(Camel):
     source_page: int | None
     confidence: str
     rationale: str | None
+    #: An existing row of the course this matches. Accepting a lecture, concept or paper duplicate
+    #: links to that row (children land on it); a question or flashcard duplicate is created again.
+    duplicate_of_id: str | None
     #: Pending, Accepted, Edited, Rejected, Applied, Failed
     status: str
     created_entity_id: str | None
@@ -429,6 +524,7 @@ def _pview(p: Any) -> ProposalView:
         source_page=p.SourcePage,
         confidence=p.Confidence,
         rationale=p.Rationale,
+        duplicate_of_id=p.DuplicateOfRef,
         status=p.Status,
         created_entity_id=p.CreatedEntityRef,
         version=p.RowVersion,
@@ -535,6 +631,7 @@ async def apply(deps: Deps, user: Principal, import_ref: str) -> ImportView:
                 "payload": {**(p.Payload or {}), **(p.UserEdits or {})},
                 "sourceFileRef": p.SourceFileRef,
                 "sourcePage": p.SourcePage,
+                "duplicateOf": p.DuplicateOfRef,
             }
             for p in rows
         ],

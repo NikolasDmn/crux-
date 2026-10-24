@@ -269,6 +269,27 @@ fn strip_key(v: &mut serde_json::Value) {
 
 /// `GET /internal/v1/ai/generation-context?user=&course=&component=&seed=`: style examples, the
 /// prompts to avoid duplicating, and the seed. The seed's key only when the user may see it.
+/// `GET /internal/v1/ai/import-catalog?user=&course=`: what the course already has, so the import
+/// can mark proposals that duplicate it (`ImportProposal.DuplicateOfRef`, spec 7.5).
+pub async fn import_catalog(ctx: &Ctx, user_ref: &str, course_ref: &str) -> AppResult<serde_json::Value> {
+    use serde_json::json;
+    let mut conn = ctx.pool.acquire().await?;
+    let actor = actor_of(&mut conn, user_ref).await?;
+    let course = readable(&mut conn, &actor, course_ref).await?;
+    let components = crux_repo::catalog::components(&mut conn, course.id, false).await?;
+    let concepts = crux_repo::catalog::concepts(&mut conn, course.id).await?;
+    let papers = crux_repo::catalog::papers(&mut conn, course.id).await?;
+    let questions = crux_repo::bank::prompts_with_ids(&mut conn, actor.user_id, course.id, 2000).await?;
+    let cards = crux_repo::flash::cards(&mut conn, actor.user_id, course.id, None, None).await?;
+    Ok(json!({
+        "components": components.iter().map(|k| json!({ "id": k.public_id, "code": k.code, "name": k.name })).collect::<Vec<_>>(),
+        "concepts": concepts.iter().filter_map(|c| c.public_id.as_ref().map(|id| json!({ "id": id, "name": c.name }))).collect::<Vec<_>>(),
+        "papers": papers.iter().filter_map(|p| p.public_id.as_ref().map(|id| json!({ "id": id, "paperKey": p.paper_key, "label": p.label }))).collect::<Vec<_>>(),
+        "questions": questions.iter().map(|(id, prompt)| json!({ "id": id, "prompt": prompt })).collect::<Vec<_>>(),
+        "flashcards": cards.iter().map(|c| json!({ "id": c.public_id, "front": c.front_text })).collect::<Vec<_>>(),
+    }))
+}
+
 pub async fn generation_context(
     ctx: &Ctx,
     user_ref: &str,

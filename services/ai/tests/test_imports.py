@@ -28,11 +28,11 @@ def prop(kind: str, key: str, payload: dict[str, Any], parent: str = "", conf: s
     }
 
 
-def mc(official: bool = True) -> dict[str, Any]:
+def mc(official: bool = True, prompt: str = "Var(2X)?") -> dict[str, Any]:
     return {
         "type": "MC",
         "content": {
-            "prompt": "Var(2X)?",
+            "prompt": prompt,
             "keyReliability": "Official" if official else "Derived",
             "options": [{"text": "4 Var(X)", "isCorrect": True}, {"text": "2 Var(X)", "isCorrect": False}],
         },
@@ -141,10 +141,72 @@ async def test_past_paper_extraction() -> None:
                 "proposals": [
                     prop("Course", "c", {"name": "x"}),  # dropped: importing into an existing course
                     prop("Question", "q1", q_linked, "l1"),
-                    prop("Question", "q2", mc(), "l1"),  # Official without a paper link -> Derived
+                    prop("Question", "q2", mc(prompt="E[X + Y]?"), "l1"),  # Official without a paper link -> Derived
                 ],
             }
         ]
         assert await imports.run_one(deps)
         qs = (await imports.proposals(deps, USER, imp.id))["Question"]
         assert [q.payload["content"]["keyReliability"] for q in qs] == ["Official", "Derived"]
+
+
+async def test_large_import_reads_in_parts_and_flags_duplicates(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(imports, "TEXT_BUDGET", 100)
+    monkeypatch.setattr(imports, "MAX_PARTS", 2)
+    async with env() as (deps, fake, core, files):
+        await turn_on(deps)
+        files.files[FILE] = {"ownerRef": USER.user_ref, "scanStatus": "Clean", "extractStatus": "Done"}
+        files.chunk_rows[FILE] = [
+            {"fileRef": FILE, "chunkNo": n, "pageNo": n, "text": f"Page {n} " + "x" * 70} for n in (1, 2, 3)
+        ]
+        lecture, question = "01EXISTINGLECTURE000000001", "01EXISTINGQUESTION00000001"
+        core.replies[("GET", f"/internal/v1/ai/import-catalog?user={USER.user_ref}&course={COURSE}")] = {
+            "components": [{"id": lecture, "code": "L1", "name": "Variance"}],
+            "questions": [{"id": question, "prompt": "Var(2X)?"}],
+        }
+        fake.json_replies = [
+            {
+                "files": [],
+                "proposals": [
+                    prop("Component", "l1", {"code": "L1", "name": "Variance"}),
+                    prop("Question", "q1", {**mc(), "componentTempKey": "l1"}, "l1"),
+                ],
+            },
+            {
+                "files": [],
+                "proposals": [
+                    prop("Component", "l1", {"code": "l1", "name": "Variance again"}),  # repeats part 1
+                    prop("Component", "l2", {"code": "L2", "name": "Covariance"}),
+                    prop("Question", "q1", {**mc(prompt="Cov(X, X)?"), "componentTempKey": "l2"}, "l2"),  # key reused
+                    prop("Flashcard", "f1", {"front": "Var(aX)", "back": "a² Var(X)"}, "l1"),
+                ],
+            },
+        ]
+        imp = await imports.create(
+            deps, USER, imports.ImportInput(course_id=COURSE, file_ids=[FILE], import_past_exams=True), status="Queued"
+        )
+        assert await imports.run_one(deps)
+        calls = [c for c in fake.calls if c["kind"] == "json"]
+        assert len(calls) == 2, "three pages of ~80 characters, 100 per part, 2 parts at most"
+        second = calls[1]["messages"][0]["content"]
+        assert "<proposed>" in second and '"tempKey": "l1"' in second and '"part": 2' in second
+        got = await imports.get(deps, USER, imp.id)
+        assert (got.parts, got.truncated) == (2, True), "page 3 didn't fit"
+
+        grouped = await imports.proposals(deps, USER, imp.id)
+        comps = {p.temp_key: p for p in grouped["Component"]}
+        assert set(comps) == {"l1", "l2"}, "part 2's L1 is the same lecture"
+        assert (comps["l1"].duplicate_of_id, comps["l2"].duplicate_of_id) == (lecture, None)
+        qs = {p.temp_key: p for p in grouped["Question"]}
+        assert set(qs) == {"q1", "p2.q1"}
+        assert (qs["q1"].duplicate_of_id, qs["p2.q1"].duplicate_of_id) == (question, None)
+        assert (qs["p2.q1"].parent_temp_key, qs["p2.q1"].payload["componentTempKey"]) == ("l2", "l2")
+        assert grouped["Flashcard"][0].parent_temp_key == "l1"
+
+        sent: list[dict[str, Any]] = []
+        core.replies[("POST", "/internal/v1/import/apply")] = lambda body: (
+            sent.append(body) or {"courseRef": COURSE, "created": [], "failed": []}
+        )
+        await imports.bulk(deps, USER, imp.id, imports.BulkInput(proposal_ids=[comps["l1"].id], action="accept"))
+        await imports.apply(deps, USER, imp.id)
+        assert sent[0]["proposals"][0]["duplicateOf"] == lecture

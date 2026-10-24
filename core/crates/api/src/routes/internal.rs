@@ -23,6 +23,7 @@ pub fn router() -> Router<AppState> {
         .route("/internal/v1/context/user", post(ai_context))
         .route("/internal/v1/mocks/{id}/open", get(mock_open))
         .route("/internal/v1/ai/generation-context", get(generation_context))
+        .route("/internal/v1/ai/import-catalog", get(import_catalog))
         .route("/internal/v1/ai/topup-plan", get(topup_plan))
         .route("/internal/v1/questions/generated", post(questions_generated))
         .route("/internal/v1/import/apply", post(import_apply))
@@ -108,6 +109,16 @@ struct GenerationQuery {
     course: String,
     component: Option<String>,
     seed: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CatalogQuery {
+    user: String,
+    course: String,
+}
+
+async fn import_catalog(State(state): State<AppState>, _svc: Service, Query(q): Query<CatalogQuery>) -> ApiResult<Json<serde_json::Value>> {
+    Ok(Json(crux_service::ai::import_catalog(&state.ctx, &q.user, &q.course).await?))
 }
 
 async fn generation_context(

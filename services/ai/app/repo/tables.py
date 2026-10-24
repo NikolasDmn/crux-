@@ -215,6 +215,8 @@ course_import = Table(
     Column("Instructions", Text),
     Column("ImportPastExams", Boolean, nullable=False),
     Column("AiRunId", BigInteger),
+    Column("Parts", SmallInteger),
+    Column("Truncated", Boolean, nullable=False),
     Column("CreatedAt", DateTime),
     Column("AppliedAt", DateTime),
     Column("RowVersion", Integer, nullable=False),

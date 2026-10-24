@@ -515,6 +515,18 @@ pub async fn set_seed(conn: &mut MySqlConnection, question_id: i64, seed_id: i64
 }
 
 /// (prompt, type) of questions in a course the user can see, newest first (generation dedupe/style).
+/// `(PublicId, prompt)` of the course questions the user can see, newest first (import duplicates).
+pub async fn prompts_with_ids(conn: &mut MySqlConnection, user_id: i64, course_id: i64, limit: i64) -> RepoResult<Vec<(String, String)>> {
+    Ok(sqlx::query_as(
+        "SELECT q.PublicId, v.Prompt FROM Question q JOIN QuestionVersion v ON v.Id = q.CurrentVersionId          WHERE q.CourseId = ? AND q.ArchivedAt IS NULL AND (q.OwnerUserId IS NULL OR q.OwnerUserId = ?) ORDER BY q.Id DESC LIMIT ?",
+    )
+    .bind(course_id)
+    .bind(user_id)
+    .bind(limit)
+    .fetch_all(conn)
+    .await?)
+}
+
 pub async fn prompts_for(
     conn: &mut MySqlConnection,
     user_id: i64,

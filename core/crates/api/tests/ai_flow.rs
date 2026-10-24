@@ -346,6 +346,27 @@ async fn import_apply_is_ordered_checked_and_idempotent() {
     let courses = call(&h.app, "GET", "/courses", Some(&t), None, &[]).await.json;
     assert_eq!(courses.as_array().unwrap().len(), 1, "applied once");
 
+    // The catalog the duplicate check compares against; an accepted duplicate lecture links to the
+    // existing one, so its children land there and no second L1 appears.
+    let cat = call(&h.app, "GET", &format!("/internal/v1/ai/import-catalog?user={me}&course={course}"), None, None, &headers).await.json;
+    let l1 = cat["components"][0]["id"].as_str().unwrap().to_string();
+    assert_eq!((cat["components"][0]["code"].as_str(), cat["questions"].as_array().unwrap().len()), (Some("L1"), 1), "{cat}");
+    assert_eq!(cat["flashcards"][0]["front"], "Var(aX)?");
+    let mut dup = p("01PROPOSAL0000000000000020", "Component", "k1", None, json!({"code": "L1", "name": "Variance (again)"}));
+    dup["duplicateOf"] = json!(l1);
+    let more = json!({"user": me, "importRef": "01IMPORT000000000000000003", "course": course, "proposals": [
+        dup,
+        p("01PROPOSAL0000000000000021", "Flashcard", "f2", Some("k1"), json!({"front": "Var(X+c)?", "back": "Var(X)"}))
+    ]});
+    let r = call(&h.app, "POST", "/internal/v1/import/apply", None, Some(more), &headers).await;
+    assert_eq!(r.json["created"][0]["entityRef"].as_str(), Some(l1.as_str()), "{}", r.json);
+    let comps = call(&h.app, "GET", &format!("/courses/{course}/components"), Some(&t), None, &[]).await.json;
+    assert_eq!(comps.as_array().unwrap().len(), 1, "no second L1: {comps}");
+    let cards = call(&h.app, "GET", &format!("/courses/{course}/flashcards"), Some(&t), None, &[]).await.json;
+    assert!(cards.as_array().unwrap().iter().all(|c| c["componentId"] == l1.as_str()), "{cards}");
+    let r = call(&h.app, "GET", &format!("/internal/v1/ai/import-catalog?user={bob}&course={course}"), None, None, &headers).await;
+    assert_eq!(r.status, StatusCode::NOT_FOUND);
+
     // Into someone else's course: 404. The paper lookup needs edit rights too.
     let other = json!({"user": bob, "importRef": "01IMPORT000000000000000002", "course": course, "proposals": []});
     let r = call(&h.app, "POST", "/internal/v1/import/apply", None, Some(other), &headers).await;

@@ -42,6 +42,11 @@ pub struct ProposalIn {
     pub payload: Value,
     pub source_file_ref: Option<String>,
     pub source_page: Option<i32>,
+    /// An existing row of the course this proposal matches (ai's duplicate check). An accepted
+    /// Component, Concept or Paper duplicate links to that row instead of creating another, so its
+    /// children land on it; other kinds are created as the user accepted them.
+    #[serde(default)]
+    pub duplicate_of: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -121,7 +126,15 @@ pub async fn apply(ctx: &Ctx, input: ApplyInput) -> AppResult<ApplyResult> {
             failed.push(Failed { proposal_ref: p.proposal_ref.clone(), reason: "no_course".into() });
             continue;
         }
-        match apply_one(&mut tx, ctx, &actor, p, &mut course_id, &keys, &mut layouts, now).await {
+        let linked = match (&p.duplicate_of, course_id) {
+            (Some(r), Some(cid)) => existing(&mut tx, p.kind.as_str(), r, cid).await?,
+            _ => None,
+        };
+        let outcome = match linked {
+            Some(id) => Ok(Some((id, p.duplicate_of.clone().unwrap_or_default()))),
+            None => apply_one(&mut tx, ctx, &actor, p, &mut course_id, &keys, &mut layouts, now).await,
+        };
+        match outcome {
             Ok(Some((id, entity_ref))) => {
                 keys.insert(p.temp_key.clone(), (p.kind.clone(), id, entity_ref.clone()));
                 created.push(Created { proposal_ref: p.proposal_ref.clone(), entity_ref });
@@ -470,6 +483,18 @@ async fn apply_one(
         }
         _ => Err("unknown_kind".into()),
     }
+}
+
+/// The internal id of an existing Component, Concept or Paper of this course, by PublicId.
+async fn existing(tx: &mut MySqlConnection, kind: &str, public_id: &str, course_id: i64) -> AppResult<Option<i64>> {
+    Ok(match kind {
+        "Component" => crux_repo::catalog::component(tx, public_id).await?.filter(|k| k.course_id == course_id).map(|k| k.id),
+        "Concept" => {
+            crux_repo::catalog::concepts(tx, course_id).await?.into_iter().find(|c| c.public_id.as_deref() == Some(public_id)).map(|c| c.id)
+        }
+        "Paper" => crux_repo::catalog::paper(tx, public_id).await?.filter(|p| p.course_id == course_id).map(|p| p.id),
+        _ => None,
+    })
 }
 
 async fn course_row(tx: &mut MySqlConnection, actor: &Actor, course_id: i64) -> AppResult<crux_repo::courses::CourseRow> {

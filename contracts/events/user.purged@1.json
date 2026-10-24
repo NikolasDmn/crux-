@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crux:events/user.purged@1",
+  "title": "user.purged v1 payload",
+  "description": "files / ai / notify -> core: this service removed everything of the user (spec 9.4). Core deletes the Users row once every service acked.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "userRef": {"type": "string", "pattern": "^[0-9A-Z]{26}$"},
+    "service": {"type": "string", "enum": ["files", "ai", "notify"]}
+  },
+  "required": ["userRef", "service"]
+}

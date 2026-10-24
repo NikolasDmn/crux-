@@ -362,6 +362,58 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
+/// Load testing only (spec 14 M9): creates `count` verified users `<prefix>0001…` (or reuses them)
+/// and returns access tokens valid for `hours`, so a load generator needn't sign up or log in (both
+/// are rate limited per IP). The CLI refuses this when `CRUX_ENV=prod`.
+pub async fn load_test_users(ctx: &Ctx, prefix: &str, count: u32, hours: i64) -> AppResult<Vec<(String, String)>> {
+    let hash = password::hash_blocking("load-test password 1".into()).await?;
+    let now = ctx.clock.now();
+    let mut out = Vec::new();
+    for i in 1..=count {
+        let username = format!("{prefix}{i:04}");
+        let mut tx = crux_repo::begin(&ctx.pool).await?;
+        let user = match users::by_username(&mut tx, &username).await? {
+            Some(u) => u,
+            None => {
+                let tier = tiers::default_tier(&mut tx).await?.ok_or_else(|| anyhow::anyhow!("no default tier"))?;
+                let public_id = ctx.ids.ulid();
+                let email = format!("{username}@load.test");
+                let id = users::insert(
+                    &mut tx,
+                    &NewUser {
+                        public_id: &public_id,
+                        username: &username,
+                        email: &email,
+                        password_hash: &hash,
+                        first_name: "Load",
+                        last_name: &username,
+                        time_zone: "Europe/Amsterdam",
+                        tier_id: tier.id,
+                    },
+                )
+                .await?;
+                settings::insert_defaults(&mut tx, id).await?;
+                users::set_email_verified(&mut tx, id, now).await?;
+                let u = users::by_id(&mut tx, id).await?.ok_or(AppError::NotFound)?;
+                emit(&mut tx, ctx, topics::USER_CREATED, Some(&u.public_id), user_payload(&u, tier.storage_quota_bytes)).await?;
+                u
+            }
+        };
+        tx.commit().await?;
+        let token = ctx.keys.sign_access(&AccessClaims {
+            iss: ISSUER.into(),
+            aud: ACCESS_AUDIENCE.into(),
+            sub: user.public_id.clone(),
+            role: user.role.clone(),
+            tier: user.tier_code.clone(),
+            iat: now.timestamp(),
+            exp: (now + chrono::Duration::hours(hours)).timestamp(),
+        });
+        out.push((username, token));
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

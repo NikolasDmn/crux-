@@ -7,7 +7,7 @@ from crux_common.app import create_app
 
 
 async def _startup(app: FastAPI) -> None:
-    app.state.deps = build_deps(get_settings(), app.state.sessions, app.state.contracts)
+    app.state.deps = build_deps(get_settings(), app.state.sessions, app.state.contracts, app.state.redis)
 
 
 app = create_app(get_settings(), "Crux AI", [internal, router], on_startup=_startup)

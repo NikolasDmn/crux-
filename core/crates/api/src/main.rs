@@ -78,6 +78,15 @@ enum Cmd {
     MakeAdmin {
         email: String,
     },
+    /// Load testing: create users and print `username token` lines (refused when CRUX_ENV=prod).
+    LoadUsers {
+        #[arg(long, default_value_t = 500)]
+        count: u32,
+        #[arg(long, default_value = "load")]
+        prefix: String,
+        #[arg(long, default_value_t = 2)]
+        hours: i64,
+    },
 }
 
 fn init_tracing() {
@@ -125,6 +134,13 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let ctx = build_ctx(&cli, pool.clone()).await?;
+    if let Cmd::LoadUsers { count, prefix, hours } = &cli.cmd {
+        anyhow::ensure!(std::env::var("CRUX_ENV").as_deref() != Ok("prod"), "load-users is for test stacks only");
+        for (username, token) in crux_service::auth::load_test_users(&ctx, prefix, *count, *hours).await? {
+            println!("{username} {token}");
+        }
+        return Ok(());
+    }
     let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
     tokio::spawn(async move {
         let _ = tokio::signal::ctrl_c().await;
@@ -181,6 +197,7 @@ async fn build_ctx(cli: &Cli, pool: crux_repo::MySqlPool) -> anyhow::Result<Ctx>
         keys: Arc::new(JwtKeys::from_pkcs8_pem(&pem)?),
         files: Arc::new(crux_clients::files::HttpFiles::new(&cli.files_url)),
         ai: Arc::new(crux_clients::ai::HttpAi::new(&cli.ai_url)),
+        exports: Arc::new(crux_clients::export::HttpExport::new(&cli.files_url, &cli.ai_url, &cli.notify_url)),
         breach_check: (!cli.hibp_url.is_empty())
             .then(|| Arc::new(crux_clients::pwned::Hibp::new(&cli.hibp_url)) as Arc<dyn crux_clients::pwned::BreachCheck>),
         breached_passwords: Arc::new(load_breached_passwords(&breached)),
@@ -236,7 +253,17 @@ async fn run_jobs(cli: &Cli, ctx: Ctx, shutdown: tokio::sync::watch::Receiver<bo
         let ctx = tick_ctx.clone();
         async move { crux_service::deadlines::tick(&ctx).await }
     }));
-    let _ = tokio::join!(relay, files_consumer, tokens, trash, derive, weeks, tick);
+    let export_ctx = ctx.clone();
+    let exports = tokio::spawn(crux_jobs::every("account.export", Duration::from_secs(30), shutdown.clone(), move || {
+        let ctx = export_ctx.clone();
+        async move { crux_service::account::run_exports(&ctx).await }
+    }));
+    let deletion_ctx = ctx.clone();
+    let deletions = tokio::spawn(crux_jobs::every("account.delete", Duration::from_secs(3600), shutdown.clone(), move || {
+        let ctx = deletion_ctx.clone();
+        async move { crux_service::account::run_deletions(&ctx).await }
+    }));
+    let _ = tokio::join!(relay, files_consumer, tokens, trash, derive, weeks, tick, exports, deletions);
     Ok(())
 }
 

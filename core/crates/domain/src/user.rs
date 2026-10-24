@@ -85,7 +85,8 @@ pub struct SettingsPatch {
     pub flash_review_limit: Option<i32>,
     pub mock_go_easy: Option<bool>,
     pub mock_real_layout: Option<bool>,
-    /// Replaces `Extra` wholesale: small UI prefs (`dailyHours`, `multiCoursePerDay`).
+    /// Replaces `Extra` wholesale: small UI prefs (`dailyHours`, `multiCoursePerDay`, and the
+    /// study window `studyStart` / `studyEnd` as `"HH:MM"`, default 09:00-22:00).
     #[schema(value_type = Option<Object>)]
     pub extra: Option<serde_json::Value>,
 }
@@ -105,13 +106,38 @@ pub fn validate_settings_patch(p: &SettingsPatch) -> ValidationErrors {
     if let Some(extra) = &p.extra {
         if !extra.is_object() {
             e.push("extra", "invalid", "Must be an object.");
-        } else if let Some(h) = extra.get("dailyHours") {
-            if !h.as_f64().is_some_and(|h| (0.5..=16.0).contains(&h)) {
-                e.push("extra.dailyHours", "invalid", "Use 0.5-16 hours.");
+        } else {
+            if let Some(h) = extra.get("dailyHours") {
+                if !h.as_f64().is_some_and(|h| (0.5..=16.0).contains(&h)) {
+                    e.push("extra.dailyHours", "invalid", "Use 0.5-16 hours.");
+                }
             }
+            validate_window(extra, &mut e);
         }
     }
     e
+}
+
+/// `studyStart` / `studyEnd`: `"HH:MM"` on 15-minute steps, at least an hour apart (a missing
+/// one is the default).
+fn validate_window(extra: &serde_json::Value, e: &mut ValidationErrors) {
+    use crate::plan::{parse_hhmm, DAY_END, DAY_START, MIN_WINDOW_MINUTES};
+    let mut read = |key: &str, default: (u32, u32)| match extra.get(key) {
+        None => Some(default),
+        Some(v) => match v.as_str().and_then(parse_hhmm) {
+            Some(t) => Some(t),
+            None => {
+                e.push(&format!("extra.{key}"), "invalid", "Use a time like 09:00, in 15-minute steps.");
+                None
+            }
+        },
+    };
+    let (start, end) = (read("studyStart", DAY_START), read("studyEnd", DAY_END));
+    if let (Some((sh, sm)), Some((eh, em))) = (start, end) {
+        if eh * 60 + em < sh * 60 + sm + MIN_WINDOW_MINUTES {
+            e.push("extra.studyEnd", "invalid", "End at least an hour after the start.");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -145,6 +171,12 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(validate_settings_patch(&bad).0.len(), 4);
+        let window = |v: serde_json::Value| validate_settings_patch(&SettingsPatch { extra: Some(v), ..Default::default() }).0;
+        assert!(window(serde_json::json!({"studyStart": "07:30", "studyEnd": "23:45"})).is_empty());
+        assert_eq!(window(serde_json::json!({"studyStart": "7:30"}))[0].field, "extra.studyStart");
+        assert_eq!(window(serde_json::json!({"studyStart": "09:10"}))[0].field, "extra.studyStart");
+        assert_eq!(window(serde_json::json!({"studyStart": "21:30"}))[0].field, "extra.studyEnd");
+        assert_eq!(window(serde_json::json!({"studyEnd": "24:00"}))[0].field, "extra.studyEnd");
         let not_obj = SettingsPatch { extra: Some(serde_json::json!([1])), ..Default::default() };
         assert_eq!(validate_settings_patch(&not_obj).0[0].field, "extra");
     }

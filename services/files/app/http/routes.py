@@ -3,12 +3,14 @@
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from app.repo import files as repo
 from app.service import files as svc
+from app.service import lifecycle
 from app.service.deps import Deps
 from crux_common.auth import User
 from crux_common.errors import NotFound
@@ -166,3 +168,12 @@ async def internal_chunks(file_id: str, request: Request, pages: str = "") -> li
             raise NotFound()
         rows = await repo.chunks_of(s, row.Id, wanted)
     return [{"fileRef": file_id, "chunkNo": r.ChunkNo, "pageNo": r.PageNo, "text": r.Text} for r in rows]
+
+
+@internal.post("/exports")
+async def internal_export(request: Request, body: dict[str, Any]) -> dict[str, Any]:
+    """Spec 11: zip every service's part with the user's originals. Service token required."""
+    from crux_common.auth import service_caller
+
+    await service_caller(request)
+    return await lifecycle.build_export(deps(request), body["userRef"], body["exportRef"], body.get("parts") or {})

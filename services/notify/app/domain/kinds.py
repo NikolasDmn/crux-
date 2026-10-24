@@ -33,11 +33,12 @@ KINDS: dict[str, Kind] = {
         Kind("course.shared", "Course shared with you", "Someone shared a course; accept or decline."),
         Kind("file.infected", "Upload blocked", "An upload failed the virus scan and was removed."),
         Kind("storage.purged", "Originals removed", "The storage saver removed original files (their text stays)."),
+        Kind("account.export_ready", "Your data export", "The export you asked for is ready to download (24 hours)."),
     )
 }
 
 #: Shown in the inbox whatever the preferences (spec 8): they need an answer.
-ALWAYS_IN_APP = frozenset({"course.shared", "exam.checkin", "file.infected"})
+ALWAYS_IN_APP = frozenset({"course.shared", "exam.checkin", "file.infected", "account.export_ready"})
 
 Prefs = Mapping[tuple[str, str], bool]
 

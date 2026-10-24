@@ -21,6 +21,7 @@ pub const MOCK_AI_GRADE_DECIDED: &str = "mock.ai_grade_decided";
 pub const FILE_PURGE_SCHEDULED: &str = "file.purge_scheduled";
 pub const FILE_PURGED: &str = "file.purged";
 pub const FILE_RESTORED: &str = "file.restored";
+pub const USER_PURGED: &str = "user.purged";
 
 /// Every topic core publishes, for the contract tests.
 pub const PRODUCED: &[&str] = &[

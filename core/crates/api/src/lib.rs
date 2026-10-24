@@ -4,9 +4,11 @@
 pub mod error;
 pub mod extract;
 pub mod idempotency;
+pub mod metrics;
 pub mod openapi;
 pub mod policy_table;
 pub mod reqlog;
+pub mod retry;
 pub mod routes;
 pub mod state;
 
@@ -22,6 +24,7 @@ pub fn app(state: AppState) -> Router {
         .merge(routes::health::router())
         .merge(routes::internal::router())
         .merge(openapi::router(api))
+        .layer(axum::middleware::from_fn(retry::layer))
         .layer(axum::middleware::from_fn_with_state(state.clone(), idempotency::layer))
         .layer(axum::middleware::from_fn(reqlog::layer))
         .with_state(state)

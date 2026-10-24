@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 
-from app.service import account, chat, generation, grading, imports, runtime, tutors
+from app.service import account, chat, generation, grading, imports, lifecycle, runtime, tutors
 from app.service.deps import Deps
 from crux_common.auth import Caller, User
 from crux_common.sse import PING_SECONDS, event, redeem
@@ -265,3 +265,10 @@ async def ai_allowed(
 async def internal_grades(request: Request, caller: Caller, mock: str, user: str) -> list[grading.GradeView]:
     """For core, which decides on a suggestion and must see exactly what ai suggested."""
     return await grading.list_grades(deps(request), user, mock)
+
+
+@internal.post("/export")
+async def internal_export(request: Request, caller: Caller, body: dict[str, str]) -> dict[str, object]:
+    """Spec 11: this service's part of an account export (never key material)."""
+    async with deps(request).sessions() as s:
+        return await lifecycle.export(s, body["userRef"])

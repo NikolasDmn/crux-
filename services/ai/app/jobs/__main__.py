@@ -5,7 +5,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.service import chat, generation, grading, imports
+from app.service import chat, generation, grading, imports, lifecycle
 from app.service.deps import Deps
 from app.service.wiring import build_deps
 from app.settings import Settings, get_settings
@@ -66,5 +66,9 @@ async def generation_loop(sessions: async_sessionmaker[AsyncSession], stop: asyn
 if __name__ == "__main__":
     settings = get_settings()
     deps = worker_deps(settings)
-    handlers: list[Handler] = [grading.MockSubmittedHandler(deps), grading.GradeDecidedHandler()]
+    handlers: list[Handler] = [
+        grading.MockSubmittedHandler(deps),
+        grading.GradeDecidedHandler(),
+        lifecycle.UserDeletedHandler(deps),
+    ]
     asyncio.run(run_worker(settings, handlers, extra=[daily_jobs, generation_loop]))

@@ -10,3 +10,7 @@ dist/
 .ruff_cache/
 .pytest_cache/
 deploy/secrets/
+
+# Load test tokens and local backups
+scripts/load/tokens.txt
+backups/

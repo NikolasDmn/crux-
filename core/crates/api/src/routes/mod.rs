@@ -1,3 +1,4 @@
+pub mod account;
 pub mod admin;
 pub mod auth;
 pub mod bank;
@@ -37,6 +38,11 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(me::get_settings, me::patch_settings))
         .routes(routes!(me::get_tier))
         .routes(routes!(me::ai_allowed))
+        .routes(routes!(account::export))
+        .routes(routes!(account::exports))
+        .routes(routes!(account::deletion))
+        .routes(routes!(account::delete))
+        .routes(routes!(account::cancel))
         .routes(routes!(invites::create, invites::list))
         .routes(routes!(invites::revoke))
         .routes(routes!(sse::ticket))

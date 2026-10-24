@@ -18,7 +18,7 @@ from app.service.account import Camel, visible_tutor
 from app.service.deps import Deps
 from crux_common.auth import Principal
 from crux_common.db import transaction
-from crux_common.errors import AppError, NotFound, ValidationFailed
+from crux_common.errors import AppError, NotFound, RateLimited, ValidationFailed
 from crux_common.ids import new_id
 from crux_common.sse import event
 from crux_common.timeutil import iso, utcnow
@@ -248,8 +248,24 @@ async def _retrieve(deps: Deps, ctx: dict[str, Any], conv: Any, inp: SendInput) 
     return chunks[: prompt.TOP_K + 1]
 
 
+#: Spec 12: AI messages, 30 per minute per user.
+MESSAGES_PER_MINUTE = 30
+
+
+async def _rate_limit(deps: Deps, user_ref: str) -> None:
+    if deps.redis is None:
+        return
+    key = f"crux:rl:ai-messages:{user_ref}"
+    n = await deps.redis.incr(key)
+    if n == 1:
+        await deps.redis.expire(key, 60)
+    if n > MESSAGES_PER_MINUTE:
+        raise RateLimited(details={"retryAfterSecs": 60})
+
+
 async def prepare(deps: Deps, user: Principal, conv_ref: str, inp: SendInput) -> dict[str, Any]:
     """Everything that can fail with a plain HTTP error happens before the stream starts."""
+    await _rate_limit(deps, user.user_ref)
     async with deps.sessions() as s:
         conv = await _conv(s, user, conv_ref)
         history_rows = (

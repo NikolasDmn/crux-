@@ -102,6 +102,10 @@ def inbox(kind: str, payload: dict[str, Any], tz: str = "Europe/Amsterdam") -> I
             "Their text, question images and thumbnails stay. Upload the same file again to bring one back.",
             "/settings/storage",
         )
+    if kind == "account.export_ready":
+        return InboxText(
+            "Your data export is ready", "Download it within 24 hours from Settings, Account.", "/settings/account"
+        )
     return InboxText(kind, "", None)
 
 

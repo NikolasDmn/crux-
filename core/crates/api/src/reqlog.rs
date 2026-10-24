@@ -49,6 +49,7 @@ pub async fn layer(mut req: Request, next: Next) -> Response {
     let status = resp.status().as_u16();
     let user = user.0.lock().unwrap().clone().unwrap_or_default();
     let latency_ms = started.elapsed().as_millis() as u64;
+    crate::metrics::record(method.as_str(), &route, status, started.elapsed());
     if status >= 500 {
         tracing::error!(request_id = %id, user = %user, %method, route = %route, status, latency_ms, "request");
     } else if route != "/healthz" && route != "/readyz" {

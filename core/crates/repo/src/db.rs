@@ -43,3 +43,8 @@ pub async fn migrate_url(url: &str) -> Result<(), sqlx::migrate::MigrateError> {
 pub async fn ping(pool: &MySqlPool) -> Result<(), sqlx::Error> {
     sqlx::query("SELECT 1").execute(pool).await.map(|_| ())
 }
+
+/// A single number from a fixed query (metrics gauges).
+pub async fn scalar_i64(conn: &mut sqlx::MySqlConnection, sql: &str) -> Result<i64, sqlx::Error> {
+    sqlx::query_scalar(sql).fetch_one(conn).await
+}

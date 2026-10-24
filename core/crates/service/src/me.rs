@@ -71,6 +71,13 @@ pub async fn patch_settings(ctx: &Ctx, actor: &Actor, version: i32, patch: Setti
         ..cur.clone()
     };
     settings::update(&mut tx, actor.user_id, version, &next).await?;
+    // The planner reads these from Extra: a change re-lays the plan (pinned entries stay).
+    let planner = |e: &Option<Json<serde_json::Value>>| {
+        ["dailyHours", "multiCoursePerDay", "studyStart", "studyEnd"].map(|k| e.as_ref().and_then(|j| j.0.get(k).cloned()))
+    };
+    if planner(&cur.extra) != planner(&next.extra) {
+        crate::plan::rebuild_in(&mut tx, ctx, actor.user_id).await?;
+    }
     let s = settings::get(&mut tx, actor.user_id).await?.ok_or(AppError::NotFound)?;
     tx.commit().await?;
     Ok(SettingsView::from(&s))

@@ -21,6 +21,7 @@ class ObjectStore(Protocol):
     def read(self, key: str) -> AsyncIterator[bytes]: ...
     async def delete(self, key: str) -> None: ...
     async def put_bytes(self, key: str, data: bytes, content_type: str) -> None: ...
+    async def put_file(self, key: str, fileobj: Any, content_type: str) -> None: ...
 
 
 async def sha256_and_head(store: ObjectStore, key: str, head_len: int = 8) -> tuple[str, bytes, int]:
@@ -114,6 +115,12 @@ class S3Store:
             lambda: self._s3.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
         )
 
+    async def put_file(self, key: str, fileobj: Any, content_type: str) -> None:
+        """Streams a (large) local file object up in parts."""
+        await asyncio.to_thread(
+            lambda: self._s3.upload_fileobj(fileobj, self.bucket, key, ExtraArgs={"ContentType": content_type})
+        )
+
 
 @dataclass
 class MemoryStore:
@@ -147,3 +154,6 @@ class MemoryStore:
 
     async def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
         self.objects[key] = data
+
+    async def put_file(self, key: str, fileobj: Any, content_type: str) -> None:
+        self.objects[key] = fileobj.read()

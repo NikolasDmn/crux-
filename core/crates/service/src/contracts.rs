@@ -34,6 +34,7 @@ const SCHEMAS: &[((&str, &str), &str)] = &[
     schema!("mock.submitted", "1"),
     schema!("mock.ai_grade_decided", "1"),
     schema!("ai.grade_suggested", "1"),
+    schema!("user.purged", "1"),
 ];
 
 pub const ENVELOPE: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../contracts/events/envelope.json"));

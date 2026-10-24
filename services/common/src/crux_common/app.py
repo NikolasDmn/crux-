@@ -8,7 +8,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
-from crux_common import db, errors
+from crux_common import db, errors, metrics
 from crux_common import logging as crux_logging
 from crux_common.auth import Authenticator, Jwks
 from crux_common.messaging.contracts import Contracts
@@ -42,6 +42,7 @@ def create_app(
     app = FastAPI(
         title=title, version="0.1.0", lifespan=lifespan, openapi_url="/openapi.json", docs_url=None, redoc_url=None
     )
+    metrics.install(app, settings.service_name)
     app.middleware("http")(crux_logging.request_log_middleware)
     errors.install(app)
 

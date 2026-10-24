@@ -68,6 +68,7 @@ impl IntoResponse for ApiError {
             }
             AppError::AiDisabled { reason } => ("AI is off here.".into(), Some(json!({ "reason": reason }))),
             AppError::MockTimeOver => ("Time is over for this mock.".into(), None),
+            AppError::Internal(_) if self.0.is_deadlock() => ("Something went wrong.".into(), None),
             AppError::Internal(e) => {
                 tracing::error!(error = %e, request_id = request_id.as_deref().unwrap_or(""), "internal error");
                 ("Something went wrong.".into(), None)
@@ -75,6 +76,9 @@ impl IntoResponse for ApiError {
         };
         let body = ErrorBody { error: ErrorDetail { code: code.into(), message, details, request_id } };
         let mut resp = (status, axum::Json(body)).into_response();
+        if self.0.is_deadlock() {
+            resp.extensions_mut().insert(crate::retry::Deadlocked);
+        }
         if let AppError::RateLimited { retry_after_secs } = &self.0 {
             if let Ok(v) = HeaderValue::from_str(&retry_after_secs.to_string()) {
                 resp.headers_mut().insert(axum::http::header::RETRY_AFTER, v);

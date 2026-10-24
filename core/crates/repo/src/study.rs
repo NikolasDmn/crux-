@@ -200,6 +200,19 @@ pub async fn upsert_week(
     data: &serde_json::Value,
     at: DateTime<Utc>,
 ) -> RepoResult<()> {
+    // UPDATE first: on an existing row it takes one record lock. `INSERT … ON DUPLICATE KEY`
+    // takes next-key (gap) locks on the unique index, which deadlocked neighbouring users'
+    // rebuilds under load (M9 k6 run). The insert path runs once per user and week.
+    let updated = sqlx::query("UPDATE WeekSummary SET Data = ?, RebuiltAt = ? WHERE UserId = ? AND IsoWeek = ?")
+        .bind(Json(data))
+        .bind(at)
+        .bind(user_id)
+        .bind(iso_week)
+        .execute(&mut *conn)
+        .await?;
+    if updated.rows_affected() > 0 {
+        return Ok(());
+    }
     sqlx::query(
         "INSERT INTO WeekSummary (UserId, IsoWeek, Data, RebuiltAt) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE Data = VALUES(Data), RebuiltAt = VALUES(RebuiltAt)",
     )

@@ -1,5 +1,7 @@
 """Builds the real dependencies from settings (tests build their own Deps with doubles)."""
 
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.clients.core import HttpCore, HttpFiles
@@ -12,7 +14,9 @@ from crux_common.messaging.contracts import Contracts
 from crux_common.service_tokens import ServiceTokens
 
 
-def build_deps(settings: Settings, sessions: async_sessionmaker[AsyncSession], contracts: Contracts) -> Deps:
+def build_deps(
+    settings: Settings, sessions: async_sessionmaker[AsyncSession], contracts: Contracts, redis: Any | None = None
+) -> Deps:
     tokens = ServiceTokens(settings.core_internal_url, settings.service_name, settings.service_secret)
     return Deps(
         settings=settings,
@@ -23,4 +27,5 @@ def build_deps(settings: Settings, sessions: async_sessionmaker[AsyncSession], c
         contracts=contracts,
         master_key=crypto.master_key(settings.kms_master_key),
         store=S3Transcripts(settings),
+        redis=redis,
     )

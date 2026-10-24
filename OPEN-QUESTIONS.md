@@ -182,6 +182,24 @@ files waits for the object store, and every compose service has `restart: unless
 | B8-20 | New internal routes in core: `ai/materials`, `context/user`, `mocks/{id}/open`, `ai/generation-context`, `ai/topup-plan`, `ai/paper`, `questions/generated`, `import/apply`; in ai: `grades` | Spec 15 lists only some internal routes |
 | B8-21 | Verify script fix: the cold start stops every compose profile first (ai containers outlived the wiped database). Core logs "ai unreachable" at info: AI off is a supported setup | Spec 9.6 |
 
+## Milestone 9 build choices (hardening)
+
+| # | Choice | Why / where |
+|---|---|---|
+| B9-1 | Export: core dumps every row of the user's from `information_schema` (any column named `*Hash` is skipped, internal Ids included for joins); notify, ai and files add their parts (ai **without key material**); files writes the zip: one JSON per service, `README.txt`, and `originals/` with the uploaded files | Spec 15 "export everything" |
+| B9-2 | **Decided (Nick 2026-10-24): the export download lasts 24 h**, then the zip is deleted (hourly job); a new export can be asked for any time. Ready → an in-app notice (`account.export_ready`, always on, can't be opted out); asking again while one is in progress returns that one | Personal data on the server as briefly as possible |
+| B9-3 | **Decided (Nick 2026-10-24): deletion keeps the 14-day grace, cancellable.** The request needs the password and a decision for every course shared with others: transfer to a named member, or delete. Logging in stays possible (to cancel, Q-auth-7). The job runs hourly (spec says daily); every service deletes its rows and confirms with `user.purged@1`; core removes the user last | Spec 15 |
+| B9-4 | Chat rate limit: **30 messages a minute per user** (Redis counter in the ai service, `429 rate_limited` with `retryAfterSecs`) | Spec 3.1 lists the code, not the number |
+| B9-5 | Metrics: Prometheus text at `/internal/metrics` on every service (blocked at the gateway): request count and latency by route template and status, plus core gauges (unpublished outbox rows, pending exports and deletions). **No Grafana/Loki containers shipped**: scrape and view with whatever the VPS runs | Spec 12; Q-arch-6 |
+| B9-6 | Backups: per database `mysqldump --single-transaction --source-data=2` (binlog position for point-in-time replay), the object store as one tar, `SHA256SUMS`. **Decided (Nick 2026-10-24): one VPS, off-site copy to an S3-compatible bucket**: `BACKUP_S3_*` in `.env`, uploads pruned after `BACKUP_KEEP_DAYS` (default 30). Encryption is left to the bucket (no client-side encryption) | Spec 12 |
+| B9-7 | Restore drill: each dump loaded into a scratch database next to the live one; table counts compared, row totals printed, scratch dropped; the tar checked against its checksum. Not a row-by-row comparison | Spec 12 "monthly restore drill" |
+| B9-8 | Load test: k6 (`grafana/k6:0.54.0`) with a studying-user script (home, course page, flashcards, events, a mock every 10th loop); thresholds p95 < 300 ms and < 1 % errors on non-AI routes. Users come from `crux-core load-users` (refused when `CRUX_ENV=prod`; 3-hour tokens). **Local laptop result, 500 users: p95 48 ms, 1,063 req/s, 0 errors.** The real run belongs on the target VPS | Spec 14 M9 |
+| B9-9 | The load test found **MySQL deadlocks** (500s on `/week`, course stats, new deadlines). Fixes: the WeekSummary write is UPDATE-first (row lock, not gap locks), and a middleware **replays a request whose transaction lost a deadlock** (3 tries, short jittered pause). Safe because each request is one transaction with side effects in the outbox; a few internal HTTP reads may repeat | `core/crates/api/src/retry.rs` |
+| B9-10 | **Decided (Nick 2026-10-24): the study window is a user setting**: `Extra.studyStart` / `studyEnd` (`"HH:MM"`, 15-minute steps, at least 1 h, default 09:00–22:00). Changing it (or `dailyHours` / `multiCoursePerDay`) rebuilds the plan at once, pinned entries kept. The flashcard exam cap (B4-3) stays at 18:00 the day before, whatever the window | Spec 5.8 |
+| B9-11 | Production DB users: `deploy/mysql/init-prod.sh` runs once on an empty volume after `init.sql` and sets the service passwords from `.env`; with `CRUX_ENV=prod` it drops the test user. Later rotation is by hand (README) | Q-arch-7 |
+| B9-12 | `cargo audit` ignores **RUSTSEC-2023-0071** (rsa timing attack): rsa comes only through sqlx's MySQL driver, which encrypts with the server's public key; the attack needs private-key decryption. No fixed release exists. `pip-audit`: clean | `core/.cargo/audit.toml` |
+| B9-13 | Small fixes: the notify API now reads `CRUX_SMTP_URL` (it was pinned to Mailpit); the README covers adding a provider, operations and a VPS deploy | |
+
 ## Product / behaviour
 
 | # | Question | Built meanwhile |
@@ -207,5 +225,5 @@ files waits for the object store, and every compose service has `restart: unless
 | Q-arch-3 | sqlx `query!` macros need a database at compile time. | M1 uses runtime-checked `sqlx::query_as`. Switch to `query!` + `cargo sqlx prepare` (offline data committed) once CI has run green on MySQL. |
 | Q-arch-4 | SeaORM for CRUD (2.2). | Not used in M1: the auth tables are few and hand-written SQL is clearer. Will be introduced in milestone 2 (catalog CRUD), entities generated from the migrated schema. |
 | Q-arch-5 | Unsubscribe links: `Recipient.UnsubscribeTokenHash` stores only a hash, so the token must be re-derivable for each email. | Token = HMAC-SHA256(`CRUX_UNSUBSCRIBE_SECRET`, userRef); only its sha256 is stored. |
-| Q-arch-6 | Metrics endpoint (`/metrics`) and Grafana/Loki. | Planned for milestone 9 (hardening); logs are already structured JSON. |
-| Q-arch-7 | Prod DB passwords: `deploy/mysql/init.sql` holds dev passwords. | Fine for dev/CI. A prod init script reading `.env` comes with deployment (milestone 9). |
+| Q-arch-6 | Metrics endpoint (`/metrics`) and Grafana/Loki. | **Done in M9 (B9-5):** `/internal/metrics` on every service; dashboards are left to the VPS. |
+| Q-arch-7 | Prod DB passwords: `deploy/mysql/init.sql` holds dev passwords. | **Done in M9 (B9-11):** `deploy/mysql/init-prod.sh` sets them from `.env`. |

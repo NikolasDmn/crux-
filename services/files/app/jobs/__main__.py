@@ -3,12 +3,13 @@
 import asyncio
 import logging
 import time
+from typing import Any
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.clients.store import S3Store
-from app.service import jobs, saver
+from app.service import jobs, lifecycle, saver
 from app.service.deps import Deps
 from app.service.users import UserEventsHandler
 from app.service.wiring import build_deps
@@ -56,7 +57,16 @@ async def job_loop(sessions: async_sessionmaker[AsyncSession], stop: asyncio.Eve
                 stuck = await jobs.recover_stuck(deps)
                 abandoned = await jobs.sweep_abandoned(deps)
                 purged = await saver.purge_due(deps)
-                log.info("sweeps done", extra={"stuck_jobs": stuck, "abandoned_uploads": abandoned, "purged": purged})
+                expired = await lifecycle.expire_exports(deps)
+                log.info(
+                    "sweeps done",
+                    extra={
+                        "stuck_jobs": stuck,
+                        "abandoned_uploads": abandoned,
+                        "purged": purged,
+                        "expired_exports": expired,
+                    },
+                )
             worked = await jobs.run_one(deps)
         except Exception as e:
             log.error("job loop error", extra={"error": repr(e), "alert": True})
@@ -66,6 +76,16 @@ async def job_loop(sessions: async_sessionmaker[AsyncSession], stop: asyncio.Eve
                 await asyncio.wait_for(stop.wait(), timeout=1.0)
             except TimeoutError:
                 pass
+
+
+def _deps_for_handlers(settings: Any, store: S3Store) -> Deps:
+    """Handlers are built before run_worker opens its sessions: they get their own engine."""
+    from crux_common import db
+
+    sessions = db.make_sessionmaker(db.make_engine(settings.database_url, pool_size=2))
+    d = _deps(sessions)
+    d.store = store
+    return d
 
 
 if __name__ == "__main__":
@@ -82,5 +102,6 @@ if __name__ == "__main__":
         UserEventsHandler(),
         jobs.CourseEventsHandler(store),
         saver.PurgeRequestsHandler(Contracts(settings.contracts_dir)),
+        lifecycle.UserDeletedHandler(_deps_for_handlers(settings, store), Contracts(settings.contracts_dir)),
     ]
     asyncio.run(run_worker(get_settings(), handlers, extra=[job_loop]))

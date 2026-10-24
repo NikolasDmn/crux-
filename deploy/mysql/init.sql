@@ -1,6 +1,6 @@
 -- One MySQL server, one database per service (backend-spec 1). Each service gets a user that can
 -- only touch its own database, so "files never writes core tables" (spec 9.3) is enforced by grants.
--- Dev passwords; production passwords come from .env via deploy/mysql/init-prod.sh (later).
+-- Dev passwords here; init-prod.sh (01-passwords.sh) then sets the ones from .env.
 
 CREATE DATABASE IF NOT EXISTS crux_core   CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE DATABASE IF NOT EXISTS crux_files  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crux_clients::ai::AiApi;
 use crux_clients::clock::Clock;
+use crux_clients::export::ExportApi;
 use crux_clients::files::FilesApi;
 use crux_clients::ids::IdGen;
 use crux_clients::kv::KeyValue;
@@ -31,6 +32,8 @@ pub struct Ctx {
     pub files: Arc<dyn FilesApi>,
     /// The ai service (gate); unreachable when the "ai" profile is off.
     pub ai: Arc<dyn AiApi>,
+    /// Account export parts from the other services (spec 11).
+    pub exports: Arc<dyn ExportApi>,
     /// Offline list: the fallback when the online check can't answer.
     pub breached_passwords: Arc<HashSet<String>>,
     /// Online check (HIBP). None = offline list only (tests, air-gapped installs).

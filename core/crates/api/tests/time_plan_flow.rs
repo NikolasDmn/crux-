@@ -373,3 +373,41 @@ async fn digests_and_reminder_changes() {
     assert_eq!(got.iter().filter(|r| r.2).map(|r| r.0.as_str()).collect::<Vec<_>>(), ["exam.eve", "exam.checkin"]);
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn the_study_window_setting_re_lays_the_plan() {
+    let Some(h) = common::harness().await else { return };
+    let (t, _, _) = signup(&h.app, &h.t.ctx, "wendy").await;
+    let course = ok(&h, "POST", "/courses", &t, Some(json!({"name": "Evening course", "code": "EVE"})), &[]).await["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    ok(&h, "POST", &format!("/courses/{course}/components"), &t, Some(json!({"code": "L1", "name": "L1", "estHours": 3.0})), &[]).await;
+    ok(&h, "POST", &format!("/courses/{course}/deadlines"), &t, Some(json!({"type": "Exam", "startsAt": "2026-11-20T08:00:00Z"})), &[])
+        .await;
+
+    let bad = call(&h.app, "GET", "/me/settings", Some(&t), None, &[]).await;
+    let v = bad.json["version"].as_i64().unwrap().to_string();
+    let r = call(&h.app, "PATCH", "/me/settings", Some(&t), Some(json!({"extra": {"studyStart": "21:30"}})), &[("if-match", &v)]).await;
+    assert_eq!(
+        (r.status, r.json["error"]["details"]["fields"][0]["field"].as_str()),
+        (StatusCode::UNPROCESSABLE_ENTITY, Some("extra.studyEnd"))
+    );
+
+    // 19:00-21:00 Amsterdam.
+    ok(&h, "PATCH", "/me/settings", &t, Some(json!({"extra": {"studyStart": "19:00", "studyEnd": "21:00"}})), &[("if-match", &v)]).await;
+    let plan = ok(&h, "GET", &format!("/plan?from={}&to=2026-11-21T00:00:00Z", at(&h, Duration::zero())), &t, None, &[]).await;
+    let lectures: Vec<&Value> = plan.as_array().unwrap().iter().filter(|e| e["kind"] == "Lecture").collect();
+    assert!(!lectures.is_empty());
+    // Amsterdam is UTC+2 until 25 Oct 01:00 UTC, then UTC+1.
+    let local = |iso: &str| {
+        let t = chrono::DateTime::parse_from_rfc3339(iso).unwrap().with_timezone(&Utc);
+        let off = if t < Utc.with_ymd_and_hms(2026, 10, 25, 1, 0, 0).unwrap() { 2 } else { 1 };
+        (t + Duration::hours(off)).format("%H:%M").to_string()
+    };
+    for e in &lectures {
+        let (s, f) = (local(e["startAt"].as_str().unwrap()), local(e["endAt"].as_str().unwrap()));
+        assert!(s.as_str() >= "19:00" && f.as_str() <= "21:00", "{s}-{f}: {e}");
+    }
+    h.db.drop_db().await;
+}

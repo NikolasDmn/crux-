@@ -87,3 +87,7 @@ async def set_settings(session: AsyncSession, user_ref: str, **values: bool) -> 
     await session.execute(
         update(user_storage).where(c.UserRef == user_ref).values(RowVersion=c.RowVersion + 1, **values)
     )
+
+
+async def delete_user(session: AsyncSession, user_ref: str) -> None:
+    await session.execute(user_storage.delete().where(user_storage.c.UserRef == user_ref))

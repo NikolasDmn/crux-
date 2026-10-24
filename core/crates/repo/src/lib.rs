@@ -3,6 +3,7 @@
 //!
 //! Every query on user data is scoped by the caller's `UserId` here (schema header).
 
+pub mod account;
 pub mod auth_tokens;
 pub mod bank;
 pub mod catalog;

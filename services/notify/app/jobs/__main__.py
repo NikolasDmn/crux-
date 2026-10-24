@@ -5,10 +5,12 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.clients.smtp import SmtpMailer
+from app.service.account import UserDeletedHandler
 from app.service.requests import NotifyRequestedHandler, RedisPublisher, dispatch_once
 from app.service.users import UserEventsHandler
 from app.settings import get_settings
 from crux_common.messaging.consumer import Handler
+from crux_common.messaging.contracts import Contracts
 from crux_common.settings import REDIS_SOCKET_TIMEOUT
 from crux_common.worker import run_worker
 
@@ -37,5 +39,9 @@ async def dispatcher(sessions: async_sessionmaker[AsyncSession], stop: asyncio.E
 
 if __name__ == "__main__":
     settings = get_settings()
-    handlers: list[Handler] = [UserEventsHandler(settings.unsubscribe_secret), NotifyRequestedHandler()]
+    handlers: list[Handler] = [
+        UserEventsHandler(settings.unsubscribe_secret),
+        NotifyRequestedHandler(),
+        UserDeletedHandler(Contracts(settings.contracts_dir)),
+    ]
     asyncio.run(run_worker(settings, handlers, extra=[dispatcher]))

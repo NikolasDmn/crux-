@@ -74,6 +74,8 @@ struct Prefs {
     tz: Tz,
     daily_hours: f64,
     multi_course: bool,
+    day_start: (u32, u32),
+    day_end: (u32, u32),
 }
 
 async fn prefs(conn: &mut MySqlConnection, user_id: i64) -> AppResult<Prefs> {
@@ -83,6 +85,8 @@ async fn prefs(conn: &mut MySqlConnection, user_id: i64) -> AppResult<Prefs> {
         tz,
         daily_hours: extra.get("dailyHours").and_then(|v| v.as_f64()).unwrap_or(plan::DEFAULT_DAILY_HOURS),
         multi_course: extra.get("multiCoursePerDay").and_then(|v| v.as_bool()).unwrap_or(false),
+        day_start: extra.get("studyStart").and_then(|v| v.as_str()).and_then(plan::parse_hhmm).unwrap_or(plan::DAY_START),
+        day_end: extra.get("studyEnd").and_then(|v| v.as_str()).and_then(plan::parse_hhmm).unwrap_or(plan::DAY_END),
     })
 }
 
@@ -115,7 +119,19 @@ async fn input(conn: &mut MySqlConnection, user_id: i64, now: DateTime<Utc>, p: 
         });
     }
     let busy = repo::busy_from(conn, user_id, now).await?;
-    Ok((PlanInput { now, tz: p.tz, daily_hours: p.daily_hours, multi_course: p.multi_course, courses, busy }, codes))
+    Ok((
+        PlanInput {
+            now,
+            tz: p.tz,
+            daily_hours: p.daily_hours,
+            multi_course: p.multi_course,
+            day_start: p.day_start,
+            day_end: p.day_end,
+            courses,
+            busy,
+        },
+        codes,
+    ))
 }
 
 /// Replaces the unpinned planner entries from now on (spec 5.8), in the caller's transaction.

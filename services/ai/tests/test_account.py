@@ -150,3 +150,33 @@ async def test_settings_keys_tutors_gate_budget() -> None:
         assert (await runtime.decide(deps, USER.user_ref, "MaterialChat"))[0] == "no_key"
         async with deps.sessions() as sess:
             assert len((await sess.execute(select(consent_log))).all()) >= 3
+
+
+async def test_export_and_user_deletion() -> None:
+    from app.repo.tables import provider_key as pk
+    from app.service import lifecycle
+    from crux_common.messaging.bus import Delivery, Envelope
+    from crux_common.messaging.consumer import process
+    from crux_common.messaging.tables import outbox
+
+    async with env() as (deps, _fake, _core, _files):
+        await account.patch_settings(
+            deps, USER, account.SettingsPatch(enabled=True, consent_policy_version=deps.settings.consent_policy_version)
+        )
+        await account.add_key(deps, USER, account.KeyInput(provider="fake", api_key="fake-valid-key-7777"))
+        async with deps.sessions() as s:
+            out = await lifecycle.export(s, USER.user_ref)
+        assert out["keys"][0]["Last4"] == "7777" and "Ciphertext" not in out["keys"][0]
+        assert out["settings"][0]["Enabled"] and out["consentLog"]
+        d = Delivery(
+            "1-0",
+            "user.deleted",
+            Envelope(
+                "01EVTDEL00000000000000000B", "user.deleted", 1, "x", "core", USER.user_ref, {"userRef": USER.user_ref}
+            ),
+        )
+        await process(deps.sessions, deps.contracts, lifecycle.UserDeletedHandler(deps), d)
+        async with deps.sessions() as s:
+            assert (await s.execute(select(pk))).all() == []
+            assert [r.Topic for r in await s.execute(select(outbox.c.Topic))] == ["user.purged"]
+        assert (await account.get_settings(deps, USER)).enabled is False

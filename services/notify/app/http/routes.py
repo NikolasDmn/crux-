@@ -9,13 +9,15 @@ from html import escape
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 
+from app.service import account
 from app.service import inbox as svc
 from app.service.requests import stream_channel
-from crux_common.auth import User
+from crux_common.auth import Caller, User
 from crux_common.errors import NotFound
 from crux_common.sse import PING_SECONDS, event, redeem
 
 router = APIRouter(tags=["notify"])
+internal = APIRouter(prefix="/internal/v1", tags=["internal"])
 
 
 def sessions(request: Request):  # type: ignore[no-untyped-def]
@@ -130,3 +132,10 @@ async def email_webhook(body: svc.BounceBatch, request: Request) -> dict[str, in
     if not secret or not hmac.compare_digest(secret, given):
         raise NotFound()
     return {"suppressed": await svc.record_bounces(sessions(request), body)}
+
+
+@internal.post("/export")
+async def internal_export(request: Request, caller: Caller, body: dict[str, str]) -> dict[str, object]:
+    """Spec 11: this service's part of an account export. Service token required."""
+    async with sessions(request)() as s:
+        return await account.export(s, body["userRef"])

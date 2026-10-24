@@ -20,5 +20,7 @@ class Deps:
     files: FilesApi
     contracts: Contracts
     master_key: bytes
-    #: Transcript store (put_bytes / delete); None = transcripts off (tests).
+    #: Transcript store (put / delete); None = transcripts off (tests).
     store: Any | None = None
+    #: Redis for rate limits; None = no limits (tests, the worker).
+    redis: Any | None = None

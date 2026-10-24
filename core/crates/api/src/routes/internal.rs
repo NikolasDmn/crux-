@@ -15,6 +15,7 @@ use crate::AppState;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/internal/v1/jwks", get(jwks))
+        .route("/internal/metrics", get(crate::metrics::handler))
         .route("/internal/v1/service-token", post(service_token))
         .route("/internal/v1/access", get(access))
         .route("/internal/v1/access/file-ref", get(file_ref_access))

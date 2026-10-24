@@ -1,0 +1,8 @@
+# cargo audit (CI). Each ignore says why it doesn't apply; review when sqlx updates.
+[advisories]
+ignore = [
+    # rsa "Marvin attack": timing leaks in RSA *decryption* with a private key. rsa comes in only
+    # through sqlx-mysql, which *encrypts* the password with the server's public key
+    # (caching_sha2_password without TLS); core never decrypts. No fixed rsa release exists.
+    "RUSTSEC-2023-0071",
+]

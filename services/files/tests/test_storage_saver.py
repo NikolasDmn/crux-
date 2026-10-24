@@ -122,3 +122,56 @@ async def test_chunk_search_for_ai() -> None:
             assert await repo.search_chunks(s, [b.id], "residuals", 5) == []
             row = await repo.by_public_id(s, a.id)
             assert [c.PageNo for c in await repo.chunks_of(s, row.Id, [1])] == [1]
+
+
+async def test_export_and_user_deletion() -> None:
+    import zipfile
+    from io import BytesIO
+
+    from app.service import lifecycle
+
+    async with env() as (deps, store, _):
+        data = make_pdf(["My notes"])
+        f = await upload(deps, store, OWNER, data, course=COURSE)
+        await drain(deps)
+        out = await lifecycle.build_export(deps, OWNER.user_ref, "01EXPORT000000000000000001", {"core": {"user": "x"}})
+        again = await lifecycle.build_export(deps, OWNER.user_ref, "01EXPORT000000000000000001", {"core": {}})
+        assert again == out, "idempotent per export"
+        async with deps.sessions() as s:
+            row = await repo.by_public_id(s, out["fileRef"])
+        z = zipfile.ZipFile(BytesIO(store.objects[row.StorageKey]))
+        names = z.namelist()
+        assert "core.json" in names and "files.json" in names and any(n.startswith("originals/") for n in names)
+        assert (await svc.storage_view(deps, OWNER)).used_bytes == len(data), "exports don't count"
+        url = await svc.download_url(deps, OWNER, out["fileRef"])
+        assert url.url
+
+        async with deps.sessions() as s, s.begin():
+            await s.execute(
+                update(stored_file)
+                .where(stored_file.c.PublicId == out["fileRef"])
+                .values(UploadedAt=utcnow() - timedelta(days=2))
+            )
+        assert await lifecycle.expire_exports(deps) == 1
+
+        h = lifecycle.UserDeletedHandler(deps, deps.contracts)
+        d = Delivery(
+            "1-0",
+            "user.deleted",
+            Envelope(
+                "01EVTDEL00000000000000000A",
+                "user.deleted",
+                1,
+                "x",
+                "core",
+                OWNER.user_ref,
+                {"userRef": OWNER.user_ref},
+            ),
+        )
+        assert await process(deps.sessions, deps.contracts, h, d) == Outcome.APPLIED
+        async with deps.sessions() as s:
+            row = await repo.by_public_id(s, f.id)
+            q = await storage.get(s, OWNER.user_ref)
+        assert (row.Status, row.StorageKey, q) == ("Deleted", None, None)
+        assert store.objects == {}
+        assert "user.purged" in await topics(deps)

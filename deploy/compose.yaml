@@ -43,10 +43,16 @@ services:
       - --collation-server=utf8mb4_0900_ai_ci
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-crux-root}
+      CRUX_ENV: ${CRUX_ENV:-dev}
+      CRUX_CORE_DB_PASSWORD: ${CRUX_CORE_DB_PASSWORD:-crux-core}
+      CRUX_FILES_DB_PASSWORD: ${CRUX_FILES_DB_PASSWORD:-crux-files}
+      CRUX_AI_DB_PASSWORD: ${CRUX_AI_DB_PASSWORD:-crux-ai}
+      CRUX_NOTIFY_DB_PASSWORD: ${CRUX_NOTIFY_DB_PASSWORD:-crux-notify}
     ports: ["${CRUX_MYSQL_PORT:-3306}:3306"]
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+      - ./mysql/init-prod.sh:/docker-entrypoint-initdb.d/01-passwords.sh:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-crux-root}"]
       interval: 5s
@@ -143,7 +149,7 @@ services:
       CRUX_SERVICE_NAME: notify
       CRUX_UNSUBSCRIBE_SECRET: ${CRUX_UNSUBSCRIBE_SECRET:-dev-unsubscribe-secret-change-me}
       CRUX_EMAIL_WEBHOOK_SECRET: ${CRUX_EMAIL_WEBHOOK_SECRET:-}
-      CRUX_SMTP_URL: smtp://mailpit:1025
+      CRUX_SMTP_URL: ${CRUX_SMTP_URL:-smtp://mailpit:1025}
     depends_on:
       mysql: {condition: service_healthy}
       redis: {condition: service_healthy}

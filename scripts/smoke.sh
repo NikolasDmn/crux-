@@ -2,7 +2,7 @@
 # Smoke test against a running stack: health of every service through the gateway, signup with an
 # invite, /me, user.created reaching files and notify (M1); then a course with a lecture, a PDF
 # uploaded to its pre-signed URL through the gateway, scanned, extracted, attached as a material,
-# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5); a live inbox notification (M6); storage saver and thumbnails (M7); AI chat and generation, or service_unavailable without ai (M8).
+# its page text and a download link (M2); a mock answered and graded (M3); a flashcard reviewed (M4); an exam planned, an event, /next and /week (M5); a live inbox notification (M6); storage saver and thumbnails (M7); AI chat and generation, or service_unavailable without ai (M8); an account export (M9).
 # Usage: scripts/smoke.sh [base-url]   (default http://localhost:8000)
 set -euo pipefail
 
@@ -178,3 +178,16 @@ else
     [ "$reason" = service_unavailable ] || fail "without ai, core should say service_unavailable (got $reason)"
     echo "ok   ai profile off: core reports service_unavailable"
 fi
+
+# ---------- milestone 9 ----------
+# Account export: queued, built by core-jobs with every service's part, zipped by files, and
+# downloadable through the signed URL.
+api POST /account/export >/dev/null || fail "export request"
+for _ in $(seq 1 60); do est=$(api GET /account/exports | j '[0]["status"]'); [ "$est" = Ready ] && break; sleep 1; done
+[ "$est" = Ready ] || fail "export not ready in 60 s ($est)"
+efile=$(api GET /account/exports | j '[0]["fileId"]')
+eurl=$(api GET "/files/$efile/url" | j '["url"]')
+zipf=$(mktemp)
+curl -fsS "$eurl" -o "$zipf" || fail "export download"
+python3 -c "import sys, zipfile; n = zipfile.ZipFile(sys.argv[1]).namelist(); assert {'core.json', 'notify.json', 'files.json'} <= set(n), n" "$zipf" || fail "export zip contents"
+echo "ok   account export zipped and downloadable"

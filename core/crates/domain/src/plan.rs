@@ -18,9 +18,11 @@ pub const DEFAULT_DAILY_HOURS: f64 = 4.0;
 /// Planning horizon when no course has an exam.
 pub const HORIZON_NO_EXAM_DAYS: i64 = 14;
 pub const MAX_HORIZON_DAYS: i64 = 120;
-/// The day's study window (local time).
+/// The default study window (local time); users set their own (`Extra.studyStart` / `studyEnd`).
 pub const DAY_START: (u32, u32) = (9, 0);
 pub const DAY_END: (u32, u32) = (22, 0);
+/// The shortest study window a user may set, in minutes.
+pub const MIN_WINDOW_MINUTES: u32 = 60;
 const MIN_BLOCK_HOURS: f64 = 0.5;
 const FINAL_WEEK_DAYS: i64 = 7;
 const DEFAULT_MOCK_MINUTES: i64 = 120;
@@ -77,6 +79,9 @@ pub struct PlanInput {
     pub tz: Tz,
     pub daily_hours: f64,
     pub multi_course: bool,
+    /// The day's study window, local `(hour, minute)`.
+    pub day_start: (u32, u32),
+    pub day_end: (u32, u32),
     pub courses: Vec<PlanCourse>,
     /// Pinned (user) entries from now on: their time is taken.
     pub busy: Vec<(DateTime<Utc>, DateTime<Utc>)>,
@@ -98,6 +103,16 @@ pub struct Plan {
     /// Courses whose lectures don't fit before the final week: (course, hours that landed late or
     /// not at all).
     pub short: Vec<(i64, f64)>,
+}
+
+/// `"HH:MM"` on a 15-minute step, e.g. `"08:30"`.
+pub fn parse_hhmm(s: &str) -> Option<(u32, u32)> {
+    let (h, m) = s.split_once(':')?;
+    if h.len() != 2 || m.len() != 2 {
+        return None;
+    }
+    let (h, m): (u32, u32) = (h.parse().ok()?, m.parse().ok()?);
+    (h < 24 && m < 60 && m % 15 == 0).then_some((h, m))
 }
 
 fn local(tz: Tz, d: NaiveDate, (h, m): (u32, u32)) -> DateTime<Utc> {
@@ -195,11 +210,11 @@ pub fn build(input: &PlanInput) -> Plan {
 
     let mut day = today;
     while day <= horizon_end {
-        let mut start = local(tz, day, DAY_START);
+        let mut start = local(tz, day, input.day_start);
         if day == today {
             start = start.max(round_up_15(input.now));
         }
-        let end = local(tz, day, DAY_END);
+        let end = local(tz, day, input.day_end);
         let busy_today: f64 =
             input.busy.iter().filter(|(s, e)| *s < end && *e > start).map(|(s, e)| hours((*e).min(end) - (*s).max(start))).sum();
         let mut capacity = (input.daily_hours - busy_today).min(hours(end - start).max(0.0));
@@ -366,7 +381,16 @@ mod tests {
     }
 
     fn input(courses: Vec<PlanCourse>) -> PlanInput {
-        PlanInput { now: t(2, 7), tz: AMS, daily_hours: 4.0, multi_course: false, courses, busy: vec![] }
+        PlanInput {
+            now: t(2, 7),
+            tz: AMS,
+            daily_hours: 4.0,
+            multi_course: false,
+            day_start: DAY_START,
+            day_end: DAY_END,
+            courses,
+            busy: vec![],
+        }
     }
 
     fn course(id: i64, code: &str, exam: Option<DateTime<Utc>>, lectures: Vec<PlanLecture>) -> PlanCourse {
@@ -414,6 +438,24 @@ mod tests {
         multi.multi_course = true;
         let p = build(&multi);
         assert_eq!(p.entries.iter().filter(|e| day_of(e) == day_of(&p.entries[0])).count(), 2, "both on day one");
+    }
+
+    #[test]
+    fn the_users_study_window_bounds_every_block() {
+        // 18:00-20:00 local: 2 h a day though capacity is 4 h.
+        let mut i = input(vec![course(1, "BSA", None, vec![lec(1, 5.0)])]);
+        i.day_start = (18, 0);
+        i.day_end = (20, 0);
+        let p = build(&i);
+        assert_eq!((p.entries[0].start, p.entries[0].end), (t(2, 17), t(2, 19)), "18:00-20:00 Amsterdam");
+        for e in &p.entries {
+            let (s, end) = (e.start.with_timezone(&AMS).time(), e.end.with_timezone(&AMS).time());
+            assert!(s >= NaiveTime::from_hms_opt(18, 0, 0).unwrap() && end <= NaiveTime::from_hms_opt(20, 0, 0).unwrap(), "{e:?}");
+        }
+        assert_eq!(p.entries.len(), 3, "5 h over three evenings");
+        assert_eq!(parse_hhmm("08:45"), Some((8, 45)));
+        assert_eq!(parse_hhmm("8:45"), None);
+        assert_eq!(parse_hhmm("08:40"), None);
     }
 
     #[test]

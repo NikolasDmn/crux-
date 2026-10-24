@@ -220,3 +220,39 @@ async def test_inbox_push_email_reschedule_cancel_unsubscribe() -> None:
         async with sessions() as s:
             assert await recipients.is_suppressed(s, "bob@example.com")
         assert len(mailer.sent) == 1
+
+
+async def test_export_and_user_deletion() -> None:
+    from app.repo.preferences import preference
+    from app.service import account as lifecycle
+    from crux_common.messaging.tables import outbox
+
+    async with migrated_db(SERVICE_DIR, "notify") as sessions:
+        c = Contracts(CONTRACTS)
+        await process(sessions, c, UserEventsHandler(SECRET), user_event(verified=True))
+        await svc.put_preferences(
+            sessions,
+            ME,
+            svc.PreferencesInput(preferences=[svc.PreferenceChange(kind="exam.eve", channel="Email", enabled=True)]),
+        )
+        await process(
+            sessions,
+            c,
+            NotifyRequestedHandler(),
+            req("course.shared", "course.shared:X", utcnow(), {"courseName": "BSA"}),
+        )
+        async with sessions() as s:
+            out = await lifecycle.export(s, USER)
+        assert (
+            out["recipient"]["email"] == "nina@example.com"
+            and len(out["preferences"]) == 1
+            and len(out["notifications"]) == 1
+        )
+        d = Delivery("1-0", "user.deleted", Envelope(_id(), "user.deleted", 1, "x", "core", USER, {"userRef": USER}))
+        assert await process(sessions, c, lifecycle.UserDeletedHandler(c), d) == Outcome.APPLIED
+        async with sessions() as s:
+            assert await recipients.get(s, USER) is None
+            assert (await s.execute(select(preference))).all() == [] and (
+                await s.execute(select(notification))
+            ).all() == []
+            assert [r.Topic for r in await s.execute(select(outbox.c.Topic))] == ["user.purged"]

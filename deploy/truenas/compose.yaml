@@ -1,0 +1,207 @@
+# Crux on a home server (TrueNAS) behind your own reverse proxy: a small trial for volunteers.
+# Everything comes as images from your registry (scripts/ghcr-push.sh); the server needs only this
+# file, its .env (made by setup.sh) and the data directory. See README.md here.
+#
+#   ./setup.sh                 once: secrets, the S3 config and the signing key
+#   docker compose up -d       start (or update: docker compose pull && docker compose up -d)
+#
+# Only the gateway is published (CRUX_HTTP_PORT, plain HTTP for your proxy); Mailpit's inbox is on
+# CRUX_MAIL_PORT for you on the LAN. Nothing else listens outside the stack.
+
+name: crux
+
+x-python-env: &python-env
+  CRUX_ENV: prod
+  CRUX_REDIS_URL: redis://redis:6379/0
+  CRUX_CORE_INTERNAL_URL: http://core:8080
+  CRUX_JWKS_URL: http://core:8080/internal/v1/jwks
+  CRUX_S3_ENDPOINT: http://s3:8333
+  CRUX_S3_ACCESS_KEY: ${CRUX_S3_ACCESS_KEY:?run setup.sh}
+  CRUX_S3_SECRET_KEY: ${CRUX_S3_SECRET_KEY:?run setup.sh}
+  CRUX_S3_BUCKET: crux-files
+  # Uploads and downloads go through the gateway at the public address (same-origin, signed URLs).
+  CRUX_S3_PUBLIC_ENDPOINT: ${CRUX_APP_BASE_URL:?set CRUX_APP_BASE_URL}
+  CRUX_APP_BASE_URL: ${CRUX_APP_BASE_URL}
+  CRUX_SCANNER: ${CRUX_SCANNER:-clamd}
+  CRUX_CLAMD_HOST: clamav
+  CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET:?run setup.sh}
+
+services:
+  gateway:
+    restart: unless-stopped
+    image: ${CRUX_IMAGES:?set CRUX_IMAGES}/crux-gateway:${CRUX_TAG:-latest}
+    ports: ["${CRUX_HTTP_PORT:-8100}:80"]
+    environment:
+      CRUX_SITE_ADDRESS: ":80"
+      CRUX_ENV: prod
+      # Your proxy runs on the LAN: trust its X-Forwarded-For so each user has their own rate limit.
+      CRUX_TRUSTED_PROXIES: ${CRUX_TRUSTED_PROXIES:-private_ranges}
+    depends_on:
+      core: {condition: service_healthy}
+      files: {condition: service_healthy}
+      notify: {condition: service_healthy}
+
+  mysql:
+    restart: unless-stopped
+    image: ${CRUX_IMAGES}/crux-mysql:${CRUX_TAG:-latest}
+    command: [--default-time-zone=+00:00, --character-set-server=utf8mb4, --collation-server=utf8mb4_0900_ai_ci]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?run setup.sh}
+      CRUX_ENV: prod
+      CRUX_CORE_DB_PASSWORD: ${CRUX_CORE_DB_PASSWORD:?run setup.sh}
+      CRUX_FILES_DB_PASSWORD: ${CRUX_FILES_DB_PASSWORD:?run setup.sh}
+      CRUX_AI_DB_PASSWORD: ${CRUX_AI_DB_PASSWORD:?run setup.sh}
+      CRUX_NOTIFY_DB_PASSWORD: ${CRUX_NOTIFY_DB_PASSWORD:?run setup.sh}
+    volumes:
+      - ${CRUX_DATA_DIR:-./data}/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\""]
+      interval: 5s
+      retries: 60
+
+  redis:
+    restart: unless-stopped
+    image: redis:7.4
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - ${CRUX_DATA_DIR:-./data}/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+
+  s3:
+    restart: unless-stopped
+    image: chrislusf/seaweedfs:3.80
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024
+    volumes:
+      - ${CRUX_DATA_DIR:-./data}/s3:/data
+      - ${CRUX_DATA_DIR:-./data}/config/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # Virus scanning of uploads (about 1.5 GB of RAM; the first start downloads signatures).
+  clamav:
+    restart: unless-stopped
+    image: clamav/clamav:1.4
+    volumes:
+      - ${CRUX_DATA_DIR:-./data}/clamav:/var/lib/clamav
+
+  # No email provider in the trial: verification and reset emails land here. Open
+  # http://<truenas>:CRUX_MAIL_PORT on your LAN to read them (and forward a link if needed).
+  mailpit:
+    restart: unless-stopped
+    image: axllent/mailpit:v1.20
+    ports: ["${CRUX_MAIL_PORT:-8025}:8025"]
+
+  core:
+    restart: unless-stopped
+    image: ${CRUX_IMAGES}/crux-core:${CRUX_TAG:-latest}
+    environment:
+      CRUX_ENV: prod
+      CRUX_DATABASE_URL: mysql://crux_core:${CRUX_CORE_DB_PASSWORD}@mysql:3306/crux_core
+      CRUX_REDIS_URL: redis://redis:6379/0
+      CRUX_JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_ed25519.pem
+      CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET}
+      CRUX_COOKIE_SECURE: "true"
+      CRUX_AI_INTERNAL_URL: http://ai:8080
+      CRUX_APP_BASE_URL: ${CRUX_APP_BASE_URL}
+    volumes:
+      - ${CRUX_DATA_DIR:-./data}/secrets:/run/secrets:ro
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "crux-core", "healthcheck"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
+  core-jobs:
+    restart: unless-stopped
+    image: ${CRUX_IMAGES}/crux-core:${CRUX_TAG:-latest}
+    command: ["crux-core", "jobs"]
+    environment:
+      CRUX_ENV: prod
+      CRUX_DATABASE_URL: mysql://crux_core:${CRUX_CORE_DB_PASSWORD}@mysql:3306/crux_core
+      CRUX_REDIS_URL: redis://redis:6379/0
+      CRUX_JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_ed25519.pem
+      CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET}
+      CRUX_APP_BASE_URL: ${CRUX_APP_BASE_URL}
+    volumes:
+      - ${CRUX_DATA_DIR:-./data}/secrets:/run/secrets:ro
+    depends_on:
+      core: {condition: service_healthy}
+
+  files:
+    restart: unless-stopped
+    image: ${CRUX_IMAGES}/crux-files:${CRUX_TAG:-latest}
+    environment:
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_files:${CRUX_FILES_DB_PASSWORD}@mysql:3306/crux_files
+      CRUX_SERVICE_NAME: files
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      s3: {condition: service_started}
+    healthcheck: &py-health
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
+  files-worker:
+    restart: unless-stopped
+    image: ${CRUX_IMAGES}/crux-files:${CRUX_TAG:-latest}
+    command: ["python", "-m", "app.jobs"]
+    environment:
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_files:${CRUX_FILES_DB_PASSWORD}@mysql:3306/crux_files
+      CRUX_SERVICE_NAME: files
+    depends_on: [files, s3, clamav]
+
+  notify:
+    restart: unless-stopped
+    image: ${CRUX_IMAGES}/crux-notify:${CRUX_TAG:-latest}
+    environment: &notify-env
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_notify:${CRUX_NOTIFY_DB_PASSWORD}@mysql:3306/crux_notify
+      CRUX_SERVICE_NAME: notify
+      CRUX_UNSUBSCRIBE_SECRET: ${CRUX_UNSUBSCRIBE_SECRET:?run setup.sh}
+      CRUX_EMAIL_WEBHOOK_SECRET: ""
+      CRUX_SMTP_URL: smtp://mailpit:1025
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck: *py-health
+
+  notify-worker:
+    restart: unless-stopped
+    image: ${CRUX_IMAGES}/crux-notify:${CRUX_TAG:-latest}
+    command: ["python", "-m", "app.jobs"]
+    environment:
+      <<: *notify-env
+      CRUX_DISPATCH_INTERVAL_SECONDS: "30"
+    depends_on: [notify]
+
+  # AI is off for the trial; `docker compose --profile ai up -d` once its settings screens exist.
+  ai:
+    restart: unless-stopped
+    profiles: ["ai"]
+    image: ${CRUX_IMAGES}/crux-ai:${CRUX_TAG:-latest}
+    environment: &ai-env
+      <<: *python-env
+      CRUX_DATABASE_URL: mysql+aiomysql://crux_ai:${CRUX_AI_DB_PASSWORD}@mysql:3306/crux_ai
+      CRUX_SERVICE_NAME: ai
+      CRUX_KMS_MASTER_KEY: ${CRUX_KMS_MASTER_KEY:?run setup.sh}
+    depends_on:
+      mysql: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck: *py-health
+
+  ai-worker:
+    restart: unless-stopped
+    profiles: ["ai"]
+    image: ${CRUX_IMAGES}/crux-ai:${CRUX_TAG:-latest}
+    command: ["python", "-m", "app.jobs"]
+    environment: *ai-env
+    depends_on: [ai]

@@ -78,6 +78,14 @@ enum Cmd {
     MakeAdmin {
         email: String,
     },
+    /// Mark a user's email verified (a trial without email): `verify-user <username or email>`.
+    VerifyUser {
+        login: String,
+    },
+    /// Set a temporary password, print it, and sign the user out everywhere.
+    ResetPassword {
+        login: String,
+    },
     /// Container health check: exits 0 when this process's `/healthz` answers on CRUX_LISTEN's port
     /// (the image has no curl).
     Healthcheck,
@@ -137,6 +145,24 @@ async fn main() -> anyhow::Result<()> {
             let n = crux_repo::users::make_admin_by_email(&mut *pool.acquire().await?, email).await?;
             anyhow::ensure!(n == 1, "no user with email {email}");
             println!("{email} is now an admin");
+            return Ok(());
+        }
+        Cmd::VerifyUser { login } => {
+            let mut conn = pool.acquire().await?;
+            let u = crux_repo::users::by_login(&mut conn, login).await?.with_context(|| format!("no user {login}"))?;
+            crux_repo::users::set_email_verified(&mut conn, u.id, chrono::Utc::now()).await?;
+            println!("{} ({}) is verified", u.username, u.email);
+            return Ok(());
+        }
+        Cmd::ResetPassword { login } => {
+            let mut conn = pool.acquire().await?;
+            let u = crux_repo::users::by_login(&mut conn, login).await?.with_context(|| format!("no user {login}"))?;
+            let temp = crux_service::password::temporary();
+            let hash = crux_service::password::hash_blocking(temp.clone()).await?;
+            crux_repo::users::set_password_hash(&mut conn, u.id, &hash).await?;
+            crux_repo::sessions::revoke_all_for_user(&mut conn, u.id, chrono::Utc::now(), crux_domain::auth::RevokeReason::PasswordReset)
+                .await?;
+            println!("{}: temporary password {temp} (signed out everywhere; ask them to change it)", u.username);
             return Ok(());
         }
         Cmd::CreateInvite { email, tier, max_uses, days } => {

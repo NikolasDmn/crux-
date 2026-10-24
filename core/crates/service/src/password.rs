@@ -24,6 +24,15 @@ pub fn dummy_hash() -> &'static str {
     DUMMY.get_or_init(|| hash("crux-dummy-password-for-timing").expect("dummy hash"))
 }
 
+/// A temporary password for an admin reset (no email in a small trial): 16 letters and digits,
+/// without look-alikes (0/O, 1/l/I).
+pub fn temporary() -> String {
+    use rand::Rng;
+    const CHARS: &[u8] = b"abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let mut rng = rand::thread_rng();
+    (0..16).map(|_| CHARS[rng.gen_range(0..CHARS.len())] as char).collect()
+}
+
 pub async fn hash_blocking(password: String) -> anyhow::Result<String> {
     tokio::task::spawn_blocking(move || hash(&password)).await?
 }

@@ -3,3 +3,9 @@ core/target
 **/.venv
 **/__pycache__
 .git
+deploy/secrets
+imports
+backups
+.env
+web/dist
+web/coverage

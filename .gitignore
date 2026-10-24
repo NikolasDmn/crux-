@@ -16,3 +16,6 @@ scripts/load/tokens.txt
 backups/
 coverage/
 *.tsbuildinfo
+
+# Old dashboard exports for the importer (personal course data)
+imports/

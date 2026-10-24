@@ -1,5 +1,10 @@
 {
 	admin off
+	# Behind another reverse proxy (TrueNAS: CRUX_TRUSTED_PROXIES=private_ranges), take the client's
+	# address from its X-Forwarded-For, so rate limits and logs see each user, not the proxy.
+	servers {
+		trusted_proxies static {$CRUX_TRUSTED_PROXIES:127.0.0.1/32}
+	}
 }
 
 {$CRUX_SITE_ADDRESS::80} {

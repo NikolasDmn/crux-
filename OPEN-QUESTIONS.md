@@ -44,6 +44,18 @@ Other M2 build choices: creating a course subscribes the owner; accepting a shar
 stranger gets 404 rather than a validation error (spec 4.2); a body that can't be parsed at all is
 422 for everyone.
 
+### Milestone 2 build choices (files)
+
+| # | Choice | Why |
+|---|---|---|
+| B2-1 | Uploads go browser → pre-signed URL → **the gateway at `/crux-files/*`** → SeaweedFS | Same origin: no CORS on the store, CSP stays `'self'`; Caddy keeps the Host header so the signature matches |
+| B2-2 | Scan/extract work lives in a **`FileJob` table** (files migration 0002), not Redis | Durable, retried 3× with backoff (30 s, 60 s, 120 s), stuck jobs reclaimed after 15 min |
+| B2-3 | A user's first upload before `user.created` arrives gets the **default 1 GiB quota** | The event overwrites it moments later; uploads never fail on event lag |
+| B2-4 | Re-uploading a purged or deleted original reuses **the same row** (new storage key) | Spec 6.1 restore; also lets a user retry after an infected/abandoned upload |
+| B2-5 | Core's trash purge (`course.deleted`) **deletes the course's uploads** and frees the owner's quota | Otherwise a purged course would keep counting against the owner forever |
+| B2-6 | Breached list: SecLists **`100k-most-used-passwords-NCSC.txt`** (the "top 100k" file the spec meant has moved), filtered to ≥ 10 chars → 9,126 entries | Offline fallback for HIBP (Q-auth-3) |
+| B2-7 | `file.infected` is a **non-transactional** `notify.requested` (in-app once milestone 6 lands) | It's about a user's own upload; not an account email |
+
 ## Product / behaviour
 
 | # | Question | Built meanwhile |

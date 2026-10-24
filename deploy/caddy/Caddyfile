@@ -21,6 +21,13 @@
 		respond 404
 	}
 
+	# The object store, same-origin: the browser PUTs uploads and GETs downloads with pre-signed
+	# URLs signed for this host (files: CRUX_S3_PUBLIC_ENDPOINT). Caddy passes the Host header
+	# through unchanged, so the signature still matches at the store.
+	handle /crux-files/* {
+		reverse_proxy s3:8333
+	}
+
 	handle /api/v1/files/* {
 		uri strip_prefix /api/v1/files
 		reverse_proxy files:8080

@@ -37,6 +37,15 @@ def test_only_known_account_kinds_skip_preferences() -> None:
 def test_templates_include_the_link() -> None:
     e = templates.render("auth.verify_email", {"firstName": "Nick", "link": "http://x/verify?token=t"}, None)
     assert "http://x/verify?token=t" in e.body and e.subject
+    shared = templates.render(
+        "invite.course_shared", {"inviterName": "Nick D", "courseName": "BSA", "link": "http://x/signup?invite=C"}, None
+    )
+    assert "Nick D" in shared.subject and "BSA" in shared.subject and "invite=C" in shared.body
+    assert (
+        "invite=C"
+        in templates.render("invite.created", {"inviterName": "Nick D", "link": "http://x/signup?invite=C"}, None).body
+    )
+    assert rules.is_transactional("invite.course_shared", True)
     with pytest.raises(ValueError, match="no email template"):
         templates.render("nope", {}, None)
 

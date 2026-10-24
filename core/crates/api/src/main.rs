@@ -39,6 +39,9 @@ struct Cli {
     service_secret: String,
     #[arg(long, env = "CRUX_COOKIE_SECURE", default_value_t = true)]
     cookie_secure: bool,
+    /// Have I Been Pwned range API; empty disables the online check (offline list only).
+    #[arg(long, env = "CRUX_HIBP_URL", default_value = "https://api.pwnedpasswords.com")]
+    hibp_url: String,
     #[arg(long, env = "CRUX_LISTEN", default_value = "0.0.0.0:8080")]
     listen: String,
     #[arg(long, env = "CRUX_FILES_INTERNAL_URL", default_value = "http://files:8080")]
@@ -177,6 +180,8 @@ async fn build_ctx(cli: &Cli, pool: crux_repo::MySqlPool) -> anyhow::Result<Ctx>
         kv: Arc::new(kv),
         keys: Arc::new(JwtKeys::from_pkcs8_pem(&pem)?),
         files: Arc::new(crux_clients::files::HttpFiles::new(&cli.files_url)),
+        breach_check: (!cli.hibp_url.is_empty())
+            .then(|| Arc::new(crux_clients::pwned::Hibp::new(&cli.hibp_url)) as Arc<dyn crux_clients::pwned::BreachCheck>),
         breached_passwords: Arc::new(load_breached_passwords(&breached)),
         config: Arc::new(Config {
             app_base_url: cli.app_base_url.trim_end_matches('/').to_string(),

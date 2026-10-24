@@ -7,7 +7,15 @@ BACKOFF = (timedelta(minutes=1), timedelta(minutes=10), timedelta(hours=1))
 
 #: Account emails: sent whatever the preferences and to unverified addresses, because they are
 #: how an address gets verified or an account recovered (OPEN-QUESTIONS.md Q-auth-4).
-TRANSACTIONAL_KINDS = frozenset({"auth.verify_email", "auth.password_reset"})
+TRANSACTIONAL_KINDS = frozenset(
+    {
+        "auth.verify_email",
+        "auth.password_reset",
+        # Invite links (D2-1, D2-9): the recipient has no account, so preferences can't apply.
+        "invite.created",
+        "invite.course_shared",
+    }
+)
 
 
 def next_attempt(attempts_so_far: int, now: datetime) -> datetime | None:

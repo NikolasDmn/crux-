@@ -88,6 +88,7 @@ pub fn test_ctx(pool: MySqlPool) -> TestCtx {
         kv: Arc::new(MemoryKv::default()),
         keys: Arc::new(JwtKeys::from_pkcs8_pem(&JwtKeys::generate_pem()).unwrap()),
         files: files.clone(),
+        breach_check: None,
         breached_passwords: Arc::new(breached),
         config: Arc::new(Config { app_base_url: "http://crux.test".into(), service_secret: "test-service-secret".into() }),
     };

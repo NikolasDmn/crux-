@@ -5,6 +5,7 @@ use crux_clients::clock::Clock;
 use crux_clients::files::FilesApi;
 use crux_clients::ids::IdGen;
 use crux_clients::kv::KeyValue;
+use crux_clients::pwned::BreachCheck;
 use crux_domain::user::Role;
 use crux_repo::MySqlPool;
 
@@ -27,7 +28,10 @@ pub struct Ctx {
     pub kv: Arc<dyn KeyValue>,
     pub keys: Arc<JwtKeys>,
     pub files: Arc<dyn FilesApi>,
+    /// Offline list: the fallback when the online check can't answer.
     pub breached_passwords: Arc<HashSet<String>>,
+    /// Online check (HIBP). None = offline list only (tests, air-gapped installs).
+    pub breach_check: Option<Arc<dyn BreachCheck>>,
     pub config: Arc<Config>,
 }
 
@@ -44,6 +48,18 @@ impl Actor {
     pub fn is_admin(&self) -> bool {
         self.role == Role::Admin
     }
+}
+
+/// Q-auth-3: HIBP first; if it errors or times out, the shipped list. Never blocks signup on an
+/// outage of a third party.
+pub async fn password_breached(ctx: &Ctx, password: &str) -> bool {
+    if let Some(check) = &ctx.breach_check {
+        match check.is_breached(password).await {
+            Ok(b) => return b,
+            Err(e) => tracing::warn!(error = %e, "breach check unavailable; using the offline list"),
+        }
+    }
+    ctx.breached_passwords.contains(&password.to_lowercase())
 }
 
 /// Loads the breached-password list: one password per line, compared lowercase (spec 4.1).

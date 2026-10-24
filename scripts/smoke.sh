@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Smoke test against a running stack (milestone 1): health of every service through the gateway,
-# signup with an invite, /me, and the user.created event reaching files and notify.
+# Smoke test against a running stack: health of every service through the gateway, signup with an
+# invite, /me, user.created reaching files and notify (M1); then a course with a lecture, a PDF
+# uploaded to its pre-signed URL through the gateway, scanned, extracted, attached as a material,
+# its page text and a download link (M2).
 # Usage: scripts/smoke.sh [base-url]   (default http://localhost:8000)
 set -euo pipefail
 
@@ -34,7 +36,39 @@ sql() { $COMPOSE exec -T mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD:-crux-root}
 for _ in $(seq 1 30); do
     files=$(sql "SELECT COUNT(*) FROM crux_files.UserStorage WHERE UserRef='$ref'")
     notify=$(sql "SELECT COUNT(*) FROM crux_notify.Recipient WHERE UserRef='$ref'")
-    [ "$files" = 1 ] && [ "$notify" = 1 ] && { echo "ok   user.created reached files and notify"; exit 0; }
+    [ "$files" = 1 ] && [ "$notify" = 1 ] && break
     sleep 1
 done
-fail "user.created did not reach files ($files) and notify ($notify) within 30 s"
+[ "$files" = 1 ] && [ "$notify" = 1 ] || fail "user.created did not reach files ($files) and notify ($notify) within 30 s"
+echo "ok   user.created reached files and notify"
+
+# ---------- milestone 2 ----------
+j() { python3 -c "import json,sys; d=json.load(sys.stdin); print(eval('d' + sys.argv[1]))" "$1"; }
+api() { curl -fsS -X "$1" "$BASE/api/v1$2" -H "authorization: Bearer $token" -H 'content-type: application/json' ${3:+-d "$3"}; }
+
+course=$(api POST /courses '{"name":"Smoke Statistics","code":"SMK"}' | j '["id"]')
+lecture=$(api POST "/courses/$course/components" '{"code":"L1","name":"P-values","estHours":2}' | j '["id"]')
+echo "ok   course $course with lecture $lecture"
+
+pdf="scripts/fixtures/sample.pdf"
+size=$(wc -c < "$pdf" | tr -d ' ')
+sha=$(sha256sum "$pdf" | cut -d' ' -f1)
+started=$(api POST /files/uploads "{\"fileName\":\"sample.pdf\",\"sizeBytes\":$size,\"sha256\":\"$sha\",\"courseId\":\"$course\"}")
+file=$(echo "$started" | j '["file"]["id"]')
+url=$(echo "$started" | j '["uploadUrl"]')
+case "$url" in "$BASE"/crux-files/*) ;; *) fail "upload URL should be same-origin under /crux-files, got $url" ;; esac
+curl -fsS -X PUT -H 'content-type: application/pdf' --data-binary "@$pdf" "$url" >/dev/null || fail "PUT to the pre-signed URL"
+api POST "/files/$file/complete" >/dev/null || fail "complete"
+for _ in $(seq 1 30); do
+    state=$(api GET "/files/$file" | j '["scanStatus"] + "/" + d["extractStatus"]')
+    [ "$state" = "Clean/Done" ] && break
+    sleep 1
+done
+[ "$state" = "Clean/Done" ] || fail "file not scanned+extracted in 30 s ($state)"
+echo "ok   upload through the gateway, scanned and extracted"
+
+material=$(api POST "/components/$lecture/materials" "{\"kind\":\"Slides\",\"title\":\"Week 1\",\"fileId\":\"$file\"}" | j '["id"]')
+api GET "/files/$file/pages/2/text" | grep -q "confidence intervals" || fail "page text"
+dl=$(api GET "/files/$file/url" | j '["url"]')
+curl -fsS "$dl" | head -c 5 | grep -q '%PDF-' || fail "download through the signed URL"
+echo "ok   material $material, page text, signed download"

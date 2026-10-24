@@ -26,6 +26,24 @@ def render(kind: str, payload: dict[str, Any], unsubscribe_url: str | None) -> E
             "The link works for 1 hour and signs you out everywhere. "
             "If you didn't ask for this, ignore this email; your password stays the same.\n",
         )
+    elif kind == "invite.created":
+        inviter = payload.get("inviterName") or "Someone"
+        email = Email(
+            f"{inviter} invited you to Crux",
+            f"Hi,\n\n{inviter} invited you to Crux, a study and exam-prep app.\n\n"
+            f"Create your account here:\n\n{link}\n\n"
+            "The invite works only for this email address. If you weren't expecting it, ignore this email.\n",
+        )
+    elif kind == "invite.course_shared":
+        inviter = payload.get("inviterName") or "Someone"
+        course = payload.get("courseName") or "a course"
+        email = Email(
+            f'{inviter} shared "{course}" with you on Crux',
+            f'Hi,\n\n{inviter} shared the course "{course}" with you on Crux.\n\n'
+            f"Create your account to open it:\n\n{link}\n\n"
+            "The course will be in your list as soon as you've signed up. "
+            "If you weren't expecting this, ignore this email.\n",
+        )
     else:
         raise ValueError(f"no email template for {kind}")
     if unsubscribe_url:

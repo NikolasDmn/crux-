@@ -30,12 +30,16 @@ _NEW = {"UsedBytes": 0, "ReservedBytes": 0, "AutoPurgeOriginals": False, "KeepTh
 async def upsert_quota(session: AsyncSession, user_ref: str, quota_bytes: int, tier_code: str | None = None) -> None:
     """From core's user events (spec 4.3): creates the row on first sight, then only the quota changes."""
     stmt = insert(user_storage).values(UserRef=user_ref, QuotaBytes=quota_bytes, TierCode=tier_code, **_NEW)
-    await session.execute(stmt.on_duplicate_key_update(QuotaBytes=stmt.inserted.QuotaBytes, TierCode=stmt.inserted.TierCode))
+    await session.execute(
+        stmt.on_duplicate_key_update(QuotaBytes=stmt.inserted.QuotaBytes, TierCode=stmt.inserted.TierCode)
+    )
 
 
 async def ensure(session: AsyncSession, user_ref: str, default_quota: int) -> None:
     """A user whose user.created hasn't arrived yet gets the default quota until it does."""
-    await session.execute(insert(user_storage).prefix_with("IGNORE").values(UserRef=user_ref, QuotaBytes=default_quota, **_NEW))
+    await session.execute(
+        insert(user_storage).prefix_with("IGNORE").values(UserRef=user_ref, QuotaBytes=default_quota, **_NEW)
+    )
 
 
 async def get(session: AsyncSession, user_ref: str) -> Any | None:
@@ -60,13 +64,17 @@ async def settle(session: AsyncSession, user_ref: str, size: int) -> None:
     """Reserved → used (upload completed)."""
     c = user_storage.c
     await session.execute(
-        update(user_storage).where(c.UserRef == user_ref).values(ReservedBytes=c.ReservedBytes - size, UsedBytes=c.UsedBytes + size)
+        update(user_storage)
+        .where(c.UserRef == user_ref)
+        .values(ReservedBytes=c.ReservedBytes - size, UsedBytes=c.UsedBytes + size)
     )
 
 
 async def release_reserved(session: AsyncSession, user_ref: str, size: int) -> None:
     c = user_storage.c
-    await session.execute(update(user_storage).where(c.UserRef == user_ref).values(ReservedBytes=c.ReservedBytes - size))
+    await session.execute(
+        update(user_storage).where(c.UserRef == user_ref).values(ReservedBytes=c.ReservedBytes - size)
+    )
 
 
 async def release_used(session: AsyncSession, user_ref: str, size: int) -> None:
@@ -76,4 +84,6 @@ async def release_used(session: AsyncSession, user_ref: str, size: int) -> None:
 
 async def set_settings(session: AsyncSession, user_ref: str, **values: bool) -> None:
     c = user_storage.c
-    await session.execute(update(user_storage).where(c.UserRef == user_ref).values(RowVersion=c.RowVersion + 1, **values))
+    await session.execute(
+        update(user_storage).where(c.UserRef == user_ref).values(RowVersion=c.RowVersion + 1, **values)
+    )

@@ -1,5 +1,14 @@
-from app.http.routes import router
+from fastapi import FastAPI
+
+from app.http.routes import internal, router
+from app.service.wiring import build_deps
 from app.settings import get_settings
 from crux_common.app import create_app
 
-app = create_app(get_settings(), "Crux files", [router])
+
+async def _startup(app: FastAPI) -> None:
+    app.state.deps = build_deps(get_settings(), app.state.sessions, app.state.redis, app.state.contracts)
+    await app.state.deps.store.ensure_bucket()
+
+
+app = create_app(get_settings(), "Crux files", [internal, router], on_startup=_startup)

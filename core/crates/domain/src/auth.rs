@@ -3,7 +3,6 @@
 
 use chrono::{DateTime, Duration, Utc};
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
 
 use crate::ValidationErrors;
 
@@ -35,14 +34,14 @@ pub fn normalize_email(email: &str) -> String {
 /// Length is a hard rule. A breached password is a warning the user can override (Nick
 /// 2026-10-23): without `accept_breached` it fails with code `breached`, and the client asks the
 /// user to confirm before resending with the flag set.
-pub fn validate_password(password: &str, breached: &HashSet<String>, accept_breached: bool) -> ValidationErrors {
+pub fn validate_password(password: &str, breached: bool, accept_breached: bool) -> ValidationErrors {
     let mut errors = ValidationErrors::new();
     let chars = password.chars().count();
     if chars < PASSWORD_MIN_CHARS {
         errors.push("password", "too_short", "Use at least 10 characters.");
     } else if chars > PASSWORD_MAX_CHARS {
         errors.push("password", "too_long", "Use at most 256 characters.");
-    } else if !accept_breached && breached.contains(&password.to_lowercase()) {
+    } else if !accept_breached && breached {
         errors.push(
             "password",
             "breached",
@@ -255,19 +254,17 @@ mod tests {
 
     #[test]
     fn password_rules() {
-        let breached: HashSet<String> = ["password123".to_string()].into();
-        assert!(!validate_password("short", &breached, false).is_empty());
-        assert_eq!(validate_password("Password123", &breached, false).0[0].code, "breached", "breached check ignores case");
-        assert!(validate_password("correct horse battery", &breached, false).is_empty());
-        assert!(!validate_password(&"x".repeat(257), &breached, false).is_empty());
-        assert_eq!(validate_password("ééééééééé", &breached, false).0[0].code, "too_short", "counts chars, not bytes");
+        assert!(!validate_password("short", false, false).is_empty());
+        assert_eq!(validate_password("Password123", true, false).0[0].code, "breached");
+        assert!(validate_password("correct horse battery", false, false).is_empty());
+        assert!(!validate_password(&"x".repeat(257), false, false).is_empty());
+        assert_eq!(validate_password("ééééééééé", false, false).0[0].code, "too_short", "counts chars, not bytes");
     }
 
     #[test]
     fn breached_password_is_allowed_once_the_user_accepts() {
-        let breached: HashSet<String> = ["password123".to_string()].into();
-        assert!(validate_password("Password123", &breached, true).is_empty());
-        assert_eq!(validate_password("short", &breached, true).0[0].code, "too_short", "accepting never skips the length rule");
+        assert!(validate_password("Password123", true, true).is_empty());
+        assert_eq!(validate_password("short", true, true).0[0].code, "too_short", "accepting never skips the length rule");
     }
 
     #[test]

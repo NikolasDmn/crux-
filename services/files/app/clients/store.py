@@ -18,7 +18,7 @@ class ObjectStore(Protocol):
     def presign_put(self, key: str, content_type: str, expires: int) -> str: ...
     def presign_get(self, key: str, file_name: str, expires: int) -> str: ...
     async def size(self, key: str) -> int | None: ...
-    async def read(self, key: str) -> AsyncIterator[bytes]: ...
+    def read(self, key: str) -> AsyncIterator[bytes]: ...
     async def delete(self, key: str) -> None: ...
 
 
@@ -36,9 +36,16 @@ async def sha256_and_head(store: ObjectStore, key: str, head_len: int = 8) -> tu
 
 
 class S3Store:
-    def __init__(self, endpoint: str, public_endpoint: str, access_key: str, secret_key: str, bucket: str, region: str) -> None:
+    def __init__(
+        self, endpoint: str, public_endpoint: str, access_key: str, secret_key: str, bucket: str, region: str
+    ) -> None:
         cfg = Config(signature_version="s3v4", s3={"addressing_style": "path"}, retries={"max_attempts": 3})
-        common: dict[str, Any] = {"aws_access_key_id": access_key, "aws_secret_access_key": secret_key, "region_name": region, "config": cfg}
+        common: dict[str, Any] = {
+            "aws_access_key_id": access_key,
+            "aws_secret_access_key": secret_key,
+            "region_name": region,
+            "config": cfg,
+        }
         self._s3 = boto3.client("s3", endpoint_url=endpoint, **common)
         # Signs URLs for the browser's origin (the gateway proxies /<bucket>/* to the store).
         self._public = boto3.client("s3", endpoint_url=public_endpoint, **common)
@@ -61,10 +68,12 @@ class S3Store:
         )
 
     def presign_get(self, key: str, file_name: str, expires: int) -> str:
-        disposition = f"inline; filename=\"{file_name.replace(chr(34), '')}\""
+        disposition = f'inline; filename="{file_name.replace(chr(34), "")}"'
         return str(
             self._public.generate_presigned_url(
-                "get_object", Params={"Bucket": self.bucket, "Key": key, "ResponseContentDisposition": disposition}, ExpiresIn=expires
+                "get_object",
+                Params={"Bucket": self.bucket, "Key": key, "ResponseContentDisposition": disposition},
+                ExpiresIn=expires,
             )
         )
 

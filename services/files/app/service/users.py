@@ -11,4 +11,4 @@ class UserEventsHandler:
 
     async def handle(self, session: AsyncSession, delivery: Delivery) -> None:
         p = delivery.envelope.payload
-        await storage.upsert_quota(session, p["userRef"], int(p["storageQuotaBytes"]))
+        await storage.upsert_quota(session, p["userRef"], int(p["storageQuotaBytes"]), p.get("tierCode"))

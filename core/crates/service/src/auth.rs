@@ -139,7 +139,8 @@ pub async fn signup(ctx: &Ctx, input: SignupInput, client: &ClientInfo) -> AppRe
     errors.merge(rules::validate_name("firstName", &input.first_name));
     errors.merge(rules::validate_name("lastName", &input.last_name));
     errors.merge(rules::validate_time_zone(&input.time_zone));
-    errors.merge(rules::validate_password(&input.password, &ctx.breached_passwords, input.accept_breached_password));
+    let breached = crate::ctx::password_breached(ctx, &input.password).await;
+    errors.merge(rules::validate_password(&input.password, breached, input.accept_breached_password));
     errors.into_result()?;
 
     let hash = password::hash_blocking(input.password.clone()).await?;
@@ -330,7 +331,8 @@ pub async fn forgot_password(ctx: &Ctx, email: &str, client: &ClientInfo) -> App
 
 /// `POST /auth/password/reset {token, password}`: sets the password and signs out every session.
 pub async fn reset_password(ctx: &Ctx, token: &str, new_password: &str, accept_breached: bool) -> AppResult<()> {
-    rules::validate_password(new_password, &ctx.breached_passwords, accept_breached).into_result()?;
+    let breached = crate::ctx::password_breached(ctx, new_password).await;
+    rules::validate_password(new_password, breached, accept_breached).into_result()?;
     let hash = password::hash_blocking(new_password.to_string()).await?;
     let now = ctx.clock.now();
     let mut tx = crux_repo::begin(&ctx.pool).await?;

@@ -13,7 +13,11 @@ x-python-env: &python-env
   CRUX_S3_ENDPOINT: http://s3:8333
   CRUX_S3_ACCESS_KEY: ${CRUX_S3_ACCESS_KEY:-crux}
   CRUX_S3_SECRET_KEY: ${CRUX_S3_SECRET_KEY:-crux-dev-secret}
-  CRUX_S3_BUCKET: crux
+  CRUX_S3_BUCKET: crux-files
+  CRUX_S3_PUBLIC_ENDPOINT: ${CRUX_APP_BASE_URL:-http://localhost:8000}
+  # D2-7: fake (EICAR-aware) scanner in dev; set clamd and start the "full" profile for ClamAV.
+  CRUX_SCANNER: ${CRUX_SCANNER:-fake}
+  CRUX_CLAMD_HOST: clamav
   CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET:-dev-service-secret-change-me}
 
 services:

@@ -6,7 +6,21 @@ app.domain.file_state.transition (spec 2.3; tests/test_state_module.py)."""
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import JSON, BigInteger, Column, DateTime, Integer, MetaData, String, Table, Text, and_, func, select, update
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Column,
+    DateTime,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    and_,
+    func,
+    select,
+    update,
+)
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -90,7 +104,9 @@ async def original_by_sha(session: AsyncSession, owner_ref: str, sha256: str) ->
     """The owner's Original with this fingerprint (one per owner; uq_file_original), locked."""
     stmt = (
         select(stored_file)
-        .where(stored_file.c.OwnerUserRef == owner_ref, stored_file.c.Purpose == "Original", stored_file.c.Sha256 == sha256)
+        .where(
+            stored_file.c.OwnerUserRef == owner_ref, stored_file.c.Purpose == "Original", stored_file.c.Sha256 == sha256
+        )
         .with_for_update()
     )
     return (await session.execute(stmt)).first()
@@ -101,7 +117,12 @@ async def insert_original(session: AsyncSession, **values: Any) -> int:
         CursorResult[Any],
         await session.execute(
             insert(stored_file).values(
-                Purpose="Original", Status="Uploading", ScanStatus="Pending", ExtractStatus="Pending", RowVersion=0, **values
+                Purpose="Original",
+                Status="Uploading",
+                ScanStatus="Pending",
+                ExtractStatus="Pending",
+                RowVersion=0,
+                **values,
             )
         ),
     )
@@ -123,7 +144,9 @@ async def set_status(session: AsyncSession, file_id: int, current: str, target: 
 async def set_fields(session: AsyncSession, file_id: int, **values: Any) -> None:
     """Non-status columns (ScanStatus, ExtractStatus, PageCount, …)."""
     assert "Status" not in values, "Status changes go through set_status"
-    await session.execute(update(stored_file).where(stored_file.c.Id == file_id).values(RowVersion=stored_file.c.RowVersion + 1, **values))
+    await session.execute(
+        update(stored_file).where(stored_file.c.Id == file_id).values(RowVersion=stored_file.c.RowVersion + 1, **values)
+    )
 
 
 async def abandoned_uploads(session: AsyncSession, before: datetime, limit: int = 100) -> list[Any]:
@@ -149,7 +172,11 @@ async def usage_by_course(session: AsyncSession, owner_ref: str) -> list[Any]:
             func.coalesce(func.sum(stored_file.c.SizeBytes), 0).label("Bytes"),
             func.count().label("Originals"),
         )
-        .where(stored_file.c.OwnerUserRef == owner_ref, stored_file.c.Purpose == "Original", stored_file.c.Status.in_(["Active", "PendingPurge"]))
+        .where(
+            stored_file.c.OwnerUserRef == owner_ref,
+            stored_file.c.Purpose == "Original",
+            stored_file.c.Status.in_(["Active", "PendingPurge"]),
+        )
         .group_by(stored_file.c.CourseRef)
     )
     return list((await session.execute(stmt)).all())
@@ -166,10 +193,16 @@ async def replace_chunks(session: AsyncSession, file_id: int, rows: list[dict[st
 
 async def page_text(session: AsyncSession, file_id: int, page: int) -> str | None:
     rows = (
-        await session.execute(
-            select(file_chunk.c.Text).where(file_chunk.c.FileId == file_id, file_chunk.c.PageNo == page).order_by(file_chunk.c.ChunkNo)
+        (
+            await session.execute(
+                select(file_chunk.c.Text)
+                .where(file_chunk.c.FileId == file_id, file_chunk.c.PageNo == page)
+                .order_by(file_chunk.c.ChunkNo)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return "\n".join(rows) if rows else None
 
 
@@ -196,8 +229,9 @@ async def claim_due(session: AsyncSession, now: datetime) -> Any | None:
     return job
 
 
-async def finish_job(session: AsyncSession, job_id: int, **values: Any) -> None:
-    await session.execute(update(file_job).where(file_job.c.Id == job_id).values(**values))
+async def finish_job(session: AsyncSession, job_id: int, job_status: str, **values: Any) -> None:
+    """FileJob.Status (not StoredFile.Status): Pending (retry), Done, Failed."""
+    await session.execute(update(file_job).where(file_job.c.Id == job_id).values({"Status": job_status, **values}))
 
 
 async def reclaim_stuck(session: AsyncSession, started_before: datetime) -> int:

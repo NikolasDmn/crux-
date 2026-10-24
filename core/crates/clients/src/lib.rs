@@ -3,6 +3,7 @@ pub mod clock;
 pub mod files;
 pub mod ids;
 pub mod kv;
+pub mod pwned;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {

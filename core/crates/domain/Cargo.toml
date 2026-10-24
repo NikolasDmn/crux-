@@ -16,3 +16,5 @@ hex.workspace = true
 thiserror.workspace = true
 # Schema metadata only (derive), so request types can appear in the OpenAPI document.
 utoipa.workspace = true
+rand.workspace = true
+rand_chacha = "0.3"

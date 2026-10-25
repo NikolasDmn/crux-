@@ -12,7 +12,8 @@ DATA="${CRUX_DATA_DIR:-./data}"
 
 rand() { openssl rand -hex 24; }
 touch .env
-chmod 600 .env
+# Datasets with an SMB/NFSv4 ACL refuse chmod; the ACL governs access there, so carry on.
+chmod 600 .env 2>/dev/null || true
 # Keep a value already in .env; otherwise write the given one.
 put() {
     if grep -q "^$1=" .env; then return; fi
@@ -54,15 +55,15 @@ cat > "$DATA/config/s3.json" <<JSON
   ]
 }
 JSON
-chmod 600 "$DATA/config/s3.json"
+chmod 600 "$DATA/config/s3.json" 2>/dev/null || true
 
 # The access-token signing key (core runs as uid 10001 and reads it).
 if [ ! -f "$DATA/secrets/jwt_ed25519.pem" ]; then
-    if chown 10001 "$DATA/secrets" 2>/dev/null; then owned=1; else owned=0; chmod 777 "$DATA/secrets"; fi
+    if chown 10001 "$DATA/secrets" 2>/dev/null; then owned=1; else owned=0; chmod 777 "$DATA/secrets" 2>/dev/null || true; fi
     docker run --rm --user 10001 -v "$(cd "$DATA/secrets" && pwd)":/out \
         "$CRUX_IMAGES/crux-core:$CRUX_TAG" crux-core gen-keys /out/jwt_ed25519.pem
     # Only core's user may read the key; without root (no chown), fall back to readable by all.
-    if [ "$owned" = 1 ]; then chmod 700 "$DATA/secrets"; else chmod 755 "$DATA/secrets"; fi
+    if [ "$owned" = 1 ]; then chmod 700 "$DATA/secrets" 2>/dev/null || true; else chmod 755 "$DATA/secrets" 2>/dev/null || true; fi
 fi
 
 echo "Ready. Start with: docker compose up -d"

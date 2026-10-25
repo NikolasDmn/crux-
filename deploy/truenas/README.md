@@ -19,11 +19,16 @@ The packages are private. Repeat this for every update you want to roll out.
 
 ## 2. Install on TrueNAS (shell, as root)
 
+Put it on a dataset created with the **Apps** preset (Datasets → Add Dataset → Dataset Preset:
+Apps), or any dataset with a POSIX ACL. The containers change ownership of their folders on
+first start (MySQL, Redis, core's key), which a dataset with an SMB or NFSv4 ACL refuses
+("Operation not permitted").
+
 ```bash
-mkdir -p /mnt/<pool>/apps/crux && cd /mnt/<pool>/apps/crux
+cd /mnt/<pool>/<apps dataset> && mkdir -p crux && cd crux
 # copy compose.yaml and setup.sh from deploy/truenas/ into this folder
 echo "$READ_TOKEN" | docker login ghcr.io -u <you> --password-stdin     # token with read:packages
-CRUX_IMAGES=ghcr.io/<you> CRUX_APP_BASE_URL=https://crux.<your domain> ./setup.sh
+CRUX_IMAGES=ghcr.io/<you> CRUX_APP_BASE_URL=https://crux.<your domain> bash setup.sh
 docker compose up -d
 ```
 

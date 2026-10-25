@@ -47,46 +47,60 @@ def read_json(p: Path) -> Any:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def course_identity(readme: str) -> tuple[str, str]:
-    """`# BSA (Biomedical Signal Analysis) export` -> ("BSA", "Biomedical Signal Analysis")."""
+def course_identity(readme: str, folder: str) -> tuple[str | None, str | None]:
+    """`# BSA (Biomedical Signal Analysis) export` -> ("BSA", "Biomedical Signal Analysis"). Without
+    that title: the code from the folder name (`rki-export` -> RKI) and the first heading as name."""
     m = re.search(r"^#\s*([A-Za-z0-9]+)\s*\(([^)]+)\)", readme, re.M)
-    if not m:
-        raise SystemExit("The README has no '# CODE (Course name) export' title; pass --code and --name.")
-    return m.group(1).upper(), m.group(2).strip()
+    if m:
+        return m.group(1).upper(), m.group(2).strip()
+    code = re.match(r"([A-Za-z0-9]+)", folder)
+    head = re.search(r"^#\s+(.+?)\s*(?:export)?\s*$", readme, re.M | re.I)
+    return (code.group(1).upper() if code else None), (head.group(1).strip() if head else None)
 
 
-def lecture_names(readme: str) -> dict[str, str]:
-    """`Lectures: L0 = course intro, L1 empirical modelling, ...` -> {"L0": "Course intro", ...}."""
-    m = re.search(r"^Lectures:\s*(.+)$", readme, re.M)
-    if not m:
-        raise SystemExit("The README has no 'Lectures: L0 = ..., L1 ...' line.")
+def lecture_names(readme: str, used: set[str]) -> dict[str, str]:
+    """`Lectures: L0 = course intro, L1 empirical modelling, ...` -> {"L0": "Course intro", ...}.
+    Every lecture code the questions and cards use is included; one the README doesn't name is
+    called "Lecture N" (L0 "Course intro")."""
     out: dict[str, str] = {}
-    for part in re.split(r",\s*(?=L\d)", m.group(1).rstrip(". ")):
-        pm = re.match(r"(L\d+)\s*=?\s*(.+)", part.strip())
-        if pm:
-            name = pm.group(2).strip().rstrip(".")
-            out[pm.group(1)] = name[:1].upper() + name[1:]
-    return out
+    m = re.search(r"^\**Lectures:?\**:?\s*(.+)$", readme, re.M | re.I)
+    if m:
+        for part in re.split(r"[,;]\s*(?=L\d)", m.group(1).rstrip(". ")):
+            pm = re.match(r"(L\d+)\s*[=:\-–]?\s*(.+)", part.strip())
+            if pm:
+                name = pm.group(2).strip().rstrip(".")
+                out[pm.group(1)] = name[:1].upper() + name[1:]
+    for code in used - set(out):
+        n = int(code[1:])
+        out[code] = "Course intro" if n == 0 else f"Lecture {n}"
+    if not out:
+        out["L0"] = "Course intro"
+    return dict(sorted(out.items(), key=lambda kv: int(kv[0][1:])))
 
 
 def chapter_lectures(mapping_md: str) -> dict[int, str]:
-    """Textbook chapter -> lecture, from the course's mapping page ('## Lecture N' sections that
-    mention 'Ch. N'). The first lecture that names a chapter gets it."""
+    """Textbook chapter -> lecture, from a mapping page with '## Lecture N' sections that mention
+    'Ch. N' (or §N.x). The first lecture that names a chapter gets it."""
     out: dict[int, str] = {}
     lecture = None
     for line in mapping_md.splitlines():
-        h = re.match(r"^##\s+Lecture\s+(\d+)", line)
+        h = re.match(r"^#{2,3}\s+(?:Lecture|L)\s*(\d+)\b", line, re.I)
         if h:
-            lecture = f"L{h.group(1)}"
+            lecture = f"L{int(h.group(1))}"
             continue
-        if line.startswith("## "):
+        if re.match(r"^##\s", line):
             lecture = None
-        if lecture and "Shiavi" in line or (lecture and re.search(r"\bCh\.\s*\d", line) and "Rangayyan" not in line):
-            for ch in re.findall(r"Ch\.\s*(\d+)", line) + re.findall(r"and Ch\.\s*(\d+)", line):
-                out.setdefault(int(ch), lecture)
-            for ch in re.findall(r"§(\d+)\.", line):
-                out.setdefault(int(ch), lecture)
+        if not lecture:
+            continue
+        for ch in re.findall(r"\b(?:Ch|Chapter)\.?\s*(\d+)", line, re.I) + re.findall(r"§(\d+)\.", line):
+            out.setdefault(int(ch), lecture)
     return out
+
+
+def lecture_in(name: str) -> str | None:
+    """`Lecture05`, `lecture 3`, `L4_slides`, `wk2-L06` -> the lecture code, if the name has one."""
+    m = re.search(r"lecture\s*[-_ ]?0*(\d+)", name, re.I) or re.search(r"(?:^|[^A-Za-z])L0*(\d+)(?=[^0-9]|$)", name)
+    return f"L{int(m.group(1))}" if m else None
 
 
 def humanize(tag: str) -> str:
@@ -103,21 +117,23 @@ def clean_title(stem: str) -> str:
 def plan_materials(root: Path, lectures: dict[str, str]) -> list[dict[str, Any]]:
     """(path, lecture, kind, title) for every file brought in as a material, in a stable order."""
     mats = root / "01-materials"
-    mapping = mats / "lecture-textbook-mapping.md"
+    mapping = next(iter(sorted(mats.glob("*mapping*.md"))), mats / "lecture-textbook-mapping.md")
     chapters = chapter_lectures(mapping.read_text(encoding="utf-8")) if mapping.exists() else {}
     out: list[dict[str, Any]] = []
+    first = next(iter(lectures))
 
-    def add(path: Path, lecture: str, kind: str, title: str) -> None:
-        if lecture not in lectures:
-            lecture = "L0" if "L0" in lectures else sorted(lectures)[0]
+    def add(path: Path, lecture: str | None, kind: str, title: str) -> None:
+        # A lecture named in a file name exists even if no question or card uses it.
+        if lecture and lecture not in lectures:
+            lectures[lecture] = "Course intro" if lecture == "L0" else f"Lecture {lecture[1:]}"
+        lecture = lecture or first
         out.append({"path": path.relative_to(root).as_posix(), "lecture": lecture, "kind": kind, "title": title})
 
     for p in sorted((mats / "Slides").glob("*.pdf")):
-        m = re.search(r"lecture\s*0?(\d+)", p.stem, re.I)
-        n = m.group(1) if m else "0"
-        add(p, f"L{n}", "Slides", f"Lecture {n} slides")
+        lec = lecture_in(p.stem)
+        add(p, lec, "Slides", f"Lecture {lec[1:]} slides" if lec else clean_title(p.stem))
     for p in sorted(mats.glob("*.pdf")):
-        add(p, "L0", "Other", "Course manual" if "manual" in p.stem.lower() else clean_title(p.stem))
+        add(p, lecture_in(p.stem), "Other", "Course manual" if "manual" in p.stem.lower() else clean_title(p.stem))
     for book in sorted(d for d in (mats / "Textbooks").glob("*") if d.is_dir()):
         for p in sorted(book.glob("*.pdf"), key=lambda x: (int(m.group(1)) if (m := re.match(r"(\d+)---", x.name)) else 99, x.name)):
             if p.stem.lower().startswith(SKIP_TEXTBOOK):
@@ -131,12 +147,21 @@ def plan_materials(root: Path, lectures: dict[str, str]) -> list[dict[str, Any]]
     labels = paper_labels(root)
     for p in sorted((mats / "Past Exams").rglob("*.pdf")):
         add(p, "L0", "PastExam", exam_title(p.name, labels))
+    # Any other PDF under 01-materials (folders this export layout doesn't know): by the lecture in
+    # its name, else the first lecture. Exercise folders hold notebooks and data, not PDFs.
+    seen = {m["path"] for m in out}
+    for p in sorted(mats.rglob("*.pdf")):
+        if p.relative_to(root).as_posix() not in seen and (mats / "Textbooks") not in p.parents:
+            where = p.relative_to(mats).as_posix().lower()
+            kind = next((k for w, k in (("slide", "Slides"), ("exam", "PastExam"), ("exercise", "Exercise"),
+                                        ("tutorial", "Exercise"), ("book", "Textbook")) if w in where), "Other")
+            add(p, lecture_in(p.stem), kind, clean_title(p.stem))
     if mapping.exists():
-        add(mapping, "L0", "Notes", "Lectures, slides and textbook chapters")
+        add(mapping, first, "Notes", "Lectures, slides and textbook chapters")
     for p in sorted((root / "02-study-aids").glob("*.md")):
         m = re.search(r"lecture\s*0?(\d+)", p.stem, re.I)
         title = f"Lecture {m.group(1)} {clean_title(p.stem[m.end():])}".strip() if m else clean_title(p.stem).capitalize()
-        add(p, f"L{m.group(1)}" if m else "L0", "Notes", title)
+        add(p, lecture_in(p.stem), "Notes", title)
     return out
 
 
@@ -312,14 +337,27 @@ class State:
 
 def run(args: argparse.Namespace) -> None:
     root = Path(args.export).resolve()
-    readme = (root / "README.md").read_text(encoding="utf-8")
-    code, name = course_identity(readme)
-    code, name = (args.code or code).upper(), args.name or name
-    lectures = lecture_names(readme)
-    questions = read_json(root / "03-question-bank" / "questions.json")
-    papers = read_json(root / "03-question-bank" / "papers.json")
-    cards = read_json(root / "04-flashcards" / "flashcards.json")
+    readme_path = root / "README.md"
+    readme = readme_path.read_text(encoding="utf-8") if readme_path.exists() else ""
+    code, name = course_identity(readme, root.name)
+    code, name = args.code or code, args.name or name
+    if not code or not name:
+        raise SystemExit("Couldn't tell the course's code and name from the export; pass --code and --name.")
+    code = code.upper()
+
+    def optional(p: Path, empty: Any) -> Any:
+        if p.exists():
+            return read_json(p)
+        print(f"  (no {p.relative_to(root).as_posix()}: nothing of that kind to import)")
+        return empty
+
+    questions = optional(root / "03-question-bank" / "questions.json", [])
+    papers = optional(root / "03-question-bank" / "papers.json", {})
+    cards = optional(root / "04-flashcards" / "flashcards.json", [])
+    used = {x["lecture"] for x in [*questions, *cards] if re.fullmatch(r"L\d+", str(x.get("lecture", "")))}
+    lectures = lecture_names(readme, used)
     materials = plan_materials(root, lectures)
+    lectures = dict(sorted(lectures.items(), key=lambda kv: int(kv[0][1:])))
     tags = sorted({t for q in questions for t in q.get("concepts", [])})
 
     print(f"{code} {name}: {len(lectures)} lectures, {len(tags)} concepts, {len(materials)} materials, "
@@ -401,7 +439,8 @@ def run(args: argparse.Namespace) -> None:
         if key in s["papers"]:
             continue
         src = p.get("file", "")
-        local = next((root / "01-materials" / src.split("/", 2)[2]).parent.glob(Path(src).name), None) if src.count("/") >= 2 else None
+        # The export names the file by its path in the old tool; find it by name in this folder.
+        local = next(iter(sorted(root.rglob(Path(src).name))), None) if src else None
         status = p.get("key", "").lower()
         fields = {
             "paperKey": key,
@@ -437,7 +476,7 @@ def run(args: argparse.Namespace) -> None:
         key = c.get("id") or c["code"]
         if key in s["cards"]:
             continue
-        lec = c.get("lecture") if c.get("lecture") in lec_id else "L0"
+        lec = c.get("lecture") if c.get("lecture") in lec_id else next(iter(lec_id))
         s["cards"][key] = api.call("POST", f"/api/v1/courses/{cid}/flashcards",
                                    {"componentId": lec_id[lec], "front": c["front"], "back": c["back"],
                                     "shared": True, "source": "Lecture"})["id"]
@@ -448,7 +487,7 @@ def run(args: argparse.Namespace) -> None:
 
 
 def add_question(api: Api, root: Path, cid: str, q: dict[str, Any], s: dict[str, Any], file_id: Any) -> str:
-    lec = q["lecture"] if q["lecture"] in s["lectures"] else "L0"
+    lec = q.get("lecture") if q.get("lecture") in s["lectures"] else next(iter(s["lectures"]))
     content: dict[str, Any] = {
         "prompt": q["stem"],
         "explanation": q.get("explanation") or None,

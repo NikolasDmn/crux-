@@ -29,6 +29,22 @@ python tools/importer/crux_import.py imports/bsa-export --base https://crux.<you
   export skipped a number.
 - **Left out:** the Obsidian vault and the exercise notebooks and data (not PDFs).
 
+## Other courses
+
+Built on the BSA export, but nothing in it is BSA-specific. When an export differs:
+
+- **No `# CODE (Name) export` title:** the code comes from the folder name (`rki-export` → RKI)
+  and the name from the README's first heading; pass `--code`/`--name` if neither works.
+- **No `Lectures:` line:** every lecture code the questions, cards and file names use (L0, L3, …)
+  becomes a lecture called "Lecture N"; rename them in Crux afterwards.
+- **Other folder names:** every PDF under `01-materials` is imported. Its lecture comes from its
+  name (`Lecture05`, `L4_slides`, `wk2-L06`), else the first lecture; its kind from its folder
+  (slides, exam, exercise/tutorial, book), else Other.
+- **No textbook mapping, `papers.json` or `flashcards.json`:** those parts are skipped (the run
+  says so).
+
+Always start with `--dry-run`: it prints every lecture and file with where it would go.
+
 Re-runnable: what it created is recorded in `<export>/.crux-import.json` per server, so running it
 again only adds what's missing (after a failure, just run it again). Exports belong in `imports/`,
 which git ignores.

@@ -13,6 +13,7 @@ import { Dialog } from "@/components/ui/overlays";
 import { Segmented } from "@/components/ui/segmented";
 import { useToast } from "@/components/ui/toast";
 import { useCourse } from "@/features/courses/api";
+import { QuestionImage } from "@/features/files/question-image";
 import { useTraps } from "@/features/mistakes/api";
 import {
   keys,
@@ -319,6 +320,7 @@ function Runner({ mock, offset }: { mock: Mock; offset: number }) {
               {a?.flagged ? <Flag className="size-3.5 text-warning-text" aria-label="Flagged" /> : null}
             </div>
             <Markdown className="text-[17px]">{item.prompt}</Markdown>
+            {item.imageFileId ? <QuestionImage fileId={item.imageFileId} /> : null}
             <AnswerControl item={item} a={a} onChange={(p) => change(item.order, p)} />
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-sm text-muted">How sure?</span>

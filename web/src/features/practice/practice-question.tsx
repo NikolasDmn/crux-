@@ -9,6 +9,7 @@ import { Input, Textarea } from "@/components/ui/field";
 import { OptionRow } from "@/components/ui/option-row";
 import { Segmented } from "@/components/ui/segmented";
 import { useAttempt } from "@/features/next/api";
+import { QuestionImage } from "@/features/files/question-image";
 import type { Schemas } from "@/lib/api";
 import { messageFor } from "@/lib/errors";
 import { cn } from "@/lib/cn";
@@ -77,6 +78,7 @@ export function PracticeQuestionCard({
   return (
     <Card className={cn("flex flex-col gap-4", compact && "gap-3 p-4")}>
       <Markdown className={compact ? undefined : "text-md"}>{q.prompt}</Markdown>
+      {q.imageFileId ? <QuestionImage fileId={q.imageFileId} /> : null}
       {type === "MC" ? (
         <div role="radiogroup" aria-label="Options" className="flex flex-col gap-2">
           {(q.options ?? []).map((o, n) => (

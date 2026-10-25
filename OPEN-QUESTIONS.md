@@ -228,3 +228,9 @@ files waits for the object store, and every compose service has `restart: unless
 | Q-arch-5 | Unsubscribe links: `Recipient.UnsubscribeTokenHash` stores only a hash, so the token must be re-derivable for each email. | Token = HMAC-SHA256(`CRUX_UNSUBSCRIBE_SECRET`, userRef); only its sha256 is stored. |
 | Q-arch-6 | Metrics endpoint (`/metrics`) and Grafana/Loki. | **Done in M9 (B9-5):** `/internal/metrics` on every service; dashboards are left to the VPS. |
 | Q-arch-7 | Prod DB passwords: `deploy/mysql/init.sql` holds dev passwords. | **Done in M9 (B9-11):** `deploy/mysql/init-prod.sh` sets them from `.env`. |
+
+## After the volunteer trial (noted 2026-10-25)
+
+- **Question images by upload.** The question editor should take an image file directly (PNG/JPEG)
+  as well as a crop from a course PDF. Lecture materials stay PDF-only for now. (The importer works
+  around it by wrapping each figure in a one-page PDF and cropping that.)

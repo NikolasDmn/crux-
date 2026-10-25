@@ -12,6 +12,7 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/overla
 import { useToast } from "@/components/ui/toast";
 import { useConcepts, usePapers, useQuestion, useQuestionAction } from "@/features/bank/api";
 import { useCourse } from "@/features/courses/api";
+import { QuestionImage } from "@/features/files/question-image";
 import { canEdit } from "@/features/courses/lib/roles";
 import { useLectures } from "@/features/lectures/api";
 import { QuizDialog } from "@/features/practice/components";
@@ -130,6 +131,7 @@ function ViewQuestion() {
 
       <Card className="flex flex-col gap-4">
         <Markdown className="text-md">{v.prompt}</Markdown>
+        {v.imageFileId ? <QuestionImage fileId={v.imageFileId} /> : null}
         {v.options?.length ? (
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
             {v.options.map((o, n) => (

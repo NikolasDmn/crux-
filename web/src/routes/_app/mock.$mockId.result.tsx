@@ -13,6 +13,7 @@ import { OptionRow } from "@/components/ui/option-row";
 import { useToast } from "@/components/ui/toast";
 import { getQuestion } from "@/features/bank/api";
 import { CardDialog, type CardDraft } from "@/features/flash/components/card-dialog";
+import { QuestionImage } from "@/features/files/question-image";
 import { SLIP_TYPES, useLogSlip } from "@/features/mistakes/api";
 import { useResult, useReview, type Item, type Mock } from "@/features/mocks/api";
 import { scoreText } from "@/features/mocks/lib/taking";
@@ -133,6 +134,7 @@ function ItemCard({ mock, item }: { mock: Mock; item: Item }) {
         </span>
       </div>
       <Markdown>{item.prompt}</Markdown>
+      {item.imageFileId ? <QuestionImage fileId={item.imageFileId} /> : null}
 
       {item.type === "MC" ? (
         <div className="flex flex-col gap-2">

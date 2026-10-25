@@ -21,6 +21,7 @@ import {
 } from "@/features/bank/api";
 import { check, emptyForm, formFrom, toContent, type Form, type QType } from "@/features/bank/lib/editor";
 import { useCourse } from "@/features/courses/api";
+import { QuestionImage } from "@/features/files/question-image";
 import { canEdit } from "@/features/courses/lib/roles";
 import { useLectures } from "@/features/lectures/api";
 import { conflictCurrent, fieldErrors, messageFor } from "@/lib/errors";
@@ -219,6 +220,7 @@ export function QuestionEditor({
             <span className="text-sm font-medium">Preview</span>
             <div className="min-h-40 rounded-md border border-border bg-sunken/40 p-3">
               <Markdown>{f.prompt || "_Nothing yet._"}</Markdown>
+              {f.imageFileId ? <QuestionImage fileId={f.imageFileId} className="mt-2" /> : null}
             </div>
           </div>
         </div>

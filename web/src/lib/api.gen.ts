@@ -2611,6 +2611,8 @@ export interface components {
             lastVerifiedAt: string | null;
             /** Models */
             models: string[];
+            /** Prices */
+            prices: components["schemas"]["ModelPrice"][];
             /** Provider */
             provider: string;
             /** Status */
@@ -3746,6 +3748,17 @@ export interface components {
             revealAll: boolean;
             /** @description Spec 5.3 step 7. */
             warnings: components["schemas"]["Warning"][];
+        };
+        /** ModelPrice */
+        ModelPrice: {
+            /** Default */
+            default: boolean;
+            /** Id */
+            id: string;
+            /** Inputpermtok */
+            inputPerMtok: number;
+            /** Outputpermtok */
+            outputPerMtok: number;
         };
         /** MonthUsage */
         MonthUsage: {

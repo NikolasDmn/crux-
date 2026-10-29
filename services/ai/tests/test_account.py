@@ -69,6 +69,9 @@ async def test_settings_keys_tutors_gate_budget() -> None:
         assert bad.status == "Invalid" and not bad.is_default
         k = await account.add_key(deps, USER, account.KeyInput(provider="fake", api_key="fake-valid-abcd1234"))
         assert (k.status, k.last4, k.is_default) == ("Valid", "1234", True)
+        assert [(p.id, p.input_per_mtok, p.output_per_mtok, p.default) for p in k.prices] == [
+            ("fake-1", 1.0, 2.0, True)
+        ]
         with pytest.raises(ValidationFailed):
             await account.add_key(deps, USER, account.KeyInput(provider="fake", api_key="fake-valid-zzzz9999"))
         with pytest.raises(ValidationFailed):

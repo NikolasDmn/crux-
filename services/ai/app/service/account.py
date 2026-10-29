@@ -202,6 +202,15 @@ async def key_row(s: AsyncSession, user_ref: str, key_ref: str) -> Any | None:
     return (await s.execute(stmt)).first()
 
 
+class ModelPrice(Camel):
+    id: str
+    #: USD per million tokens today (standard prompts; long prompts can cost more).
+    input_per_mtok: float
+    output_per_mtok: float
+    #: The provider's default, picked when the key is added.
+    default: bool
+
+
 class KeyView(Camel):
     id: str
     provider: str
@@ -213,6 +222,8 @@ class KeyView(Camel):
     created_at: str | None
     is_default: bool
     models: list[str]
+    #: The same models with today's prices, for the model picker.
+    prices: list[ModelPrice]
 
 
 def _key_view(k: Any, default_id: int | None) -> KeyView:
@@ -226,7 +237,13 @@ def _key_view(k: Any, default_id: int | None) -> KeyView:
         created_at=iso(k.CreatedAt) if k.CreatedAt else None,
         is_default=k.Id == default_id,
         models=[m.id for m in models.for_provider(k.Provider)],
+        prices=[_price(m) for m in models.for_provider(k.Provider)],
     )
+
+
+def _price(m: models.Model) -> ModelPrice:
+    i, o = m.rates(0, utcnow().date())
+    return ModelPrice(id=m.id, input_per_mtok=i, output_per_mtok=o, default=m.default)
 
 
 async def list_keys(deps: Deps, user: Principal) -> list[KeyView]:

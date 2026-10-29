@@ -138,6 +138,13 @@
             "title": "Models",
             "type": "array"
           },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/ModelPrice"
+            },
+            "title": "Prices",
+            "type": "array"
+          },
           "provider": {
             "title": "Provider",
             "type": "string"
@@ -156,7 +163,8 @@
           "lastVerifiedAt",
           "createdAt",
           "isDefault",
-          "models"
+          "models",
+          "prices"
         ],
         "title": "KeyView",
         "type": "object"
@@ -4218,6 +4226,34 @@
             "type": "object"
           }
         ]
+      },
+      "ModelPrice": {
+        "properties": {
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "inputPerMtok": {
+            "title": "Inputpermtok",
+            "type": "number"
+          },
+          "outputPerMtok": {
+            "title": "Outputpermtok",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "inputPerMtok",
+          "outputPerMtok",
+          "default"
+        ],
+        "title": "ModelPrice",
+        "type": "object"
       },
       "MonthUsage": {
         "properties": {

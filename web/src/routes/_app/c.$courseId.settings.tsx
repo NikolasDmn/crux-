@@ -26,9 +26,10 @@ import { canEdit, isOwner, normalizeCode } from "@/features/courses/lib/roles";
 import { conflictCurrent, fieldErrors, messageFor } from "@/lib/errors";
 import { formatInZone } from "@/lib/time";
 import { CourseStorage } from "@/features/materials/course-storage";
+import { CourseAiSettings } from "@/features/ai/course-ai";
 
 // Course settings (frontend-spec 4): details (colour and grade scale are the Owner's), sharing,
-// subscription, Storage ("Free up space", undo for 7 days), delete to Trash.
+// subscription, AI for this course, Storage ("Free up space", undo for 7 days), delete to Trash.
 export const Route = createFileRoute("/_app/c/$courseId/settings")({ component: Settings });
 
 function Details({ course }: { course: Course }) {
@@ -379,6 +380,7 @@ function Settings() {
       <Details course={c} />
       <Sharing course={c} />
       <Subscription course={c} />
+      <CourseAiSettings courseId={c.id} />
       <CourseStorage course={c} />
       {isOwner(c.myRole) ? <Danger course={c} /> : null}
     </div>

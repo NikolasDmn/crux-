@@ -196,6 +196,15 @@ pub async fn signup(ctx: &Ctx, input: SignupInput, client: &ClientInfo) -> AppRe
     Ok(session)
 }
 
+/// Audit L1: files, ai and notify trust an access token on its own until it expires. When every
+/// session of a user ends (disabled, password reset, theft detected, deletion, a role change),
+/// this marker tells them to refuse tokens issued before now. It outlives the longest token.
+pub async fn revoke_access_tokens(ctx: &Ctx, user_ref: &str) -> AppResult<()> {
+    let ttl = (rules::ACCESS_TOKEN_TTL + chrono::Duration::minutes(1)).to_std().unwrap_or_default();
+    ctx.kv.set(&format!("crux:revoked:{user_ref}"), &ctx.clock.now().timestamp().to_string(), ttl).await?;
+    Ok(())
+}
+
 /// `POST /auth/login`. A wrong login name and a wrong password look and take the same.
 pub async fn login(ctx: &Ctx, input: LoginInput, client: &ClientInfo) -> AppResult<Session> {
     let login = rules::normalize_email(&input.login);
@@ -234,7 +243,11 @@ pub async fn refresh(ctx: &Ctx, refresh_token: &str, client: &ClientInfo) -> App
         RefreshDecision::Expired | RefreshDecision::Revoked => Err(AppError::Unauthenticated),
         RefreshDecision::Reused => {
             let n = sessions::revoke_all_for_user(&mut tx, session.user_id, now, RevokeReason::Reuse).await?;
+            let user_ref = users::by_id(&mut tx, session.user_id).await?.map(|u| u.public_id);
             tx.commit().await?;
+            if let Some(r) = user_ref {
+                revoke_access_tokens(ctx, &r).await?;
+            }
             tracing::warn!(revoked = n, "refresh token reuse detected; all sessions revoked");
             Err(AppError::Unauthenticated)
         }
@@ -350,7 +363,11 @@ pub async fn reset_password(ctx: &Ctx, token: &str, new_password: &str, accept_b
     auth_tokens::mark_used(&mut tx, row.id, now).await?;
     users::set_password_hash(&mut tx, row.user_id, &hash).await?;
     sessions::revoke_all_for_user(&mut tx, row.user_id, now, RevokeReason::PasswordReset).await?;
+    let user_ref = users::by_id(&mut tx, row.user_id).await?.map(|u| u.public_id);
     tx.commit().await?;
+    if let Some(r) = user_ref {
+        revoke_access_tokens(ctx, &r).await?;
+    }
     Ok(())
 }
 

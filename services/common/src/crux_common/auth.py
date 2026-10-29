@@ -74,10 +74,19 @@ class Jwks:
         return self._keys[kid]
 
 
+#: Set by core when every session of a user ends (audit L1); the value is a unix time.
+REVOKED_KEY = "crux:revoked:{}"
+
+
 class Authenticator:
-    def __init__(self, jwks: Jwks, service_name: str) -> None:
+    """`redis` (optional) lets a token be refused before it expires: core writes
+    `crux:revoked:<user>` when it ends all of a user's sessions, and tokens issued before that
+    time stop working here too."""
+
+    def __init__(self, jwks: Jwks, service_name: str, redis: Any | None = None) -> None:
         self.jwks = jwks
         self.service_name = service_name
+        self.redis = redis
 
     async def _decode(self, token: str, audience: str) -> dict[str, Any]:
         try:
@@ -99,6 +108,10 @@ class Authenticator:
 
     async def verify_access(self, token: str) -> Principal:
         claims = await self._decode(token, ACCESS_AUDIENCE)
+        if self.redis is not None:
+            revoked = await self.redis.get(REVOKED_KEY.format(claims["sub"]))
+            if revoked is not None and int(claims.get("iat", 0)) < int(revoked):
+                raise Unauthenticated()
         return Principal(user_ref=claims["sub"], role=claims.get("role", "User"), tier=claims.get("tier", ""))
 
     async def verify_service(self, token: str) -> str:

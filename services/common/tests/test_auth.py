@@ -67,3 +67,24 @@ async def test_rejects_other_keys_and_alg_none() -> None:
     unsigned = jwt.encode({"sub": "x", "aud": ACCESS_AUDIENCE, "iss": ISSUER}, None, algorithm="none")  # type: ignore[arg-type]
     with pytest.raises(Unauthenticated):
         await auth.verify_access(unsigned)
+
+
+class _Markers:
+    def __init__(self, values: dict[str, str]) -> None:
+        self.values = values
+
+    async def get(self, key: str) -> str | None:
+        return self.values.get(key)
+
+
+async def test_tokens_issued_before_a_revocation_are_refused() -> None:
+    """Audit L1: core's `crux:revoked:<user>` marker ends older tokens here too."""
+    f = json.loads(FIXTURE.read_text())
+    iat = jwt.decode(f["accessToken"], options={"verify_signature": False})["iat"]
+    j = Jwks("http://unused.invalid/jwks")
+    j.load(f["jwks"])
+    key = "crux:revoked:01TEST00000000000000000001"
+    assert (await Authenticator(j, "files", _Markers({})).verify_access(f["accessToken"])).user_ref
+    assert await Authenticator(j, "files", _Markers({key: str(iat)})).verify_access(f["accessToken"])
+    with pytest.raises(Unauthenticated):
+        await Authenticator(j, "files", _Markers({key: str(iat + 1)})).verify_access(f["accessToken"])

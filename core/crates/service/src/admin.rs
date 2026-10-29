@@ -132,6 +132,8 @@ pub async fn patch_user(ctx: &Ctx, actor: &Actor, user_ref: &str, patch: AdminUs
         if patch.status.as_deref() == Some("Disabled") {
             crux_repo::sessions::revoke_all_for_user(&mut tx, target.id, now, crux_domain::auth::RevokeReason::Admin).await?;
         }
+        // Audit L1: other services stop honouring the old role or a disabled account at once.
+        crate::auth::revoke_access_tokens(ctx, &target.public_id).await?;
     }
     audit(
         &mut tx,

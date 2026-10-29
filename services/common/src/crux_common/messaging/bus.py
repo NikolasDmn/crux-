@@ -11,10 +11,17 @@ from redis.exceptions import ResponseError
 log = logging.getLogger("crux.bus")
 
 MAX_LEN = 100_000
+#: Audit L4: after this many deliveries an entry moves to the dead-letter stream, so a handful of
+#: events that always fail can't keep the retry sweep from reaching the rest.
+MAX_DELIVERIES = 10
 
 
 def stream_key(topic: str) -> str:
     return f"crux:events:{topic}"
+
+
+def dead_key(topic: str) -> str:
+    return f"crux:events:dead:{topic}"
 
 
 @dataclass(frozen=True)
@@ -93,13 +100,36 @@ class RedisBus:
                         raise KeyError("envelope")
                     out.append(Delivery(stream_id=eid, topic=topic, envelope=Envelope.from_json(raw)))
                 except (TypeError, ValueError, KeyError):
-                    log.warning("dropping malformed event", extra={"stream": key_s, "id": eid})
+                    # Never parseable: dead-letter and ack it now, or it would be retried forever.
+                    log.warning("malformed event dead-lettered", extra={"stream": key_s, "id": eid})
+                    await self._bury(group, topic, eid, fields, "malformed")
         return out
+
+    async def _bury(self, group: str, topic: str, entry_id: str, fields: dict[Any, Any], reason: str) -> None:
+        dead = {**fields, "reason": reason, "group": group, "id": entry_id}
+        await self._r.xadd(dead_key(topic), dead, maxlen=MAX_LEN, approximate=True)
+        await self._r.xack(stream_key(topic), group, entry_id)
+
+    async def _bury_exhausted(self, group: str, topics: list[str]) -> None:
+        for topic in topics:
+            pending = await self._r.xpending_range(stream_key(topic), group, min="-", max="+", count=100)
+            for p in pending:
+                if int(p["times_delivered"]) < MAX_DELIVERIES:
+                    continue
+                eid = str(p["message_id"].decode() if isinstance(p["message_id"], bytes) else p["message_id"])
+                rows = await self._r.xrange(stream_key(topic), min=eid, max=eid)
+                fields: dict[Any, Any] = dict(rows[0][1] or {}) if rows else {}
+                log.error(
+                    "event dead-lettered after repeated failures",
+                    extra={"topic": topic, "id": eid, "group": group, "alert": True},
+                )
+                await self._bury(group, topic, eid, fields, f"failed {MAX_DELIVERIES} times")
 
     async def read(self, group: str, consumer: str, topics: list[str], count: int, block_ms: int) -> list[Delivery]:
         return await self._read(group, consumer, topics, count, block_ms, ">")
 
     async def read_pending(self, group: str, consumer: str, topics: list[str], count: int) -> list[Delivery]:
+        await self._bury_exhausted(group, topics)
         return await self._read(group, consumer, topics, count, None, "0")
 
     async def ack(self, group: str, delivery: Delivery) -> None:

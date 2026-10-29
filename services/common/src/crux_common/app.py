@@ -30,7 +30,7 @@ def create_app(
         app.state.engine = engine
         app.state.sessions = db.make_sessionmaker(engine)
         app.state.redis = Redis.from_url(settings.redis_url, socket_timeout=REDIS_SOCKET_TIMEOUT)
-        app.state.auth = Authenticator(Jwks(settings.jwks_url), settings.service_name)
+        app.state.auth = Authenticator(Jwks(settings.jwks_url), settings.service_name, app.state.redis)
         app.state.contracts = Contracts(settings.contracts_dir)
         if on_startup:
             await on_startup(app)

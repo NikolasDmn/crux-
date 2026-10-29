@@ -3,6 +3,7 @@
 
 COMPOSE := docker compose -f deploy/compose.yaml --env-file .env
 export CRUX_TEST_MYSQL_URL ?= mysql://crux_test:crux-test@127.0.0.1:3306
+export CRUX_TEST_REDIS_URL ?= redis://:crux-redis-dev@127.0.0.1:6379/15
 
 .PHONY: help env keys web web-dev up up-ai down logs seed smoke verify test test-core test-py test-web lint fmt invite unlock purge-now
 

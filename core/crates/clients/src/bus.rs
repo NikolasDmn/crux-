@@ -106,6 +106,7 @@ impl EventBus for RedisBus {
     }
 
     async fn read_pending(&self, group: &str, consumer: &str, topics: &[&str], count: usize) -> Result<Vec<Delivery>, ClientError> {
+        self.bury_exhausted(group, topics).await?;
         self.read_from(group, consumer, topics, count, None, "0").await
     }
 
@@ -116,7 +117,42 @@ impl EventBus for RedisBus {
     }
 }
 
+/// Audit L4: after this many deliveries an entry moves to `crux:events:dead:<topic>`, so a few
+/// events that always fail can't keep the retry sweep from reaching the rest.
+pub const MAX_DELIVERIES: i64 = 10;
+
 impl RedisBus {
+    /// Copies an entry to the dead-letter stream with the reason, and acks it.
+    async fn bury(&self, group: &str, topic: &str, id: &str, fields: Vec<(String, String)>, reason: &str) -> Result<(), ClientError> {
+        let mut c = self.conn.clone();
+        let mut cmd = redis::cmd("XADD");
+        cmd.arg(format!("crux:events:dead:{topic}")).arg("MAXLEN").arg("~").arg(self.max_len).arg("*");
+        for (k, v) in fields {
+            cmd.arg(k).arg(v);
+        }
+        cmd.arg("reason").arg(reason).arg("group").arg(group).arg("id").arg(id);
+        let _: String = cmd.query_async(&mut c).await?;
+        let _: i64 = redis::AsyncCommands::xack(&mut c, stream_key(topic), group, &[id]).await?;
+        Ok(())
+    }
+
+    async fn bury_exhausted(&self, group: &str, topics: &[&str]) -> Result<(), ClientError> {
+        let mut c = self.conn.clone();
+        for topic in topics {
+            let pending: Vec<(String, String, i64, i64)> =
+                redis::cmd("XPENDING").arg(stream_key(topic)).arg(group).arg("-").arg("+").arg(100).query_async(&mut c).await?;
+            for (id, _, _, delivered) in pending.into_iter().filter(|p| p.3 >= MAX_DELIVERIES) {
+                let rows: Vec<(String, Vec<String>)> =
+                    redis::cmd("XRANGE").arg(stream_key(topic)).arg(&id).arg(&id).query_async(&mut c).await?;
+                let flat = rows.into_iter().next().map(|r| r.1).unwrap_or_default();
+                let fields = flat.chunks(2).filter_map(|kv| Some((kv.first()?.clone(), kv.get(1)?.clone()))).collect();
+                tracing::error!(alert = true, topic = %topic, id = %id, group = %group, delivered, "event dead-lettered after repeated failures");
+                self.bury(group, topic, &id, fields, &format!("failed {MAX_DELIVERIES} times")).await?;
+            }
+        }
+        Ok(())
+    }
+
     /// `from` = ">" for new messages, "0" for this consumer's pending ones.
     async fn read_from(
         &self,
@@ -142,7 +178,12 @@ impl RedisBus {
                 let raw: Option<String> = entry.get("envelope");
                 match raw.as_deref().map(serde_json::from_str::<Envelope>) {
                     Some(Ok(envelope)) => out.push(Delivery { stream_id: entry.id, topic: topic.clone(), envelope }),
-                    _ => tracing::warn!(stream = %key.key, id = %entry.id, "dropping malformed event"),
+                    _ => {
+                        // Never parseable: dead-letter and ack it now, or it's retried forever.
+                        tracing::warn!(stream = %key.key, id = %entry.id, "malformed event dead-lettered");
+                        let fields = raw.map(|r| vec![("envelope".to_string(), r)]).unwrap_or_default();
+                        self.bury(group, &topic, &entry.id, fields, "malformed").await?;
+                    }
                 }
             }
         }

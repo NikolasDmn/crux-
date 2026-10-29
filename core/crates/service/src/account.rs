@@ -351,6 +351,7 @@ pub async fn run_deletions(ctx: &Ctx) -> anyhow::Result<u64> {
         repo::set_user_status(&mut tx, d.user_id, "Disabled", Some(d.requested_at)).await?;
         crux_repo::sessions::revoke_all_for_user(&mut tx, d.user_id, now, crux_domain::auth::RevokeReason::Admin).await?;
         tx.commit().await?;
+        crate::auth::revoke_access_tokens(ctx, &user_ref).await.map_err(|e| anyhow::anyhow!("{e}"))?;
         n += 1;
     }
     let mut conn = ctx.pool.acquire().await?;

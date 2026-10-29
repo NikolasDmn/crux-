@@ -126,6 +126,9 @@ function ItemCard({ mock, item, suggestion }: { mock: Mock; item: Item; suggesti
     }
   };
   const k = item.key;
+  // One chosen option, or several ("choose all that apply").
+  const picked = (id: string) => item.answer.choiceOptionId === id || !!item.answer.choiceOptionIds?.includes(id);
+  const rightIds = k?.correctOptionIds?.length ? k.correctOptionIds : k?.correctOptionId ? [k.correctOptionId] : [];
   const miss = !!item.outcome && item.outcome !== "Right";
   // Self-grading stays open in AI mode too, also while a suggestion waits.
   const needsGrade = item.type === "Open" && !item.outcome;
@@ -167,17 +170,10 @@ function ItemCard({ mock, item, suggestion }: { mock: Mock; item: Item; suggesti
               key={o.id}
               index={n}
               disabled
-              selected={item.answer.choiceOptionId === o.id}
+              multi={item.multiSelect}
+              selected={picked(o.id)}
               onSelect={() => undefined}
-              state={
-                k
-                  ? o.id === k.correctOptionId
-                    ? "right"
-                    : item.answer.choiceOptionId === o.id
-                      ? "wrong"
-                      : undefined
-                  : undefined
-              }
+              state={k ? (rightIds.includes(o.id) ? "right" : picked(o.id) ? "wrong" : undefined) : undefined}
             >
               <Markdown>{o.text}</Markdown>
             </OptionRow>

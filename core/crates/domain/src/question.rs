@@ -93,6 +93,9 @@ pub struct VersionInput {
     pub options: Option<Vec<OptionInput>>,
     #[serde(default = "yes")]
     pub shuffle_options: bool,
+    /// MC: "choose all that apply" (one or more correct options; answers pick several).
+    #[serde(default)]
+    pub multi_select: bool,
     /// Numeric only.
     pub numeric: Option<NumericKey>,
     /// Open only.
@@ -123,7 +126,9 @@ pub fn validate_version(qt: QuestionType, v: &VersionInput, source: &str) -> Val
             let opts = v.options.as_deref().unwrap_or(&[]);
             if !(2..=12).contains(&opts.len()) {
                 e.push("options", "count", "Give 2-12 options.");
-            } else if opts.iter().filter(|o| o.is_correct).count() != 1 {
+            } else if v.multi_select && !opts.iter().any(|o| o.is_correct) {
+                e.push("options", "correct", "Mark at least one option as correct.");
+            } else if !v.multi_select && opts.iter().filter(|o| o.is_correct).count() != 1 {
                 e.push("options", "correct", "Mark exactly one option as correct.");
             }
             if opts.iter().any(|o| o.text.trim().is_empty()) {
@@ -202,6 +207,7 @@ mod tests {
             change_note: None,
             options: None,
             shuffle_options: true,
+            multi_select: false,
             numeric: None,
             open: None,
         }

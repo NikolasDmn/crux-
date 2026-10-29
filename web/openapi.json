@@ -526,6 +526,16 @@
               "null"
             ]
           },
+          "choiceOptionIds": {
+            "description": "\"Choose all that apply\": every chosen option (instead of choiceOptionId).",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "confidence": {
             "description": "Sure, Unsure, Guess.",
             "type": [
@@ -572,6 +582,13 @@
               "null"
             ]
           },
+          "choiceOptionIds": {
+            "description": "\"Choose all that apply\": every chosen option.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "confidence": {
             "description": "Sure, Unsure, Guess.",
             "type": [
@@ -603,6 +620,7 @@
           }
         },
         "required": [
+          "choiceOptionIds",
           "flagged"
         ],
         "type": "object"
@@ -619,6 +637,16 @@
           "choiceOptionId": {
             "type": [
               "string",
+              "null"
+            ]
+          },
+          "choiceOptionIds": {
+            "description": "\"Choose all that apply\": every chosen option (instead of choiceOptionId).",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
               "null"
             ]
           },
@@ -3323,6 +3351,10 @@
             "format": "double",
             "type": "number"
           },
+          "multiSelect": {
+            "description": "MC: \"choose all that apply\" (answer with choiceOptionIds).",
+            "type": "boolean"
+          },
           "options": {
             "description": "MC options in this mock's shuffled order.",
             "items": {
@@ -3372,6 +3404,7 @@
           "questionId",
           "type",
           "prompt",
+          "multiSelect",
           "answer",
           "maxGrade",
           "selfShown",
@@ -3483,6 +3516,13 @@
               "null"
             ]
           },
+          "correctOptionIds": {
+            "description": "Every correct option (one, or several for \"choose all that apply\").",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "explanation": {
             "type": [
               "string",
@@ -3526,6 +3566,7 @@
           }
         },
         "required": [
+          "correctOptionIds",
           "keyReliability"
         ],
         "type": "object"
@@ -5112,6 +5153,10 @@
               "null"
             ]
           },
+          "multiSelect": {
+            "description": "MC: \"choose all that apply\" (answer with choiceOptionIds).",
+            "type": "boolean"
+          },
           "options": {
             "items": {
               "$ref": "#/components/schemas/OptionText"
@@ -5137,7 +5182,8 @@
         "required": [
           "id",
           "type",
-          "prompt"
+          "prompt",
+          "multiSelect"
         ],
         "type": "object"
       },
@@ -7246,6 +7292,10 @@
               "null"
             ]
           },
+          "multiSelect": {
+            "description": "MC: \"choose all that apply\" (one or more correct options; answers pick several).",
+            "type": "boolean"
+          },
           "numeric": {
             "oneOf": [
               {
@@ -7325,6 +7375,13 @@
           },
           "keyReliability": {
             "type": "string"
+          },
+          "multiSelect": {
+            "description": "MC: \"choose all that apply\".",
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "numeric": {
             "oneOf": [

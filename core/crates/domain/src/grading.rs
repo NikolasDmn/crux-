@@ -151,6 +151,22 @@ pub fn grade_mc(chosen_correct: Option<bool>) -> Outcome {
     }
 }
 
+/// MC by the chosen options (single choice, or "choose all that apply"): `chosen` says whether each
+/// chosen option is correct; `correct` counts the question's correct options. All of them and
+/// nothing wrong → Right; some of them and nothing wrong → Partial; anything wrong → Wrong; none
+/// chosen → Blank.
+pub fn grade_choice(chosen: &[bool], correct: usize) -> Outcome {
+    if chosen.is_empty() {
+        Outcome::Blank
+    } else if chosen.iter().any(|c| !c) {
+        Outcome::Wrong
+    } else if chosen.len() >= correct {
+        Outcome::Right
+    } else {
+        Outcome::Partial
+    }
+}
+
 /// An open answer with no text is Blank and needs no grader.
 pub fn open_is_blank(text: Option<&str>) -> bool {
     text.is_none_or(|t| t.trim().is_empty())
@@ -173,6 +189,16 @@ pub fn clamp_grade(grade: f64, max: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn choose_all_that_apply() {
+        assert_eq!(grade_choice(&[], 2), Outcome::Blank);
+        assert_eq!(grade_choice(&[true, true], 2), Outcome::Right);
+        assert_eq!(grade_choice(&[true], 2), Outcome::Partial, "some, nothing wrong");
+        assert_eq!(grade_choice(&[true, false], 2), Outcome::Wrong, "a wrong one spoils it");
+        assert_eq!(grade_choice(&[true], 1), Outcome::Right, "single choice");
+        assert_eq!(grade_choice(&[false], 1), Outcome::Wrong);
+    }
 
     fn rule(value: f64, tol: f64, relative: bool) -> NumericRule {
         NumericRule { value, tolerance: tol, relative, unit: None, unit_required: false }

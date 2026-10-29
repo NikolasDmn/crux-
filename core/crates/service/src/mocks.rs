@@ -85,6 +85,8 @@ pub struct ShownOption {
 #[serde(rename_all = "camelCase")]
 pub struct AnswerView {
     pub choice_option_id: Option<String>,
+    /// "Choose all that apply": every chosen option.
+    pub choice_option_ids: Vec<String>,
     pub text: Option<String>,
     pub numeric: Option<f64>,
     pub unit: Option<String>,
@@ -98,6 +100,8 @@ pub struct AnswerView {
 #[serde(rename_all = "camelCase")]
 pub struct KeyView {
     pub correct_option_id: Option<String>,
+    /// Every correct option (one, or several for "choose all that apply").
+    pub correct_option_ids: Vec<String>,
     pub value: Option<f64>,
     pub tolerance: Option<f64>,
     pub tolerance_kind: Option<String>,
@@ -118,6 +122,8 @@ pub struct ItemView {
     pub image_file_id: Option<String>,
     /// MC options in this mock's shuffled order.
     pub options: Option<Vec<ShownOption>>,
+    /// MC: "choose all that apply" (answer with choiceOptionIds).
+    pub multi_select: bool,
     /// Numeric: the unit to answer in, when the question has one.
     pub unit: Option<String>,
     pub answer: AnswerView,
@@ -189,8 +195,19 @@ async fn item_views(conn: &mut MySqlConnection, m: &MockRow, items: &[ItemRow], 
             Some(oid) => repo::option_public_id(conn, oid).await?,
             None => None,
         };
+        let mut chosen_many = Vec::new();
+        for oid in it.chosen_option_ids.as_ref().map(|j| j.0.clone()).unwrap_or_default() {
+            if let Some(p) = repo::option_public_id(conn, oid).await? {
+                chosen_many.push(p);
+            }
+        }
         let key = visible.then(|| KeyView {
             correct_option_id: v.options.as_ref().and_then(|os| os.iter().find(|o| o.is_correct).map(|o| o.id.clone())),
+            correct_option_ids: v
+                .options
+                .as_ref()
+                .map(|os| os.iter().filter(|o| o.is_correct).map(|o| o.id.clone()).collect())
+                .unwrap_or_default(),
             value: v.numeric.as_ref().map(|n| n.value),
             tolerance: v.numeric.as_ref().map(|n| n.tolerance),
             tolerance_kind: v.numeric.as_ref().map(|n| n.tolerance_kind.clone()),
@@ -210,9 +227,11 @@ async fn item_views(conn: &mut MySqlConnection, m: &MockRow, items: &[ItemRow], 
             prompt: v.prompt.clone(),
             image_file_id: v.image_file_id.clone(),
             options,
+            multi_select: v.multi_select.unwrap_or(false),
             unit: v.numeric.as_ref().and_then(|n| n.unit.clone()),
             answer: AnswerView {
                 choice_option_id: chosen,
+                choice_option_ids: chosen_many,
                 text: it.answer_text.clone(),
                 numeric: it.answer_numeric,
                 unit: it.answer_unit.clone(),
@@ -514,6 +533,9 @@ pub async fn start(ctx: &Ctx, actor: &Actor, mock_ref: &str) -> AppResult<MockVi
 #[serde(rename_all = "camelCase")]
 pub struct AnswerInput {
     pub choice_option_id: Option<String>,
+    /// "Choose all that apply": every chosen option (instead of choiceOptionId).
+    #[serde(default)]
+    pub choice_option_ids: Option<Vec<String>>,
     pub text: Option<String>,
     pub numeric: Option<f64>,
     pub unit: Option<String>,
@@ -546,12 +568,22 @@ pub async fn answer(ctx: &Ctx, actor: &Actor, mock_ref: &str, order: i32, input:
         ),
         None => None,
     };
+    let mut many = Vec::new();
+    for r in input.choice_option_ids.as_deref().unwrap_or(&[]) {
+        let (id, _) = repo::option_id(&mut tx, item.question_version_id, r)
+            .await?
+            .ok_or_else(|| ValidationErrors::single("choiceOptionIds", "unknown", "Not an option of this question."))?;
+        if !many.contains(&id) {
+            many.push(id);
+        }
+    }
     repo::save_answer(
         &mut tx,
         m.id,
         order,
         &repo::Answer {
             chosen_option_id: chosen,
+            chosen_option_ids: input.choice_option_ids.is_some().then_some(many.as_slice()),
             text: input.text.as_deref(),
             numeric: input.numeric.filter(|n| n.is_finite()),
             unit: input.unit.as_deref(),
@@ -580,11 +612,16 @@ pub async fn submit(ctx: &Ctx, actor: &Actor, mock_ref: &str) -> AppResult<MockV
     for it in &items {
         let outcome = match it.qtype.as_str() {
             "MC" => {
-                let correct = match it.chosen_option_id {
-                    Some(o) => repo::option_correct(&mut tx, o).await?,
-                    None => None,
+                // One chosen option, or several ("choose all that apply"), against the key.
+                let opts = bank::options(&mut tx, &[it.question_version_id]).await?;
+                let correct = opts.iter().filter(|o| o.is_correct).count();
+                let picked: Vec<i64> = match (&it.chosen_option_ids, it.chosen_option_id) {
+                    (Some(many), _) if !many.0.is_empty() => many.0.clone(),
+                    (_, Some(one)) => vec![one],
+                    _ => vec![],
                 };
-                Some(grading::grade_mc(correct))
+                let chosen: Vec<bool> = picked.iter().map(|p| opts.iter().any(|o| o.id == *p && o.is_correct)).collect();
+                Some(grading::grade_choice(&chosen, correct))
             }
             "Numeric" => {
                 let key = bank::numeric_keys(&mut tx, &[it.question_version_id]).await?.pop().ok_or(AppError::NotFound)?;

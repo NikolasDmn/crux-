@@ -246,6 +246,8 @@ pub struct ItemRow {
     pub option_order: Option<Json<serde_json::Value>>,
     pub max_grade: f64,
     pub chosen_option_id: Option<i64>,
+    /// "Choose all that apply": the chosen MCOption ids.
+    pub chosen_option_ids: Option<Json<Vec<i64>>>,
     pub answer_text: Option<String>,
     pub answer_numeric: Option<f64>,
     pub answer_unit: Option<String>,
@@ -264,7 +266,7 @@ pub struct ItemRow {
 pub async fn items(conn: &mut MySqlConnection, mock_id: i64) -> RepoResult<Vec<ItemRow>> {
     Ok(sqlx::query_as(
         "SELECT mq.MockExamId, mq.QuestionOrder, mq.QuestionId, q.PublicId AS QuestionRef, CAST(q.Type AS CHAR) AS Qtype, q.CourseComponentId AS ComponentId, \
-         mq.QuestionVersionId, mq.OptionOrder, CAST(mq.MaxGrade AS DOUBLE) AS MaxGrade, mq.ChosenOptionId, mq.AnswerText, mq.AnswerNumeric, mq.AnswerUnit, \
+         mq.QuestionVersionId, mq.OptionOrder, CAST(mq.MaxGrade AS DOUBLE) AS MaxGrade, mq.ChosenOptionId, mq.ChosenOptionIds, mq.AnswerText, mq.AnswerNumeric, mq.AnswerUnit, \
          CAST(mq.Confidence AS CHAR) AS Confidence, mq.Flagged, mq.AnsweredAt, CAST(mq.Outcome AS CHAR) AS Outcome, CAST(mq.Grade AS DOUBLE) AS Grade, \
          CAST(mq.GradedBy AS CHAR) AS GradedBy, mq.AcceptedAiGradeRef, mq.Revealed, mq.SelfShown, mq.FixedInReview \
          FROM MockQuestion mq JOIN Question q ON q.Id = mq.QuestionId WHERE mq.MockExamId = ? ORDER BY mq.QuestionOrder",
@@ -276,6 +278,7 @@ pub async fn items(conn: &mut MySqlConnection, mock_id: i64) -> RepoResult<Vec<I
 
 pub struct Answer<'a> {
     pub chosen_option_id: Option<i64>,
+    pub chosen_option_ids: Option<&'a [i64]>,
     pub text: Option<&'a str>,
     pub numeric: Option<f64>,
     pub unit: Option<&'a str>,
@@ -286,10 +289,11 @@ pub struct Answer<'a> {
 
 pub async fn save_answer(conn: &mut MySqlConnection, mock_id: i64, order: i32, a: &Answer<'_>) -> RepoResult<bool> {
     let res = sqlx::query(
-        "UPDATE MockQuestion SET ChosenOptionId = ?, AnswerText = ?, AnswerNumeric = ?, AnswerUnit = ?, Confidence = ?, Flagged = ?, AnsweredAt = ? \
-         WHERE MockExamId = ? AND QuestionOrder = ?",
+        "UPDATE MockQuestion SET ChosenOptionId = ?, ChosenOptionIds = ?, AnswerText = ?, AnswerNumeric = ?, AnswerUnit = ?, Confidence = ?, Flagged = ?, \
+         AnsweredAt = ? WHERE MockExamId = ? AND QuestionOrder = ?",
     )
     .bind(a.chosen_option_id)
+    .bind(a.chosen_option_ids.map(Json))
     .bind(a.text)
     .bind(a.numeric)
     .bind(a.unit)
@@ -515,6 +519,7 @@ pub struct NewAttempt<'a> {
     pub context: &'a str,
     pub try_no: i8,
     pub chosen_option_id: Option<i64>,
+    pub chosen_option_ids: Option<&'a [i64]>,
     pub text: Option<&'a str>,
     pub numeric: Option<f64>,
     pub confidence: Option<&'a str>,
@@ -525,8 +530,8 @@ pub struct NewAttempt<'a> {
 
 pub async fn insert_attempt(conn: &mut MySqlConnection, a: &NewAttempt<'_>) -> RepoResult<i64> {
     let res = sqlx::query(
-        "INSERT INTO QuestionAttempt (UserId, ClientId, QuestionId, QuestionVersionId, MaterialId, Context, TryNo, ChosenOptionId, AnswerText, AnswerNumeric, \
-         Confidence, Outcome, Cold, AnsweredAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO QuestionAttempt (UserId, ClientId, QuestionId, QuestionVersionId, MaterialId, Context, TryNo, ChosenOptionId, ChosenOptionIds, \
+         AnswerText, AnswerNumeric, Confidence, Outcome, Cold, AnsweredAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(a.user_id)
     .bind(a.client_id)
@@ -536,6 +541,7 @@ pub async fn insert_attempt(conn: &mut MySqlConnection, a: &NewAttempt<'_>) -> R
     .bind(a.context)
     .bind(a.try_no)
     .bind(a.chosen_option_id)
+    .bind(a.chosen_option_ids.map(Json))
     .bind(a.text)
     .bind(a.numeric)
     .bind(a.confidence)

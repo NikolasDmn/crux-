@@ -17,6 +17,8 @@ export interface Form {
   prompt: string;
   options: OptionRow[];
   shuffleOptions: boolean;
+  /** "Choose all that apply": one or more correct options. */
+  multiSelect: boolean;
   value: string;
   tolerance: string;
   toleranceKind: "Relative" | "Absolute";
@@ -48,6 +50,7 @@ export function emptyForm(componentId = ""): Form {
     prompt: "",
     options: [blankOption(), blankOption(), blankOption(), blankOption()],
     shuffleOptions: true,
+    multiSelect: false,
     value: "",
     tolerance: "",
     toleranceKind: "Relative",
@@ -84,6 +87,7 @@ export function formFrom(q: Question): Form {
       distractorNote: o.distractorNote ?? "",
     })),
     shuffleOptions: v.shuffleOptions ?? true,
+    multiSelect: v.multiSelect ?? false,
     value: v.numeric ? String(v.numeric.value) : "",
     tolerance: v.numeric ? String(v.numeric.tolerance) : "",
     toleranceKind: v.numeric?.toleranceKind === "Absolute" ? "Absolute" : "Relative",
@@ -126,7 +130,9 @@ export function check(f: Form): Record<string, string> {
   if (f.type === "MC") {
     const filled = f.options.filter((o) => o.text.trim());
     if (filled.length < 2) e.options = "Give at least two options.";
-    else if (filled.filter((o) => o.isCorrect).length !== 1) e.options = "Mark exactly one option correct.";
+    else if (f.multiSelect && !filled.some((o) => o.isCorrect)) e.options = "Mark at least one option correct.";
+    else if (!f.multiSelect && filled.filter((o) => o.isCorrect).length !== 1)
+      e.options = "Mark exactly one option correct.";
   }
   if (f.type === "Numeric") {
     if (num(f.value) === null) e.value = "Enter the answer as a number.";
@@ -153,6 +159,7 @@ export function toContent(f: Form): VersionInput {
       .filter((o) => o.text.trim())
       .map((o) => ({ text: o.text.trim(), isCorrect: o.isCorrect, distractorNote: o.distractorNote.trim() || null }));
     content.shuffleOptions = f.shuffleOptions;
+    content.multiSelect = f.multiSelect;
   }
   if (f.type === "Numeric") {
     content.numeric = {

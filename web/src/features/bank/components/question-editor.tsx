@@ -387,6 +387,23 @@ function OptionsCard({ f, set, error }: { f: Form; set: (p: Partial<Form>) => vo
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <SectionLabel>Options</SectionLabel>
+        <label className="ml-auto mr-4 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="size-4 accent-[var(--primary)]"
+            checked={f.multiSelect}
+            onChange={(e) => {
+              const multi = e.currentTarget.checked;
+              // Back to one answer: keep only the first correct option.
+              const first = f.options.findIndex((o) => o.isCorrect);
+              set({
+                multiSelect: multi,
+                options: multi ? f.options : f.options.map((o, n) => ({ ...o, isCorrect: n === first })),
+              });
+            }}
+          />
+          Choose all that apply
+        </label>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -398,15 +415,25 @@ function OptionsCard({ f, set, error }: { f: Form; set: (p: Partial<Form>) => vo
         </label>
       </div>
       {error ? <span className="text-sm text-danger-text">{error}</span> : null}
-      <div role="radiogroup" aria-label="Correct option" className="flex flex-col gap-3">
+      <div
+        role={f.multiSelect ? "group" : "radiogroup"}
+        aria-label={f.multiSelect ? "Correct options" : "Correct option"}
+        className="flex flex-col gap-3"
+      >
         {f.options.map((o, i) => (
           <div key={i} className="grid gap-2 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-center">
             <button
               type="button"
-              role="radio"
+              role={f.multiSelect ? "checkbox" : "radio"}
               aria-checked={o.isCorrect}
               aria-label={`Option ${String.fromCharCode(65 + i)} is correct`}
-              onClick={() => set({ options: f.options.map((x, n) => ({ ...x, isCorrect: n === i })) })}
+              onClick={() =>
+                set({
+                  options: f.options.map((x, n) =>
+                    f.multiSelect ? (n === i ? { ...x, isCorrect: !x.isCorrect } : x) : { ...x, isCorrect: n === i },
+                  ),
+                })
+              }
               className={cn(
                 "inline-flex size-8 items-center justify-center rounded-md border font-mono text-sm",
                 o.isCorrect ? "border-success bg-success-bg text-success-text" : "border-border bg-sunken",

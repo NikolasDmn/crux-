@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { Item } from "@/features/mocks/api";
-import { answered, crossed, fromItem, loadPending, navState, remaining, savePending, scoreText } from "./taking";
+import {
+  answered,
+  crossed,
+  fromItem,
+  loadPending,
+  navState,
+  remaining,
+  savePending,
+  scoreText,
+  toggleChoice,
+} from "./taking";
 
 describe("timer", () => {
   it("counts down from the server's end time, corrected for clock skew", () => {
@@ -41,6 +51,7 @@ describe("answers", () => {
     const item = { answer: { flagged: true, numeric: 2, unit: "kg" } } as Item;
     expect(fromItem(item)).toEqual({
       choiceOptionId: null,
+      choiceOptionIds: null,
       numeric: 2,
       unit: "kg",
       text: null,
@@ -83,5 +94,17 @@ describe("score", () => {
     expect(scoreText(6.5, 10)).toBe("6.5/10");
     expect(scoreText(7, 10)).toBe("7/10");
     expect(scoreText(null, 10)).toBe("–");
+  });
+});
+
+describe("choose all that apply", () => {
+  it("toggles options in and out", () => {
+    expect(toggleChoice(null, "a")).toEqual(["a"]);
+    expect(toggleChoice(["a", "b"], "a")).toEqual(["b"]);
+    expect(toggleChoice(["b"], "a")).toEqual(["b", "a"]);
+  });
+  it("counts several chosen options as an answer", () => {
+    expect(answered({ choiceOptionIds: ["a", "b"], flagged: false }, "MC")).toBe(true);
+    expect(answered({ choiceOptionIds: [], flagged: false }, "MC")).toBe(false);
   });
 });

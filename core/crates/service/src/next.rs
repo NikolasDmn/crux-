@@ -40,6 +40,8 @@ pub struct PracticeQuestion {
     pub prompt: String,
     pub image_file_id: Option<String>,
     pub options: Option<Vec<OptionText>>,
+    /// MC: "choose all that apply" (answer with choiceOptionIds).
+    pub multi_select: bool,
     pub unit: Option<String>,
 }
 
@@ -80,6 +82,7 @@ pub(crate) async fn practice_question(conn: &mut MySqlConnection, question_id: i
         prompt: v.prompt,
         image_file_id: v.image_file_id,
         options: v.options.map(|os| os.into_iter().map(|o| OptionText { id: o.id, text: o.text }).collect()),
+        multi_select: v.multi_select.unwrap_or(false),
         unit: v.numeric.and_then(|n| n.unit),
     }))
 }

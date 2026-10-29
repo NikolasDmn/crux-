@@ -316,11 +316,13 @@ pub async fn insert_mc(
     conn: &mut MySqlConnection,
     version_id: i64,
     shuffle: bool,
+    multi: bool,
     options: &[(String, &str, bool, Option<&str>)],
 ) -> RepoResult<()> {
-    sqlx::query("INSERT INTO MCQuestion (QuestionVersionId, ShuffleOptions) VALUES (?, ?)")
+    sqlx::query("INSERT INTO MCQuestion (QuestionVersionId, ShuffleOptions, MultiSelect) VALUES (?, ?, ?)")
         .bind(version_id)
         .bind(shuffle)
+        .bind(multi)
         .execute(&mut *conn)
         .await?;
     for (pos, (public_id, text, correct, note)) in options.iter().enumerate() {
@@ -356,11 +358,16 @@ pub async fn options(conn: &mut MySqlConnection, version_ids: &[i64]) -> RepoRes
 }
 
 pub async fn shuffle_flag(conn: &mut MySqlConnection, version_id: i64) -> RepoResult<bool> {
-    Ok(sqlx::query_scalar("SELECT ShuffleOptions FROM MCQuestion WHERE QuestionVersionId = ?")
+    Ok(mc_flags(conn, version_id).await?.0)
+}
+
+/// (ShuffleOptions, MultiSelect) of an MC version; (true, false) when it has none.
+pub async fn mc_flags(conn: &mut MySqlConnection, version_id: i64) -> RepoResult<(bool, bool)> {
+    Ok(sqlx::query_as("SELECT ShuffleOptions, MultiSelect FROM MCQuestion WHERE QuestionVersionId = ?")
         .bind(version_id)
         .fetch_optional(conn)
         .await?
-        .unwrap_or(true))
+        .unwrap_or((true, false)))
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]

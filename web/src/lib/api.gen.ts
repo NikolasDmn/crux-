@@ -2721,6 +2721,8 @@ export interface components {
         };
         AnswerInput: {
             choiceOptionId?: string | null;
+            /** @description "Choose all that apply": every chosen option (instead of choiceOptionId). */
+            choiceOptionIds?: string[] | null;
             /** @description Sure, Unsure, Guess. */
             confidence?: string | null;
             flagged?: boolean;
@@ -2732,6 +2734,8 @@ export interface components {
         AnswerView: {
             answeredAt?: string | null;
             choiceOptionId?: string | null;
+            /** @description "Choose all that apply": every chosen option. */
+            choiceOptionIds: string[];
             /** @description Sure, Unsure, Guess. */
             confidence?: string | null;
             flagged: boolean;
@@ -2744,6 +2748,8 @@ export interface components {
             /** Format: date-time */
             answeredAt?: string | null;
             choiceOptionId?: string | null;
+            /** @description "Choose all that apply": every chosen option (instead of choiceOptionId). */
+            choiceOptionIds?: string[] | null;
             /** @description Made on the device (ULID); the same id twice is the same attempt. */
             clientId: string;
             /** @description Warm-ups are cold (spec 5.9); otherwise computed. */
@@ -3509,6 +3515,8 @@ export interface components {
             key?: null | components["schemas"]["KeyView"];
             /** Format: double */
             maxGrade: number;
+            /** @description MC: "choose all that apply" (answer with choiceOptionIds). */
+            multiSelect: boolean;
             /** @description MC options in this mock's shuffled order. */
             options?: components["schemas"]["ShownOption"][] | null;
             /** Format: int32 */
@@ -3560,6 +3568,8 @@ export interface components {
         };
         KeyView: {
             correctOptionId?: string | null;
+            /** @description Every correct option (one, or several for "choose all that apply"). */
+            correctOptionIds: string[];
             explanation?: string | null;
             keyReliability: string;
             modelAnswer?: string | null;
@@ -4016,6 +4026,8 @@ export interface components {
         PracticeQuestion: {
             id: string;
             imageFileId?: string | null;
+            /** @description MC: "choose all that apply" (answer with choiceOptionIds). */
+            multiSelect: boolean;
             options?: components["schemas"]["OptionText"][] | null;
             prompt: string;
             type: string;
@@ -4647,6 +4659,8 @@ export interface components {
             keyNote?: string | null;
             /** @description Official, Derived (default), Disputed. */
             keyReliability?: string | null;
+            /** @description MC: "choose all that apply" (one or more correct options; answers pick several). */
+            multiSelect?: boolean;
             numeric?: null | components["schemas"]["NumericKey"];
             open?: null | components["schemas"]["OpenKey"];
             /** @description MC only. */
@@ -4663,6 +4677,8 @@ export interface components {
             imageFileId?: string | null;
             keyNote?: string | null;
             keyReliability: string;
+            /** @description MC: "choose all that apply". */
+            multiSelect?: boolean | null;
             numeric?: null | components["schemas"]["NumericView"];
             open?: null | components["schemas"]["OpenView"];
             /** @description MC: in their stored order. */

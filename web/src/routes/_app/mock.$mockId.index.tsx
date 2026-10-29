@@ -25,7 +25,15 @@ import {
   type Item,
   type Mock,
 } from "@/features/mocks/api";
-import { crossed, fromItem, loadPending, navState, remaining, savePending } from "@/features/mocks/lib/taking";
+import {
+  crossed,
+  fromItem,
+  loadPending,
+  navState,
+  remaining,
+  savePending,
+  toggleChoice,
+} from "@/features/mocks/lib/taking";
 import { cn } from "@/lib/cn";
 import { ApiError } from "@/lib/api";
 import { messageFor } from "@/lib/errors";
@@ -267,7 +275,13 @@ function Runner({ mock, offset }: { mock: Mock; offset: number }) {
       else if (k.kind === "flag") change(item.order, { flagged: !a?.flagged });
       else if (item.type === "MC") {
         const o = item.options?.[k.index] as { id: string } | undefined;
-        if (o) change(item.order, { choiceOptionId: o.id, confidence: k.confidence });
+        if (o && item.multiSelect) {
+          change(item.order, {
+            choiceOptionIds: toggleChoice(a?.choiceOptionIds, o.id),
+            choiceOptionId: null,
+            confidence: k.confidence,
+          });
+        } else if (o) change(item.order, { choiceOptionId: o.id, confidence: k.confidence });
       }
     };
     window.addEventListener("keydown", onKey);
@@ -437,6 +451,29 @@ function AnswerControl({
 }) {
   if (item.type === "MC") {
     const options = (item.options ?? []) as { id: string; text: string }[];
+    if (item.multiSelect) {
+      // "Choose all that apply": each option toggles (keys too).
+      return (
+        <div className="flex flex-col gap-2">
+          <p className="m-0 text-sm text-muted">Choose all that apply.</p>
+          <div role="group" aria-label="Options, choose all that apply" className="flex flex-col gap-2">
+            {options.map((o, n) => (
+              <OptionRow
+                key={o.id}
+                index={n}
+                multi
+                selected={!!a?.choiceOptionIds?.includes(o.id)}
+                onSelect={() =>
+                  onChange({ choiceOptionIds: toggleChoice(a?.choiceOptionIds, o.id), choiceOptionId: null })
+                }
+              >
+                <Markdown>{o.text}</Markdown>
+              </OptionRow>
+            ))}
+          </div>
+        </div>
+      );
+    }
     return (
       <div role="radiogroup" aria-label="Options" className="flex flex-col gap-2">
         {options.map((o, n) => (

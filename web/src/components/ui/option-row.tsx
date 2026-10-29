@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 // Picked: Row with key (frontend-spec 3.3). The key square shows the shortcut digit; selected = 2 px
-// text border and an ink key. Use inside a `role="radiogroup"`.
+// text border and an ink key. Use inside a `role="radiogroup"`, or a `role="group"` with `multi`
+// ("choose all that apply": each row is a checkbox).
 export function OptionRow({
   index,
   selected,
@@ -10,6 +11,7 @@ export function OptionRow({
   children,
   disabled,
   state,
+  multi = false,
 }: {
   index: number;
   selected: boolean;
@@ -18,11 +20,12 @@ export function OptionRow({
   disabled?: boolean;
   /** After grading: shown with a word and icon, never colour alone (spec 2.7). */
   state?: "right" | "wrong" | undefined;
+  multi?: boolean;
 }) {
   return (
     <button
       type="button"
-      role="radio"
+      role={multi ? "checkbox" : "radio"}
       aria-checked={selected}
       disabled={disabled}
       onClick={onSelect}

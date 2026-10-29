@@ -41,13 +41,17 @@ export function PracticeQuestionCard({
   compact?: boolean;
 }) {
   const attempt = useAttempt();
+  const type = q.type;
   const [clientId] = useState(ulid);
   const [choice, setChoice] = useState<string | null>(null);
+  // "Choose all that apply": every picked option.
+  const [choices, setChoices] = useState<string[]>([]);
+  const multi = type === "MC" && !!q.multiSelect;
   const [value, setValue] = useState("");
   const [self, setSelf] = useState<"Right" | "Partial" | "Wrong" | null>(null);
   const [result, setResult] = useState<Result | null>(null);
-  const type = q.type;
-  const ready = type === "MC" ? !!choice : type === "Numeric" ? value.trim() !== "" : !!self;
+  const ready =
+    type === "MC" ? (multi ? choices.length > 0 : !!choice) : type === "Numeric" ? value.trim() !== "" : !!self;
 
   const check = () =>
     attempt.mutate(
@@ -59,7 +63,7 @@ export function PracticeQuestionCard({
         ...(context.kind === "Warmup" ? { cold: true } : {}),
         ...(context.kind === "Notes" ? { materialId: context.materialId } : {}),
         answeredAt: new Date().toISOString(),
-        ...(type === "MC" ? { choiceOptionId: choice } : {}),
+        ...(type === "MC" ? (multi ? { choiceOptionIds: choices } : { choiceOptionId: choice }) : {}),
         ...(type === "Numeric" ? { numeric: Number(value.replace(",", ".")), unit: q.unit ?? null } : {}),
         ...(type === "Open" ? { text: value, selfOutcome: self } : {}),
       },
@@ -72,23 +76,36 @@ export function PracticeQuestionCard({
     );
 
   const key = result?.key;
-  const right = (key?.options ?? []).find((o) => o.isCorrect)?.id;
+  const rightIds = (key?.options ?? []).filter((o) => o.isCorrect).map((o) => o.id);
+  const picked = (id: string) => (multi ? choices.includes(id) : choice === id);
   const tempting =
-    result && choice && choice !== right ? key?.options?.find((o) => o.id === choice)?.distractorNote : null;
+    result && !multi && choice && !rightIds.includes(choice)
+      ? key?.options?.find((o) => o.id === choice)?.distractorNote
+      : null;
   return (
     <Card className={cn("flex flex-col gap-4", compact && "gap-3 p-4")}>
       <Markdown className={compact ? undefined : "text-md"}>{q.prompt}</Markdown>
       {q.imageFileId ? <QuestionImage fileId={q.imageFileId} /> : null}
       {type === "MC" ? (
-        <div role="radiogroup" aria-label="Options" className="flex flex-col gap-2">
+        <div
+          role={multi ? "group" : "radiogroup"}
+          aria-label={multi ? "Options, choose all that apply" : "Options"}
+          className="flex flex-col gap-2"
+        >
+          {multi ? <p className="m-0 text-sm text-muted">Choose all that apply.</p> : null}
           {(q.options ?? []).map((o, n) => (
             <OptionRow
               key={o.id}
               index={n}
-              selected={choice === o.id}
+              multi={multi}
+              selected={picked(o.id)}
               disabled={!!result}
-              onSelect={() => setChoice(o.id)}
-              state={result ? (o.id === right ? "right" : o.id === choice ? "wrong" : undefined) : undefined}
+              onSelect={() =>
+                multi
+                  ? setChoices((c) => (c.includes(o.id) ? c.filter((x) => x !== o.id) : [...c, o.id]))
+                  : setChoice(o.id)
+              }
+              state={result ? (rightIds.includes(o.id) ? "right" : picked(o.id) ? "wrong" : undefined) : undefined}
             >
               <Markdown>{o.text}</Markdown>
             </OptionRow>

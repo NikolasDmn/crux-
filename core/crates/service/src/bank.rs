@@ -64,6 +64,8 @@ pub struct VersionView {
     /// MC: in their stored order.
     pub options: Option<Vec<OptionView>>,
     pub shuffle_options: Option<bool>,
+    /// MC: "choose all that apply".
+    pub multi_select: Option<bool>,
     pub numeric: Option<NumericView>,
     pub open: Option<OpenView>,
 }
@@ -143,7 +145,7 @@ pub(crate) async fn version_views(
     let mut out = HashMap::new();
     for v in versions {
         let qt = qtypes.get(&v.question_id).map(String::as_str).unwrap_or("Open");
-        let shuffle = if qt == "MC" { Some(repo::shuffle_flag(conn, v.id).await?) } else { None };
+        let flags = if qt == "MC" { Some(repo::mc_flags(conn, v.id).await?) } else { None };
         out.insert(
             v.id,
             VersionView {
@@ -157,7 +159,8 @@ pub(crate) async fn version_views(
                 change_note: v.change_note.clone(),
                 created_at: iso(v.created_at),
                 options: (qt == "MC").then(|| options.remove(&v.id).unwrap_or_default()),
-                shuffle_options: shuffle,
+                shuffle_options: flags.map(|f| f.0),
+                multi_select: flags.map(|f| f.1),
                 numeric: numerics.get(&v.id).cloned(),
                 open: opens.get(&v.id).cloned(),
             },
@@ -393,7 +396,7 @@ pub(crate) async fn write_version(
                 .iter()
                 .map(|o| (ctx.ids.ulid(), o.text.trim(), o.is_correct, o.distractor_note.as_deref()))
                 .collect();
-            repo::insert_mc(conn, vid, v.shuffle_options, &opts).await?;
+            repo::insert_mc(conn, vid, v.shuffle_options, v.multi_select, &opts).await?;
         }
         QuestionType::Numeric => {
             let n = v.numeric.as_ref().ok_or_else(|| ValidationErrors::single("numeric", "required", "Give the answer value."))?;
@@ -746,6 +749,7 @@ pub(crate) fn version_input_from(v: &VersionView) -> VersionInput {
                 .collect()
         }),
         shuffle_options: v.shuffle_options.unwrap_or(true),
+        multi_select: v.multi_select.unwrap_or(false),
         numeric: v.numeric.as_ref().map(|n| question::NumericKey {
             value: n.value,
             tolerance: n.tolerance,

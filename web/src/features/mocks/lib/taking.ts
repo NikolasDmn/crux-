@@ -23,9 +23,15 @@ export function crossed(before: number | null, after: number | null, limitMin?: 
 
 export function answered(a: AnswerInput | undefined, type: string): boolean {
   if (!a) return false;
-  if (type === "MC") return !!a.choiceOptionId;
+  if (type === "MC") return !!a.choiceOptionId || !!a.choiceOptionIds?.length;
   if (type === "Numeric") return a.numeric !== null && a.numeric !== undefined;
   return !!a.text?.trim();
+}
+
+/** "Choose all that apply": `id` in or out of the chosen ones. */
+export function toggleChoice(ids: readonly string[] | null | undefined, id: string): string[] {
+  const now = ids ?? [];
+  return now.includes(id) ? now.filter((x) => x !== id) : [...now, id];
 }
 
 export type NavState = "answered" | "flagged" | "blank";
@@ -40,6 +46,7 @@ export function fromItem(i: Item): AnswerInput {
   const a = i.answer;
   return {
     choiceOptionId: a.choiceOptionId ?? null,
+    choiceOptionIds: a.choiceOptionIds?.length ? a.choiceOptionIds : null,
     numeric: a.numeric ?? null,
     unit: a.unit ?? null,
     text: a.text ?? null,

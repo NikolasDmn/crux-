@@ -551,3 +551,56 @@ async fn material_checks_and_quiz_me() {
     assert_eq!(quiz("componentId=01AAAAAAAAAAAAAAAAAAAAAAAA".into()).await.status, StatusCode::UNPROCESSABLE_ENTITY);
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn choose_all_that_apply() {
+    let Some(h) = common::harness().await else { return };
+    let (t, _, _) = signup(&h.app, &h.t.ctx, "multi").await;
+    let c = setup(&h, &t).await;
+    let body = |opts: Value| json!({"componentId": c.l1, "type": "MC", "content": {"prompt": "Which are measures of spread?", "multiSelect": true, "options": opts}});
+    let none = call(
+        &h.app,
+        "POST",
+        &format!("/courses/{}/questions", c.id),
+        Some(&t),
+        Some(body(json!([
+        {"text": "Mean", "isCorrect": false}, {"text": "Median", "isCorrect": false}]))),
+        &[],
+    )
+    .await;
+    assert_eq!(none.json["error"]["details"]["fields"][0]["code"], "correct", "at least one correct");
+    let q = call(
+        &h.app,
+        "POST",
+        &format!("/courses/{}/questions", c.id),
+        Some(&t),
+        Some(body(json!([
+        {"text": "Variance", "isCorrect": true}, {"text": "Range", "isCorrect": true}, {"text": "Mean", "isCorrect": false}]))),
+        &[],
+    )
+    .await;
+    assert_eq!((q.status, q.json["current"]["multiSelect"].as_bool()), (StatusCode::CREATED, Some(true)), "{}", q.json);
+    let id = |text: &str| q.json["current"]["options"].as_array().unwrap().iter().find(|o| o["text"] == text).unwrap()["id"].clone();
+
+    // A mock per answer: all the right ones, some of them, and one wrong among them.
+    for (picked, want) in [(vec!["Variance", "Range"], "Right"), (vec!["Range"], "Partial"), (vec!["Variance", "Mean"], "Wrong")] {
+        let m = call(&h.app, "POST", &format!("/courses/{}/mocks", c.id), Some(&t), Some(json!({"n": 5})), &[]).await.json;
+        let mid = m["id"].as_str().unwrap().to_string();
+        assert_eq!(m["items"][0]["multiSelect"], true);
+        call(&h.app, "POST", &format!("/mocks/{mid}/start"), Some(&t), None, &[]).await;
+        let ids: Vec<Value> = picked.iter().map(|p| id(p)).collect();
+        let a =
+            call(&h.app, "PUT", &format!("/mocks/{mid}/questions/1/answer"), Some(&t), Some(json!({"choiceOptionIds": ids})), &[]).await;
+        assert_eq!(a.json["answer"]["choiceOptionIds"].as_array().unwrap().len(), picked.len(), "{}", a.json);
+        call(&h.app, "POST", &format!("/mocks/{mid}/submit"), Some(&t), None, &[]).await;
+        let r = call(&h.app, "GET", &format!("/mocks/{mid}/result"), Some(&t), None, &[]).await.json;
+        assert_eq!(r["items"][0]["outcome"], want, "{picked:?}: {r}");
+    }
+
+    // Practice the same way.
+    let att = json!({"clientId": "01CLIENT0000000000000MULTI", "questionId": q.json["id"], "context": "Practice",
+        "choiceOptionIds": [id("Variance"), id("Range")]});
+    let a = call(&h.app, "POST", "/attempts", Some(&t), Some(att), &[]).await;
+    assert_eq!(a.json["outcome"], "Right", "{}", a.json);
+    h.db.drop_db().await;
+}

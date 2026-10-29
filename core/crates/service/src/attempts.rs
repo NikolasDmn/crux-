@@ -28,6 +28,9 @@ pub struct AttemptInput {
     #[serde(default = "one")]
     pub try_no: i8,
     pub choice_option_id: Option<String>,
+    /// "Choose all that apply": every chosen option (instead of choiceOptionId).
+    #[serde(default)]
+    pub choice_option_ids: Option<Vec<String>>,
     pub text: Option<String>,
     pub numeric: Option<f64>,
     pub unit: Option<String>,
@@ -104,6 +107,7 @@ pub async fn record(ctx: &Ctx, actor: &Actor, input: AttemptInput) -> AppResult<
     let now = ctx.clock.now();
     // Spec 5.11 style clamp: no future answers, and nothing older than a week.
     let at = input.answered_at.unwrap_or(now).clamp(now - Duration::days(7), now + Duration::minutes(5));
+    let mut many: Vec<i64> = Vec::new();
     let (outcome, chosen) = match q.qtype.as_str() {
         "MC" => {
             let chosen = match &input.choice_option_id {
@@ -114,7 +118,24 @@ pub async fn record(ctx: &Ctx, actor: &Actor, input: AttemptInput) -> AppResult<
                 ),
                 None => None,
             };
-            (grading::grade_mc(chosen.map(|c| c.1)), chosen.map(|c| c.0))
+            // Several ("choose all that apply"), or the one.
+            let mut picked: Vec<bool> = Vec::new();
+            for r in input.choice_option_ids.as_deref().unwrap_or(&[]) {
+                let (id, correct) = mocks::option_id(&mut tx, vid, r)
+                    .await?
+                    .ok_or_else(|| ValidationErrors::single("choiceOptionIds", "unknown", "Not an option of this question."))?;
+                if !many.contains(&id) {
+                    many.push(id);
+                    picked.push(correct);
+                }
+            }
+            if let Some((_, correct)) = chosen {
+                if many.is_empty() {
+                    picked.push(correct);
+                }
+            }
+            let correct = key.options.as_ref().map(|os| os.iter().filter(|o| o.is_correct).count()).unwrap_or(1);
+            (grading::grade_choice(&picked, correct), chosen.map(|c| c.0))
         }
         "Numeric" => {
             let n = key.numeric.as_ref().ok_or(AppError::NotFound)?;
@@ -157,6 +178,7 @@ pub async fn record(ctx: &Ctx, actor: &Actor, input: AttemptInput) -> AppResult<
             context: &input.context,
             try_no: input.try_no,
             chosen_option_id: chosen,
+            chosen_option_ids: input.choice_option_ids.is_some().then_some(many.as_slice()),
             text: input.text.as_deref(),
             numeric: input.numeric,
             confidence: input.confidence.as_deref(),

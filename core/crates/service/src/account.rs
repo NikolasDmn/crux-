@@ -24,6 +24,9 @@ pub const GRACE_DAYS: i64 = 14;
 pub const EXPORT_HOURS: i64 = 24;
 /// Services that must ack `user.deleted` before the Users row goes (spec 9.4).
 pub const ACK_SERVICES: [&str; 3] = ["files", "ai", "notify"];
+/// Audit M3: a service that isn't deployed (ai is optional) never acks. After this long the
+/// deletion finishes anyway, with an alert naming the services that didn't answer.
+pub const ACK_TIMEOUT_DAYS: i64 = 3;
 
 // ---------- export ----------
 
@@ -71,41 +74,53 @@ pub async fn list_exports(ctx: &Ctx, actor: &Actor) -> AppResult<Vec<ExportView>
     Ok(repo::exports(&mut conn, actor.user_id).await?.iter().map(|r| export_view(r, now)).collect())
 }
 
-/// The user's core rows (spec 11): every table with their UserId, their owned courses' catalog.
+/// Core tables that hold nothing of a user's (audit M4: every other table is exported; a test
+/// checks that each table is one or the other).
+pub const NOT_PERSONAL: &[&str] = &["ConsumedEvent", "Outbox", "Tier"];
+
+/// The user's core rows (spec 11, "export everything"): every table with their UserId, then the
+/// rows hanging off those or off their owned courses, listed table by table.
 pub async fn core_part(conn: &mut MySqlConnection, user_id: i64) -> AppResult<Value> {
     let mut out = serde_json::Map::new();
     out.insert("Users".into(), json!(repo::dump(conn, "Users", "Id = ?", &[user_id]).await?));
     for t in repo::user_tables(conn).await? {
         out.insert(t.clone(), json!(repo::dump(conn, &t, "UserId = ?", &[user_id]).await?));
     }
-    out.insert("Course".into(), json!(repo::dump(conn, "Course", "OwnerUserId = ?", &[user_id]).await?));
+    // Each `?` is the user's id.
     let owned = "SELECT Id FROM Course WHERE OwnerUserId = ?";
-    for t in ["CourseComponent", "Concept", "Paper"] {
-        out.insert(t.into(), json!(repo::dump(conn, t, &format!("CourseId IN ({owned})"), &[user_id]).await?));
-    }
-    out.insert(
-        "ComponentMaterial".into(),
-        json!(
-            repo::dump(
-                conn,
-                "ComponentMaterial",
-                &format!("CourseComponentId IN (SELECT Id FROM CourseComponent WHERE CourseId IN ({owned}))"),
-                &[user_id]
-            )
-            .await?
-        ),
-    );
-    // Questions and cards: the course's own and the user's private ones, never another user's.
+    let components = format!("SELECT Id FROM CourseComponent WHERE CourseId IN ({owned})");
+    // Questions and cards: the owned courses' own and the user's private ones, never another user's.
     let mine = format!("(CourseId IN ({owned}) AND OwnerUserId IS NULL) OR OwnerUserId = ?");
-    out.insert("Question".into(), json!(repo::dump(conn, "Question", &mine, &[user_id, user_id]).await?));
-    out.insert(
-        "QuestionVersion".into(),
-        json!(
-            repo::dump(conn, "QuestionVersion", &format!("QuestionId IN (SELECT Id FROM Question WHERE {mine})"), &[user_id, user_id])
-                .await?
-        ),
-    );
-    out.insert("Flashcard".into(), json!(repo::dump(conn, "Flashcard", &mine, &[user_id, user_id]).await?));
+    let versions = format!("SELECT Id FROM QuestionVersion WHERE QuestionId IN (SELECT Id FROM Question WHERE {mine})");
+    let deadlines = "SELECT Id FROM Deadline WHERE CourseSubscriptionId IN (SELECT Id FROM CourseSubscription WHERE UserId = ?)";
+    let rows: Vec<(&str, String, usize)> = vec![
+        ("Course", "OwnerUserId = ?".into(), 1),
+        ("GradeScale", "OwnerUserId = ?".into(), 1),
+        ("Invite", "InvitedBy = ?".into(), 1),
+        ("CourseShareInvite", "InvitedBy = ?".into(), 1),
+        ("CourseComponent", format!("CourseId IN ({owned})"), 1),
+        ("ComponentDependency", format!("DependantId IN ({components})"), 1),
+        ("Concept", format!("CourseId IN ({owned})"), 1),
+        ("Paper", format!("CourseId IN ({owned})"), 1),
+        ("PaperOmission", format!("PaperId IN (SELECT Id FROM Paper WHERE CourseId IN ({owned}))"), 1),
+        ("ComponentMaterial", format!("CourseComponentId IN ({components})"), 1),
+        ("MaterialQuestion", format!("MaterialId IN (SELECT Id FROM ComponentMaterial WHERE CourseComponentId IN ({components}))"), 1),
+        ("Question", mine.clone(), 2),
+        ("QuestionConcept", format!("QuestionId IN (SELECT Id FROM Question WHERE {mine})"), 2),
+        ("QuestionVersion", format!("QuestionId IN (SELECT Id FROM Question WHERE {mine})"), 2),
+        ("MCQuestion", format!("QuestionVersionId IN ({versions})"), 2),
+        ("MCOption", format!("QuestionVersionId IN ({versions})"), 2),
+        ("NumericQuestion", format!("QuestionVersionId IN ({versions})"), 2),
+        ("OpenQuestion", format!("QuestionVersionId IN ({versions})"), 2),
+        ("Flashcard", mine.clone(), 2),
+        ("Deadline", format!("Id IN ({deadlines})"), 1),
+        ("DeadlineComponent", format!("DeadlineId IN ({deadlines})"), 1),
+        ("MockQuestion", "MockExamId IN (SELECT Id FROM MockExam WHERE UserId = ?)".into(), 1),
+        ("WeakSpotCheck", "WeakSpotId IN (SELECT Id FROM WeakSpot WHERE UserId = ?)".into(), 1),
+    ];
+    for (table, filter, n) in rows {
+        out.insert(table.into(), json!(repo::dump(conn, table, &filter, &vec![user_id; n]).await?));
+    }
     Ok(Value::Object(out))
 }
 
@@ -306,9 +321,15 @@ pub async fn run_deletions(ctx: &Ctx) -> anyhow::Result<u64> {
         for dec in d.course_decisions.0.as_array().cloned().unwrap_or_default() {
             let Some(cref) = dec["courseRef"].as_str() else { continue };
             let Some((_, course_id)) = crux_repo::courses::owner_of_live_course(&mut tx, cref).await? else { continue };
+            // Audit M3: the choice is up to 14 days old. Transfer only to someone who is still an
+            // accepted member with an active account; otherwise the course goes with the account.
             if dec["action"] == "transfer" {
                 if let Some(to) = dec["toUserRef"].as_str() {
-                    if let Some(u) = crux_repo::users::by_public_id(&mut tx, to).await? {
+                    let member = crux_repo::courses::members(&mut tx, course_id)
+                        .await?
+                        .into_iter()
+                        .any(|m| m.user_ref == to && m.status == "Accepted");
+                    if let Some(u) = crux_repo::users::by_public_id(&mut tx, to).await?.filter(|u| member && u.status == "Active") {
                         repo::transfer_course(&mut tx, course_id, d.user_id, u.id).await?;
                         continue;
                     }
@@ -326,7 +347,19 @@ pub async fn run_deletions(ctx: &Ctx) -> anyhow::Result<u64> {
             .map_err(|e| anyhow::anyhow!("{e}"))?;
         repo::set_deletion_status(&mut tx, &user_ref, "Purging", now).await?;
         repo::set_acks(&mut tx, &user_ref, &json!([])).await?;
+        // Audit M3: no more sign-ins or writes while the services purge (they'd be orphaned).
+        repo::set_user_status(&mut tx, d.user_id, "Disabled", Some(d.requested_at)).await?;
+        crux_repo::sessions::revoke_all_for_user(&mut tx, d.user_id, now, crux_domain::auth::RevokeReason::Admin).await?;
         tx.commit().await?;
+        n += 1;
+    }
+    let mut conn = ctx.pool.acquire().await?;
+    for (user_ref, user_id, acks) in repo::stalled_purges(&mut conn, now - Duration::days(ACK_TIMEOUT_DAYS)).await? {
+        let acks: Vec<String> = acks.and_then(|a| serde_json::from_value(a.0).ok()).unwrap_or_default();
+        let missing: Vec<&str> = ACK_SERVICES.iter().copied().filter(|s| !acks.iter().any(|a| a == s)).collect();
+        tracing::error!(alert = true, user = %user_ref, missing = ?missing, "account deletion finished without every service's ack");
+        repo::delete_user(&mut conn, user_id).await?;
+        repo::set_deletion_status(&mut conn, &user_ref, "Done", now).await?;
         n += 1;
     }
     Ok(n)

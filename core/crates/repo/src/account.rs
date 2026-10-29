@@ -9,7 +9,7 @@ use sqlx::MySqlConnection;
 use crate::RepoResult;
 
 /// Tables with a `UserId` column that hold no data of the user's own (sessions and tokens).
-const SKIP_TABLES: &[&str] = &["UserSession", "AuthToken", "Outbox", "ConsumedEvent", "AccountDeletion"];
+pub const SKIP_TABLES: &[&str] = &["UserSession", "AuthToken", "Outbox", "ConsumedEvent", "AccountDeletion"];
 
 pub async fn columns(conn: &mut MySqlConnection, table: &str) -> RepoResult<Vec<String>> {
     Ok(sqlx::query_scalar(
@@ -181,6 +181,17 @@ pub async fn set_deletion_status(conn: &mut MySqlConnection, user_ref: &str, sta
 pub async fn set_acks(conn: &mut MySqlConnection, user_ref: &str, acks: &serde_json::Value) -> RepoResult<()> {
     sqlx::query("UPDATE AccountDeletion SET Acks = ? WHERE UserRef = ?").bind(Json(acks)).bind(user_ref).execute(conn).await?;
     Ok(())
+}
+
+/// Purges started before `before` that some service never acked: (UserRef, UserId, Acks).
+pub async fn stalled_purges(
+    conn: &mut MySqlConnection,
+    before: DateTime<Utc>,
+) -> RepoResult<Vec<(String, i64, Option<Json<serde_json::Value>>)>> {
+    Ok(sqlx::query_as("SELECT UserRef, UserId, Acks FROM AccountDeletion WHERE Status = 'Purging' AND StartedAt <= ?")
+        .bind(before)
+        .fetch_all(conn)
+        .await?)
 }
 
 /// Pending deletions whose grace period has ended.

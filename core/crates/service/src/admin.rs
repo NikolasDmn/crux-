@@ -115,6 +115,18 @@ pub async fn patch_user(ctx: &Ctx, actor: &Actor, user_ref: &str, patch: AdminUs
             .await?;
         }
     }
+    // Audit M3: a status change settles a pending deletion first (Active cancels it), and an
+    // account that's already being purged can't be brought back.
+    if patch.status.is_some() {
+        if let Some(d) = crux_repo::account::deletion(&mut tx, &target.public_id).await? {
+            if d.status == "Purging" {
+                return Err(AppError::conflict("This account is being deleted."));
+            }
+            if d.status == "Pending" && patch.status.as_deref() == Some("Active") {
+                crux_repo::account::set_deletion_status(&mut tx, &target.public_id, "Cancelled", now).await?;
+            }
+        }
+    }
     if patch.role.is_some() || patch.status.is_some() {
         users::set_role_status(&mut tx, target.id, patch.role.as_deref(), patch.status.as_deref()).await?;
         if patch.status.as_deref() == Some("Disabled") {

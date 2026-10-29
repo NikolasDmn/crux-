@@ -107,3 +107,72 @@ async fn export_then_delete_with_course_transfer() {
     assert_eq!(status, "Done");
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn deletion_rechecks_transfers_locks_the_account_and_times_out() {
+    let Some(h) = common::harness().await else { return };
+    let (t, me, _) = signup(&h.app, &h.t.ctx, "dana").await;
+    let me = me["id"].as_str().unwrap().to_string();
+    let (bt, bob, _) = signup(&h.app, &h.t.ctx, "bob").await;
+    let bob = bob["id"].as_str().unwrap().to_string();
+    let shared = call(&h.app, "POST", "/courses", Some(&t), Some(json!({"name": "Shared", "code": "SH"})), &[]).await.json["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    call(&h.app, "POST", &format!("/courses/{shared}/members"), Some(&t), Some(json!({"usernameOrEmail": "bob", "role": "Editor"})), &[])
+        .await;
+    call(&h.app, "POST", &format!("/course-invitations/{shared}/accept"), Some(&bt), None, &[]).await;
+    let body = json!({"password": "correct horse battery", "courses": [{"courseId": shared, "action": "transfer", "toUserId": bob}]});
+    assert_eq!(call(&h.app, "POST", "/account/delete", Some(&t), Some(body), &[]).await.json["status"], "Pending");
+    // Bob leaves during the grace period: the course goes with Dana's account instead.
+    let left = call(&h.app, "DELETE", &format!("/courses/{shared}/members/{bob}"), Some(&bt), None, &[]).await;
+    assert_eq!(left.status, StatusCode::NO_CONTENT, "{}", left.json);
+
+    h.t.clock.advance(Duration::days(15));
+    assert_eq!(crux_service::account::run_deletions(&h.t.ctx).await.unwrap(), 1);
+    let again = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "bob", "password": "correct horse battery"})), &[]).await;
+    let bt = again.json["accessToken"].as_str().unwrap().to_string();
+    assert_eq!(call(&h.app, "GET", &format!("/courses/{shared}"), Some(&bt), None, &[]).await.status, StatusCode::NOT_FOUND);
+    // Audit M3: while the services purge, the account can't be used.
+    assert_eq!(call(&h.app, "GET", "/me", Some(&t), None, &[]).await.status, StatusCode::UNAUTHORIZED);
+    let login = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "dana", "password": "correct horse battery"})), &[]).await;
+    assert_ne!(login.status, StatusCode::OK);
+
+    // ai isn't deployed: it never acks, and the deletion finishes after the timeout.
+    let handler = crux_jobs::files::FileEvents;
+    process(&h.db.pool, &handler, &purged(1, &me, "files")).await.unwrap();
+    process(&h.db.pool, &handler, &purged(2, &me, "notify")).await.unwrap();
+    h.t.clock.advance(Duration::days(2));
+    crux_service::account::run_deletions(&h.t.ctx).await.unwrap();
+    assert_eq!(users_with(&h, &me).await, 1, "still waiting");
+    h.t.clock.advance(Duration::days(2));
+    assert_eq!(crux_service::account::run_deletions(&h.t.ctx).await.unwrap(), 1);
+    assert_eq!(users_with(&h, &me).await, 0);
+    h.db.drop_db().await;
+}
+
+/// Audit M4: every core table is exported, skipped as a secret store, or declared not personal.
+#[tokio::test]
+async fn export_covers_every_table() {
+    let Some(h) = common::harness().await else { return };
+    let (_, me, _) = signup(&h.app, &h.t.ctx, "dana").await;
+    let id: i64 =
+        sqlx::query_scalar("SELECT Id FROM Users WHERE PublicId = ?").bind(me["id"].as_str().unwrap()).fetch_one(&h.db.pool).await.unwrap();
+    let mut conn = h.db.pool.acquire().await.unwrap();
+    let part = crux_service::account::core_part(&mut conn, id).await.unwrap();
+    let tables: Vec<String> =
+        sqlx::query_scalar("SELECT CAST(TABLE_NAME AS CHAR) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()")
+            .fetch_all(&mut *conn)
+            .await
+            .unwrap();
+    let missing: Vec<&String> = tables
+        .iter()
+        .filter(|t| !t.starts_with('_'))
+        .filter(|t| part.get(t.as_str()).is_none())
+        .filter(|t| !crux_repo::account::SKIP_TABLES.contains(&t.as_str()))
+        .filter(|t| !crux_service::account::NOT_PERSONAL.contains(&t.as_str()))
+        .collect();
+    assert!(missing.is_empty(), "export these, or list them as not personal: {missing:?}");
+    drop(conn);
+    h.db.drop_db().await;
+}

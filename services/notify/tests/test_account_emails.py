@@ -121,3 +121,12 @@ async def test_account_kinds_without_the_flag_are_not_sent() -> None:
         mailer = FakeMailer()
         assert await dispatch_once(sessions, mailer, CONFIG) == 0
         assert mailer.sent == []
+
+
+def test_mock_graded_links_to_the_mock_from_either_producer() -> None:
+    """Core sends mockRef/name/score; the ai service sends mockId/summary. Both open the result."""
+    core = templates.inbox("mock.graded", {"mockRef": "01MOCK", "name": "Dress rehearsal", "score": 7, "maxScore": 10})
+    assert (core.title, core.link) == ("Dress rehearsal is graded", "/mock/01MOCK/result")
+    assert "7 of 10" in core.body
+    ai = templates.inbox("mock.graded", {"mockId": "01MOCK2", "summary": "AI suggested grades."})
+    assert (ai.link, ai.body) == ("/mock/01MOCK2/result", "AI suggested grades.")

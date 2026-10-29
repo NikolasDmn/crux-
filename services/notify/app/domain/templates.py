@@ -65,10 +65,15 @@ def inbox(kind: str, payload: dict[str, Any], tz: str = "Europe/Amsterdam") -> I
         lines = "; ".join(str(i.get("description", "")) for i in items[:5])
         return InboxText(f"Today's plan: {len(items)} item{'s' if len(items) != 1 else ''}", lines, "/plan")
     if kind == "mock.graded":
+        # Core sends mockRef/name/score, ai sends mockId/summary: read either.
+        mock = p.get("mockRef") or p.get("mockId") or ""
+        name = p.get("name") or p.get("mockName") or "Your mock"
+        score, top = p.get("score"), p.get("maxScore")
+        default = f"Score {score:g} of {top:g}. Open the review." if score is not None and top else None
         return InboxText(
-            f"{p.get('mockName', 'Your mock')} is graded",
-            p.get("summary", "Open the review to see how you did."),
-            f"/mock/{p.get('mockId', '')}/result",
+            f"{name} is graded",
+            p.get("summary") or default or "Open the review to see how you did.",
+            f"/mock/{mock}/result" if mock else "/",
         )
     if kind == "import.ready":
         return InboxText(

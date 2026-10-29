@@ -51,7 +51,21 @@ test("free up space, undo, free again; re-upload restores", async ({ page }) => 
   await expect(page.getByText("Restored: your questions and notes are reconnected", { exact: true })).toBeVisible({
     timeout: 45_000,
   });
-  await page.goto(`/c/${courseId}/settings`);
-  await expect(row.getByRole("button", { name: "Free up space" })).toBeVisible();
+  // Core hears of the restore through an event too.
+  await expect
+    .poll(
+      async () => {
+        await page.goto(`/c/${courseId}/settings`);
+        return row
+          .getByRole("button", { name: "Free up space" })
+          .waitFor({ timeout: 5_000 })
+          .then(
+            () => true,
+            () => false,
+          );
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
   await api.dispose();
 });

@@ -881,6 +881,9 @@ pub async fn review_flag(ctx: &Ctx, actor: &Actor, mock_ref: &str, order: i32, s
     let mut tx = crux_repo::begin(&ctx.pool).await?;
     let m = openable(&mut tx, actor, mock_ref, true).await?;
     let status = MockStatus::from_db(&m.status);
+    if status == MockStatus::Submitted {
+        return Err(AppError::conflict("Mark the open answers first; then the answers can be shown."));
+    }
     if !matches!(status, MockStatus::Graded | MockStatus::Reviewed) {
         return Err(wrong_state(MockError::WrongState));
     }

@@ -157,7 +157,14 @@ function HoursChart({ s, colors, tz }: { s: WeekSummary; colors: Record<string, 
       ) : (
         <div className="h-64" role="img" aria-label="Hours studied per day by course, against planned hours">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={rows} barGap={2} margin={{ top: 4, right: 4, bottom: 0, left: -16 }}>
+            {/* No keyboard layer: it made the chart a focusable role=application that outlined on click;
+                "Show as table" is the accessible view (spec 8). */}
+            <BarChart
+              data={rows}
+              barGap={2}
+              margin={{ top: 4, right: 4, bottom: 0, left: -16 }}
+              accessibilityLayer={false}
+            >
               <CartesianGrid vertical={false} stroke="var(--border)" />
               <XAxis
                 dataKey="label"
@@ -173,17 +180,31 @@ function HoursChart({ s, colors, tz }: { s: WeekSummary; colors: Record<string, 
               />
               <Tooltip
                 cursor={{ fill: "var(--surface-sunken)" }}
-                contentStyle={{
-                  background: "var(--surface-raised)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 6,
-                  color: "var(--text)",
-                  fontSize: 13,
-                }}
-                formatter={(v, name) => [
-                  hours(Number(v)),
-                  name === "planned" ? "Planned" : (code[String(name)] ?? name),
-                ]}
+                wrapperStyle={{ outline: "none" }}
+                content={({ active, payload, label }) =>
+                  active && payload?.length ? (
+                    <div className="rounded-md border border-border bg-raised px-3 py-2 text-sm shadow-raised">
+                      <div className="mb-1 font-medium">{label}</div>
+                      {/* Only what happened that day: no rows of "0 h". */}
+                      {payload
+                        .filter((e) => Number(e.value) > 0)
+                        .map((e) => (
+                          <div key={String(e.dataKey)} className="flex items-center gap-2 tnum">
+                            {e.dataKey === "planned" ? (
+                              <span className="inline-block size-2.5 rounded-sm border border-dashed border-muted" />
+                            ) : (
+                              <Dot color={colors[String(e.dataKey)]} />
+                            )}
+                            <span className="flex-1">
+                              {e.dataKey === "planned" ? "Planned" : (code[String(e.dataKey)] ?? e.name)}
+                            </span>
+                            <span className="font-mono">{hours(Number(e.value))}</span>
+                          </div>
+                        ))}
+                      {payload.every((e) => !Number(e.value)) ? <div className="text-muted">Nothing</div> : null}
+                    </div>
+                  ) : null
+                }
               />
               <Bar
                 dataKey="planned"

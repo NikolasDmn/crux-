@@ -92,7 +92,8 @@ export function QuestionEditor({
       );
     } else {
       create.mutate(
-        { key, body: { ...shared, type: f.type, content, private: f.private, source: f.source } },
+        // Without edit rights it can only be a private question (the box shows ticked and locked).
+        { key, body: { ...shared, type: f.type, content, private: f.private || !editor, source: f.source } },
         {
           onSuccess: (q) =>
             void navigate({ to: "/c/$courseId/q/$questionId", params: { courseId, questionId: q.id }, replace: true }),
@@ -225,11 +226,17 @@ export function QuestionEditor({
             </div>
           </div>
         </div>
-        <ImageField
-          courseId={courseId}
-          value={f.imageFileId ?? null}
-          onChange={(imageFileId) => set({ imageFileId })}
-        />
+        {editor ? (
+          <ImageField
+            courseId={courseId}
+            value={f.imageFileId ?? null}
+            onChange={(imageFileId) => set({ imageFileId })}
+          />
+        ) : (
+          <p className="m-0 text-sm text-muted">
+            Images count against the course owner&apos;s storage: editors add them.
+          </p>
+        )}
       </Card>
 
       {f.type === "MC" ? <OptionsCard f={f} set={set} error={errors.options ?? errors["content.options"]} /> : null}

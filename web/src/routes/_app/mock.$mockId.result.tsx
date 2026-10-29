@@ -239,7 +239,10 @@ function ItemCard({ mock, item, suggestion }: { mock: Mock; item: Item; suggesti
         </div>
       ) : null}
 
-      {miss ? (
+      {miss && mock.status === "Submitted" ? (
+        <p className="m-0 text-sm text-muted">Mark the open answers first; then you can see the answers.</p>
+      ) : null}
+      {miss && mock.status !== "Submitted" ? (
         <div className="flex flex-wrap items-center gap-2">
           {!k ? (
             <Button size="sm" disabled={review.isPending} onClick={() => run({ kind: "show", order: item.order })}>

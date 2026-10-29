@@ -48,5 +48,23 @@ test("17-18. privacy between users, and sharing a course", async ({ browser }) =
   await b.getByLabel("Main").getByRole("link", { name: code }).click();
   await expect(b.getByRole("heading", { name: `Course ${code}`, level: 1 })).toBeVisible();
   await expect(b.getByText(/Shared with you by/)).toHaveCount(0); // that line is on Settings
+
+  // Ben (a viewer) sees Ann's question without its answer until he asks for it...
+  await b.goto(`/c/${courseId}/bank`);
+  await b.getByRole("link", { name: `Seeded question ${code}` }).click();
+  await expect(b.getByText(`Seeded question ${code}`).first()).toBeVisible();
+  await expect(b.getByText("Correct", { exact: true })).toHaveCount(0);
+  await b.getByRole("button", { name: "Show answer" }).click();
+  await expect(b.getByText("Correct", { exact: true })).toBeVisible();
+  await expectAccessible(b, "question, answer shown");
+
+  // ...and can write questions of his own in it, kept private.
+  await b.goto(`/c/${courseId}/bank/new`);
+  await b.getByRole("radio", { name: "Open" }).click();
+  await b.getByLabel("Lecture", { exact: true }).selectOption({ label: "L1 Basics" });
+  await b.getByLabel("Question (markdown, $maths$)").fill(`Ben's own question (${RUN})`);
+  await b.getByRole("button", { name: "Create question" }).click();
+  await expect(b).toHaveURL(/\/q\/[0-9A-Z]{26}$/);
+  await expect(b.getByText("Private", { exact: true }).first()).toBeVisible();
   await api.dispose();
 });

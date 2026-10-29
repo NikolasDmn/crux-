@@ -1,7 +1,9 @@
+import { useQueries } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
   ArrowRight,
+  BookOpen,
   CalendarDays,
   CalendarRange,
   CircleAlert,
@@ -19,10 +21,13 @@ import { Dialog as D } from "radix-ui";
 import type { ReactNode } from "react";
 import { Dot } from "@/components/ui/misc";
 import { useCourses } from "@/features/courses/api";
+import { keys as lectureKeys } from "@/features/lectures/api";
+import { api, unwrap } from "@/lib/api";
 import { applyTheme } from "@/lib/theme";
 import { t } from "@/lib/t";
 
-// ⌘/Ctrl+K (frontend-spec 2.6): go to a course or page; "Take me there"; switch theme.
+// ⌘/Ctrl+K (frontend-spec 2.6): go to a page, a course or one of its lectures ("simple linear
+// regression" finds that lecture); "Take me there"; switch theme. Lectures load while it's open.
 
 function Item({
   onSelect,
@@ -50,6 +55,20 @@ function Item({
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const navigate = useNavigate();
   const courses = useCourses();
+  const live = (courses.data ?? []).filter((c) => !c.trashedAt);
+  const lectureLists = useQueries({
+    queries: live.map((c) => ({
+      queryKey: lectureKeys.lectures(c.id),
+      enabled: open,
+      staleTime: 60_000,
+      // Same key and shape as useLectures (sorted), so each fills the other's cache.
+      queryFn: async () =>
+        (await unwrap(api.GET("/courses/{id}/components", { params: { path: { id: c.id } } }))).sort(
+          (a, b) => a.sortOrder - b.sortOrder,
+        ),
+    })),
+  });
+  const lectures = live.flatMap((c, i) => (lectureLists[i]?.data ?? []).map((l) => ({ course: c, l })));
   const go = (to: string, params?: Record<string, string>) => {
     onOpenChange(false);
     void navigate({ to, params } as never);
@@ -122,6 +141,23 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                         <span className="text-muted">{c.name}</span>
                       </Item>
                     ))}
+                </Command.Group>
+              ) : null}
+              {lectures.length ? (
+                <Command.Group heading="Lectures">
+                  {lectures.map(({ course: c, l }) => (
+                    <Item
+                      key={l.id}
+                      value={`${l.name} ${l.code} ${c.code} ${c.name} lecture ${l.id}`}
+                      onSelect={() => go("/c/$courseId/l/$componentId", { courseId: c.id, componentId: l.id })}
+                      icon={<BookOpen />}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{l.name}</span>
+                      <span className="shrink-0 font-mono text-xs text-muted">
+                        {c.code} {l.code}
+                      </span>
+                    </Item>
+                  ))}
                 </Command.Group>
               ) : null}
               <Command.Group heading={t("palette.actions")}>

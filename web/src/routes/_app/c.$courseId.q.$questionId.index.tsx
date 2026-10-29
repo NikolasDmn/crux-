@@ -20,9 +20,10 @@ import { cn } from "@/lib/cn";
 import { messageFor } from "@/lib/errors";
 import { formatInZone } from "@/lib/time";
 
-// One question, read-only (the default click everywhere): the prompt, the answer (correct option
-// with why the others tempt, numeric value, model answer and rubric), the explanation, and where it
-// comes from. Owners and Editors (and a private question's author) get Edit and the other actions.
+// One question, read-only (the default click everywhere): the prompt, then the answer (correct option
+// with why the others tempt, numeric value, model answer and rubric) and the explanation, and where it
+// comes from. A student sees the question first and asks for the answer ("Show answer"); whoever can
+// edit it sees the answer at once. Owners and Editors (and a private question's author) get Edit.
 export const Route = createFileRoute("/_app/c/$courseId/q/$questionId/")({ component: ViewQuestion });
 
 const KEY_TONE = { Official: "success", Derived: "info", Disputed: "danger" } as const;
@@ -38,12 +39,15 @@ function ViewQuestion() {
   const act = useQuestionAction();
   const toast = useToast();
   const [quiz, setQuiz] = useState<{ componentId?: string; conceptId?: string; title: string } | null>(null);
+  // null: the default for this viewer (shown to editors, hidden otherwise).
+  const [reveal, setReveal] = useState<boolean | null>(null);
 
   if (q.isPending) return <Skeleton className="h-96" />;
   if (!q.data) return <EmptyList title="Not found, or you don't have access." />;
   const d = q.data;
   const v = d.current;
   const mayEdit = canEdit(course.data?.myRole) || d.private;
+  const shown = reveal ?? mayEdit;
   const lecture = lectures.data?.find((l) => l.id === d.componentId);
   const paper = papers.data?.find((p) => p.id === d.paperId);
   const name = (id: string) => concepts.data?.find((c) => c.id === id)?.name ?? "…";
@@ -139,7 +143,7 @@ function ViewQuestion() {
                 key={o.id}
                 className={cn(
                   "flex gap-3 rounded-lg border px-3.5 py-3",
-                  o.isCorrect ? "border-success bg-success-bg/40" : "border-border",
+                  shown && o.isCorrect ? "border-success bg-success-bg/40" : "border-border",
                 )}
               >
                 <span className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-[6px] bg-sunken font-mono text-sm">
@@ -147,11 +151,11 @@ function ViewQuestion() {
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1 [&_.crux-prose>*]:my-0">
                   <Markdown>{o.text}</Markdown>
-                  {!o.isCorrect && o.distractorNote ? (
+                  {shown && !o.isCorrect && o.distractorNote ? (
                     <span className="text-sm text-muted">{o.distractorNote}</span>
                   ) : null}
                 </div>
-                {o.isCorrect ? (
+                {shown && o.isCorrect ? (
                   <span className="flex items-center gap-1 text-sm font-medium text-success-text">
                     <Check className="size-4" aria-hidden="true" />
                     Correct
@@ -161,7 +165,12 @@ function ViewQuestion() {
             ))}
           </ul>
         ) : null}
-        {v.numeric ? (
+        <div>
+          <Button size="sm" aria-expanded={shown} onClick={() => setReveal(!shown)}>
+            {shown ? "Hide answer" : "Show answer"}
+          </Button>
+        </div>
+        {shown && v.numeric ? (
           <div className="flex flex-col gap-1">
             <SectionLabel>Answer</SectionLabel>
             <p className="m-0">
@@ -177,7 +186,7 @@ function ViewQuestion() {
             {v.numeric.modelAnswer ? <Markdown>{v.numeric.modelAnswer}</Markdown> : null}
           </div>
         ) : null}
-        {v.open ? (
+        {shown && v.open ? (
           <div className="flex flex-col gap-2">
             {v.open.modelAnswer ? (
               <>
@@ -200,7 +209,7 @@ function ViewQuestion() {
             {v.open.rubricNote ? <p className="m-0 text-sm text-muted">{v.open.rubricNote}</p> : null}
           </div>
         ) : null}
-        {v.explanation ? (
+        {shown && v.explanation ? (
           <div className="flex flex-col gap-1 border-t border-border pt-3">
             <SectionLabel>Explanation</SectionLabel>
             <Markdown>{v.explanation}</Markdown>

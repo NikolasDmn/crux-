@@ -58,3 +58,13 @@ describe("field errors", () => {
     expect(conflictCurrent(err(409, "conflict"))).toBeNull();
   });
 });
+
+describe("conflict messages", () => {
+  it("say what the server says, unless it's the bare edit conflict", () => {
+    const e = (message: string) => new ApiError(409, "conflict", message, null, null);
+    expect(messageFor(e("Mark the open answers first; then the answers can be shown."))).toBe(
+      "Mark the open answers first; then the answers can be shown.",
+    );
+    expect(messageFor(e("Changed somewhere else."))).toBe("This changed somewhere else.");
+  });
+});

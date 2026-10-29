@@ -25,6 +25,11 @@ export function messageFor(e: unknown): string {
       const s = retryAfter(e);
       if (s) return `Too many attempts. Try again in ${s} s.`;
     }
+    // A 409 says what to do in its own words ("Mark the open answers first…"); the generic line is
+    // only for a bare edit conflict.
+    if (e.code === "conflict" && e.message && !/^(conflict|changed somewhere else\.?)$/i.test(e.message)) {
+      return e.message;
+    }
     return MESSAGES[e.code] ?? e.message;
   }
   // fetch rejects with a TypeError when offline; a TypeError from a bug in the page is not that.

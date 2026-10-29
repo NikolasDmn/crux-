@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Plus, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -8,14 +8,18 @@ import { Card, SectionLabel } from "@/components/ui/card";
 import { EmptyList } from "@/components/ui/empty";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/misc";
-import { Dialog } from "@/components/ui/overlays";
+import { Dialog, Tooltip } from "@/components/ui/overlays";
 import { usePapers, useQuestions, useSavePaper, type Paper } from "@/features/bank/api";
 import { useCourse } from "@/features/courses/api";
 import { canEdit } from "@/features/courses/lib/roles";
 import { fieldErrors, messageFor } from "@/lib/errors";
+import { useToast } from "@/components/ui/toast";
+import { extractPaper, useAi } from "@/features/ai/api";
+import { reasonText } from "@/features/ai/lib/format";
 
 // Past papers (frontend-spec 4): the exam map: label, date, how many of its questions are in the
-// bank, key status, and what was left out and why. "Extract questions" (AI) joins with step 8.
+// bank, key status, and what was left out and why. "Extract questions" (AI gate) on a paper with a
+// file opens the import review.
 export const Route = createFileRoute("/_app/c/$courseId/papers")({ component: Papers });
 
 const KEY_TONE = { Official: "success", Partial: "warning", Derived: "info", None: "neutral" } as const;
@@ -85,6 +89,7 @@ function PaperCard({ courseId, paper, onEdit }: { courseId: string; paper: Paper
           {n}
           {paper.totalQuestions ? ` of ${paper.totalQuestions}` : ""} in the bank
         </Link>
+        {onEdit && paper.fileId ? <ExtractButton courseId={courseId} paperId={paper.id} /> : null}
         {onEdit ? (
           <Button size="sm" variant="ghost" onClick={onEdit}>
             Edit
@@ -261,5 +266,41 @@ function PaperDialog({
         </div>
       </form>
     </Dialog>
+  );
+}
+
+/** "Extract questions" (AI): reads the paper's file into question proposals, then the review. */
+function ExtractButton({ courseId, paperId }: { courseId: string; paperId: string }) {
+  const gate = useAi("PastExamImport", courseId);
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (!gate.visible) return null;
+  const why = gate.allowed ? null : reasonText(gate.reason, courseId);
+  const button = (
+    <Button
+      size="sm"
+      variant="ghost"
+      disabled={!gate.allowed || busy}
+      onClick={() => {
+        setBusy(true);
+        extractPaper(paperId).then(
+          (id) => void navigate({ to: "/imports/$importId", params: { importId: id } }),
+          (e: unknown) => {
+            setBusy(false);
+            toast({ message: messageFor(e), tone: "danger" });
+          },
+        );
+      }}
+    >
+      Extract questions
+    </Button>
+  );
+  return why ? (
+    <Tooltip label={why.text}>
+      <span tabIndex={0}>{button}</span>
+    </Tooltip>
+  ) : (
+    button
   );
 }

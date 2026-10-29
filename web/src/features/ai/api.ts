@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { api, ApiError, unwrap, type Schemas } from "@/lib/api";
+import { useEffect } from "react";
+import { sseTicket } from "@/features/notify/api";
+import { api, ApiError, BASE, unwrap, type Schemas } from "@/lib/api";
+import { openStream } from "@/lib/sse";
 import { readEvents, type SseEvent } from "@/lib/stream";
 
 export type AiSettings = Schemas["AiSettingsView"];
@@ -200,4 +203,91 @@ export function useFeedback(conversationId: string | null) {
       ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["ai", "conversation", conversationId] }),
   });
+}
+
+// Course import and past-paper extraction (frontend-spec 4, 5.6).
+
+export type ImportView = Schemas["ImportView"];
+export type ProposalView = Schemas["ProposalView"];
+
+export function useImport(id: string) {
+  return useQuery({
+    queryKey: ["ai", "import", id],
+    queryFn: () => unwrap(api.GET("/ai/imports/{import_id}", { params: { path: { import_id: id } } })),
+  });
+}
+
+export function useProposals(id: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["ai", "import", id, "proposals"],
+    enabled,
+    queryFn: () => unwrap(api.GET("/ai/imports/{import_id}/proposals", { params: { path: { import_id: id } } })),
+  });
+}
+
+/** Creates an import of uploaded files and starts it; returns its id. */
+export async function startImport(body: Schemas["ImportInput"]): Promise<string> {
+  const imp = await unwrap(api.POST("/ai/imports", { body }));
+  await unwrap(api.POST("/ai/imports/{import_id}/start", { params: { path: { import_id: imp.id } } }));
+  return imp.id;
+}
+
+export async function extractPaper(paperId: string): Promise<string> {
+  return (await unwrap(api.POST("/ai/papers/{paper_id}/extract", { params: { path: { paper_id: paperId } } }))).id;
+}
+
+/** Live progress (2.3): every status change refetches the import, and the proposals at the end. */
+export function useImportStream(id: string, enabled: boolean) {
+  const qc = useQueryClient();
+  useEffect(() => {
+    if (!enabled) return;
+    const refresh = () => {
+      void qc.invalidateQueries({ queryKey: ["ai", "import", id] });
+    };
+    const s = openStream(
+      `${BASE}/ai/imports/${id}/events`,
+      { status: refresh, done: refresh },
+      {
+        ticket: sseTicket,
+        open: (url) => new EventSource(url),
+        setTimer: (fn, ms) => window.setTimeout(fn, ms),
+        clearTimer: (t) => window.clearTimeout(t as number),
+      },
+    );
+    return () => s.close();
+  }, [enabled, id, qc]);
+}
+
+export function useImportActions(id: string) {
+  const qc = useQueryClient();
+  const refresh = () => qc.invalidateQueries({ queryKey: ["ai", "import", id] });
+  const path = { params: { path: { import_id: id } } };
+  return {
+    patch: useMutation({
+      mutationFn: ({ proposalId, body }: { proposalId: string; body: Schemas["ProposalPatch"] }) =>
+        unwrap(api.PATCH("/ai/proposals/{proposal_id}", { params: { path: { proposal_id: proposalId } }, body })),
+      onSuccess: refresh,
+    }),
+    bulk: useMutation({
+      mutationFn: (body: Schemas["BulkInput"]) =>
+        unwrap(api.POST("/ai/imports/{import_id}/proposals/bulk", { ...path, body })),
+      onSuccess: refresh,
+    }),
+    apply: useMutation({
+      mutationFn: () => unwrap(api.POST("/ai/imports/{import_id}/apply", path)),
+      onSuccess: (v) => {
+        qc.setQueryData(["ai", "import", id], v);
+        void qc.invalidateQueries({ queryKey: ["ai", "import", id, "proposals"] });
+        void qc.invalidateQueries({ queryKey: ["courses"] });
+      },
+    }),
+    cancel: useMutation({
+      mutationFn: () => unwrap(api.POST("/ai/imports/{import_id}/cancel", path)),
+      onSuccess: refresh,
+    }),
+    retry: useMutation({
+      mutationFn: () => unwrap(api.POST("/ai/imports/{import_id}/start", path)),
+      onSuccess: refresh,
+    }),
+  };
 }

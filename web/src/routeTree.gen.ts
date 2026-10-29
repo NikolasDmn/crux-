@@ -28,6 +28,7 @@ import { Route as AppCCourseIdRouteImport } from './routes/_app/c.$courseId'
 import { Route as AppCoursesNewRouteImport } from './routes/_app/courses.new'
 import { Route as AppFlashIndexRouteImport } from './routes/_app/flash.index'
 import { Route as AppFlashReviewRouteImport } from './routes/_app/flash.review'
+import { Route as AppImportsImportIdRouteImport } from './routes/_app/imports.$importId'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings.index'
 import { Route as AppSettingsAccountRouteImport } from './routes/_app/settings.account'
 import { Route as AppSettingsAiRouteImport } from './routes/_app/settings.ai'
@@ -146,6 +147,11 @@ const AppFlashIndexRoute = AppFlashIndexRouteImport.update({
 const AppFlashReviewRoute = AppFlashReviewRouteImport.update({
   id: '/flash/review',
   path: '/flash/review',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppImportsImportIdRoute = AppImportsImportIdRouteImport.update({
+  id: '/imports/$importId',
+  path: '/imports/$importId',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
@@ -296,6 +302,7 @@ export interface FileRoutesByFullPath {
   '/c/$courseId': typeof AppCCourseIdRouteWithChildren
   '/courses/new': typeof AppCoursesNewRoute
   '/flash/review': typeof AppFlashReviewRoute
+  '/imports/$importId': typeof AppImportsImportIdRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/notifications': typeof AppSettingsNotificationsRoute
@@ -339,6 +346,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/courses/new': typeof AppCoursesNewRoute
   '/flash/review': typeof AppFlashReviewRoute
+  '/imports/$importId': typeof AppImportsImportIdRoute
   '/settings/account': typeof AppSettingsAccountRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/notifications': typeof AppSettingsNotificationsRoute
@@ -386,6 +394,7 @@ export interface FileRoutesById {
   '/_app/c/$courseId': typeof AppCCourseIdRouteWithChildren
   '/_app/courses/new': typeof AppCoursesNewRoute
   '/_app/flash/review': typeof AppFlashReviewRoute
+  '/_app/imports/$importId': typeof AppImportsImportIdRoute
   '/_app/settings/account': typeof AppSettingsAccountRoute
   '/_app/settings/ai': typeof AppSettingsAiRoute
   '/_app/settings/notifications': typeof AppSettingsNotificationsRoute
@@ -433,6 +442,7 @@ export interface FileRouteTypes {
     | '/c/$courseId'
     | '/courses/new'
     | '/flash/review'
+    | '/imports/$importId'
     | '/settings/account'
     | '/settings/ai'
     | '/settings/notifications'
@@ -476,6 +486,7 @@ export interface FileRouteTypes {
     | '/'
     | '/courses/new'
     | '/flash/review'
+    | '/imports/$importId'
     | '/settings/account'
     | '/settings/ai'
     | '/settings/notifications'
@@ -522,6 +533,7 @@ export interface FileRouteTypes {
     | '/_app/c/$courseId'
     | '/_app/courses/new'
     | '/_app/flash/review'
+    | '/_app/imports/$importId'
     | '/_app/settings/account'
     | '/_app/settings/ai'
     | '/_app/settings/notifications'
@@ -693,6 +705,13 @@ declare module '@tanstack/react-router' {
       path: '/flash/review'
       fullPath: '/flash/review'
       preLoaderRoute: typeof AppFlashReviewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/imports/$importId': {
+      id: '/_app/imports/$importId'
+      path: '/imports/$importId'
+      fullPath: '/imports/$importId'
+      preLoaderRoute: typeof AppImportsImportIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/settings/': {
@@ -947,6 +966,7 @@ interface AppRouteChildren {
   AppCCourseIdRoute: typeof AppCCourseIdRouteWithChildren
   AppCoursesNewRoute: typeof AppCoursesNewRoute
   AppFlashReviewRoute: typeof AppFlashReviewRoute
+  AppImportsImportIdRoute: typeof AppImportsImportIdRoute
   AppWeekIsoWeekRoute: typeof AppWeekIsoWeekRoute
   AppFlashIndexRoute: typeof AppFlashIndexRoute
   AppWeekIndexRoute: typeof AppWeekIndexRoute
@@ -966,6 +986,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppCCourseIdRoute: AppCCourseIdRouteWithChildren,
   AppCoursesNewRoute: AppCoursesNewRoute,
   AppFlashReviewRoute: AppFlashReviewRoute,
+  AppImportsImportIdRoute: AppImportsImportIdRoute,
   AppWeekIsoWeekRoute: AppWeekIsoWeekRoute,
   AppFlashIndexRoute: AppFlashIndexRoute,
   AppWeekIndexRoute: AppWeekIndexRoute,

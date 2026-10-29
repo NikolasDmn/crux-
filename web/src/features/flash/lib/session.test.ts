@@ -53,6 +53,23 @@ describe("review buffer", () => {
     expect(onStale).toHaveBeenCalledOnce();
   });
 
+  it("two drains at once share the send instead of spinning", async () => {
+    let release = () => undefined as void;
+    const send = vi.fn(
+      (b: Review[]) =>
+        new Promise<{ clientId: string; status: string }[]>((ok) => {
+          release = () => ok(b.map((x) => ({ clientId: x.clientId, status: "applied" })));
+        }),
+    );
+    const buf = new ReviewBuffer(send, undefined, store());
+    buf.push(r(1));
+    const both = Promise.all([buf.drain(), buf.drain()]);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    release();
+    expect(await both).toEqual([true, true]);
+    expect(buf.size).toBe(0);
+  });
+
   it("drains in batches and stops on a failure", async () => {
     let calls = 0;
     const buf = new ReviewBuffer(

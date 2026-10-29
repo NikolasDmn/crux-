@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAuth } from "@/app/auth";
 import { AuthLayout } from "@/components/shell/auth-layout";
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,12 @@ function Verify() {
     },
   });
   const { mutate } = confirm;
+  // Once per token: a second confirm (StrictMode runs effects twice) would find it used.
+  const sent = useRef<string | null>(null);
   useEffect(() => {
-    if (token) mutate();
+    if (!token || sent.current === token) return;
+    sent.current = token;
+    mutate();
   }, [token, mutate]);
 
   const failed = !token || confirm.isError;

@@ -27,6 +27,7 @@ import {
 } from "@/features/mocks/api";
 import { crossed, fromItem, loadPending, navState, remaining, savePending } from "@/features/mocks/lib/taking";
 import { cn } from "@/lib/cn";
+import { ApiError } from "@/lib/api";
 import { messageFor } from "@/lib/errors";
 import { mockKey, typingIn, type Confidence } from "@/lib/keyboard";
 import { clock } from "@/lib/time";
@@ -53,6 +54,8 @@ function Taking() {
   }, [status, mockId, navigate]);
 
   if (data.isPending) return <Skeleton className="m-6 h-96" />;
+  // Someone else's mock, or a deleted one: the not-found page (spec 9, journey 17).
+  if (data.isError && data.error instanceof ApiError && data.error.status === 404) throw data.error;
   if (data.isError) return <Banner tone="danger">{messageFor(data.error)}</Banner>;
   const { mock, offset } = data.data;
   if (mock.status === "Draft") return <Start mock={mock} />;

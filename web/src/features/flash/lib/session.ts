@@ -25,7 +25,8 @@ const KEY = "crux.flash.pending";
 
 export class ReviewBuffer {
   private queue: Review[];
-  private sending = false;
+  /** The send in flight: a second caller waits for it (drain() would spin otherwise). */
+  private sending: Promise<boolean> | null = null;
 
   constructor(
     private readonly send: Send,
@@ -47,9 +48,16 @@ export class ReviewBuffer {
   }
 
   /** Sends up to one batch; what fails stays queued (and stored) for the next try. */
-  async flush(keepalive = false): Promise<boolean> {
-    if (this.sending || !this.queue.length) return true;
-    this.sending = true;
+  flush(keepalive = false): Promise<boolean> {
+    if (this.sending) return this.sending;
+    if (!this.queue.length) return Promise.resolve(true);
+    this.sending = this.sendBatch(keepalive).finally(() => {
+      this.sending = null;
+    });
+    return this.sending;
+  }
+
+  private async sendBatch(keepalive: boolean): Promise<boolean> {
     const batch = this.queue.slice(0, BATCH);
     try {
       const results = await this.send(batch, { keepalive });
@@ -61,8 +69,6 @@ export class ReviewBuffer {
       return true;
     } catch {
       return false;
-    } finally {
-      this.sending = false;
     }
   }
 

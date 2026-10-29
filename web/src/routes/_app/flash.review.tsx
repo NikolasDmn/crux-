@@ -138,7 +138,11 @@ function Session({
       durationMs: Date.now() - shownAt.current,
       confidence,
     });
-    if (toWarmup && !card.progress.warmupFlagged) warmup.mutate({ id: card.id, flagged: true });
+    // A review clears the card's warm-up flag on the server, so the rating goes first.
+    if (toWarmup && !card.progress.warmupFlagged) {
+      const id = card.id;
+      void buffer.drain().finally(() => warmup.mutate({ id, flagged: true }));
+    }
     setRated((x) => [
       ...x,
       {

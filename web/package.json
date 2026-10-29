@@ -18,7 +18,9 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@date-fns/tz": "^1.2.0",
@@ -52,7 +54,9 @@
     "unist-util-visit-parents": "^6.0.2"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
     "@eslint/js": "^9.28.0",
+    "@playwright/test": "^1.56.1",
     "@tailwindcss/vite": "^4.1.8",
     "@tanstack/router-plugin": "^1.120.0",
     "@testing-library/jest-dom": "^6.6.3",

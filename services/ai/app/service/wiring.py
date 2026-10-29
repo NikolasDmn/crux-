@@ -5,6 +5,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.clients.core import HttpCore, HttpFiles
+from app.clients.fake_demo import demo_json
 from app.clients.llm import FakeProvider, registry
 from app.clients.transcripts import S3Transcripts
 from app.domain import crypto
@@ -21,7 +22,7 @@ def build_deps(
     return Deps(
         settings=settings,
         sessions=sessions,
-        providers=registry(FakeProvider() if settings.fake_allowed else None),
+        providers=registry(FakeProvider(json_fn=demo_json) if settings.fake_allowed else None),
         core=HttpCore(settings.core_internal_url, tokens),
         files=HttpFiles(settings.files_internal_url, tokens),
         contracts=contracts,

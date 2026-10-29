@@ -19,3 +19,6 @@ coverage/
 
 # Old dashboard exports for the importer (personal course data)
 imports/
+# Playwright (web/e2e)
+web/test-results/
+web/playwright-report/

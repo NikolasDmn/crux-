@@ -26,6 +26,7 @@ import {
   type Mock,
 } from "@/features/mocks/api";
 import { scoreText } from "@/features/mocks/lib/taking";
+import { ApiError } from "@/lib/api";
 import { fieldErrors, messageFor } from "@/lib/errors";
 
 // Mock result and review (frontend-spec 4): the score (open answers: Right 1, Partial 0.5); per
@@ -42,6 +43,8 @@ function Result() {
   const r = useResult(mockId);
   const grades = useAiGrades(r.data);
   if (r.isPending) return <Skeleton className="h-96" />;
+  // Someone else's mock, or a deleted one: the not-found page (spec 9, journey 17).
+  if (r.isError && r.error instanceof ApiError && r.error.status === 404) throw r.error;
   if (r.isError) return <Banner tone="danger">{messageFor(r.error)}</Banner>;
   const m = r.data;
   const items = [...m.items].sort((a, b) => a.order - b.order);
@@ -131,7 +134,7 @@ function ItemCard({ mock, item, suggestion }: { mock: Mock; item: Item; suggesti
     review.mutate(a, { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) });
 
   return (
-    <Card className="flex flex-col gap-3">
+    <Card className="flex flex-col gap-3" aria-label={`Question ${item.order}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-sm text-muted tnum">Q{item.order}</span>
         {item.outcome ? (

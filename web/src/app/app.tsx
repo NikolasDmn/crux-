@@ -26,7 +26,12 @@ function Routed({ auth }: { auth: Auth }) {
 
 function Splash() {
   return (
-    <div className="flex min-h-full items-center justify-center" aria-busy="true" aria-label="Loading Crux">
+    <div
+      role="status"
+      className="flex min-h-full items-center justify-center"
+      aria-busy="true"
+      aria-label="Loading Crux"
+    >
       <Mark size={40} className="animate-pulse" />
     </div>
   );

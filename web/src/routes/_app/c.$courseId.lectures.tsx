@@ -8,6 +8,7 @@ import { Field, Input, Select } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/misc";
 import { Dialog, Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/overlays";
 import { useToast } from "@/components/ui/toast";
+import { CourseImportButton } from "@/features/ai/course-import";
 import { useCourse } from "@/features/courses/api";
 import { canEdit } from "@/features/courses/lib/roles";
 import {
@@ -134,6 +135,11 @@ function Lectures() {
 
   return (
     <div className="flex flex-col gap-4">
+      {editor ? (
+        <div className="flex justify-end empty:hidden">
+          <CourseImportButton courseId={courseId} />
+        </div>
+      ) : null}
       {editor ? (
         <Card>
           <LectureForm

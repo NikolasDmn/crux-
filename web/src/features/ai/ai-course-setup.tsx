@@ -13,13 +13,14 @@ import { startImport, useAi } from "./api";
 import { reasonText } from "./lib/format";
 
 // New course, "Set up with AI" (frontend-spec 4): drop PDFs, add instructions, optionally turn past
-// exams into questions, then review the proposals on the import page.
+// exams into questions, then review the proposals on the import page. With `courseId`, the same
+// for an existing course ("Import with AI" on Lectures): what it already has shows as matches.
 
-export function AiCourseSetup() {
+export function AiCourseSetup({ courseId }: { courseId?: string } = {}) {
   const navigate = useNavigate();
-  const pastExams = useAi("PastExamImport");
-  // Files go in uncoursed; the import attaches them when it's applied.
-  const { uploads, add, dismiss } = useUploads({ onClean: () => undefined });
+  const pastExams = useAi("PastExamImport", courseId);
+  // A new course's files go in uncoursed; the import attaches them when it's applied.
+  const { uploads, add, dismiss } = useUploads({ courseId, onClean: () => undefined });
   const [instructions, setInstructions] = useState("");
   const [withExams, setWithExams] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -33,6 +34,7 @@ export function AiCourseSetup() {
     setError(null);
     try {
       const id = await startImport({
+        courseId: courseId ?? null,
         fileIds: ready.map((u) => u.file!.id),
         instructions: instructions.trim() || null,
         importPastExams: withExams && pastExams.allowed,
@@ -47,8 +49,9 @@ export function AiCourseSetup() {
   return (
     <div className="flex flex-col gap-4">
       <p className="m-0 text-muted">
-        Drop your slides, syllabus and past exams. AI proposes the course, lectures, materials, exam dates and more; you
-        review everything before anything is added.
+        {courseId
+          ? "Drop more slides or past exams. AI proposes lectures, materials, questions and dates for this course; you review everything before anything is added."
+          : "Drop your slides, syllabus and past exams. AI proposes the course, lectures, materials, exam dates and more; you review everything before anything is added."}
       </p>
       {error ? <Banner tone="danger">{error}</Banner> : null}
       <DropBox

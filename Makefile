@@ -4,7 +4,7 @@
 COMPOSE := docker compose -f deploy/compose.yaml --env-file .env
 export CRUX_TEST_MYSQL_URL ?= mysql://crux_test:crux-test@127.0.0.1:3306
 
-.PHONY: help env keys web web-dev up up-ai down logs seed smoke verify test test-core test-py test-web lint fmt invite unlock
+.PHONY: help env keys web web-dev up up-ai down logs seed smoke verify test test-core test-py test-web lint fmt invite unlock purge-now
 
 help:
 	@grep -E '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -38,12 +38,14 @@ logs: ## follow logs
 unlock: ## dev: clear login/signup rate limits ("Too many attempts")
 	@$(COMPOSE) exec -T redis sh -c 'redis-cli --scan --pattern "crux:rl:*" | xargs -r redis-cli del' >/dev/null && echo "rate limits cleared"
 
+purge-now: ## dev: remove freed originals now, not after 7 days (FILE="<file id> ...")
+	@$(COMPOSE) exec -T files-worker python -m app.jobs.purge_now $(FILE)
+
 invite: ## print a fresh invite code
 	@$(COMPOSE) exec -T core crux-core create-invite
 
 seed: ## demo data: an admin (demo-admin@crux.test, password in deploy/secrets/demo-accounts.txt) + an invite
-	@test -f deploy/secrets/demo-accounts.txt || printf 'demo-admin  demo-admin@crux.test  demo-%s
-' "$$(openssl rand -hex 8)" > deploy/secrets/demo-accounts.txt
+	@test -f deploy/secrets/demo-accounts.txt || printf 'demo-admin  demo-admin@crux.test  demo-%s\n' "$$(openssl rand -hex 8)" > deploy/secrets/demo-accounts.txt
 	./scripts/demo-seed.sh http://localhost:$${CRUX_HTTP_PORT:-8000}
 
 smoke: ## smoke-test a running stack

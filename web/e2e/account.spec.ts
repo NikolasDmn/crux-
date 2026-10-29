@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectAccessible } from "./support/a11y";
+import { expectAccessible } from "./support/axe";
 import { logIn, signedUp } from "./support/stack";
 
 // Journey 22: export my data and download the zip; schedule deletion, see the banner, cancel it.

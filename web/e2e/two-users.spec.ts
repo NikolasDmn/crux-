@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { expectAccessible } from "./support/a11y";
+import { expectAccessible } from "./support/axe";
 import { apiAs, logIn, RUN, seededCourse, signedUp, type User } from "./support/stack";
 
 // Journeys 17 and 18: another user's mock is a 404 page; sharing a course by username, accepted

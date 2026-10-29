@@ -101,6 +101,8 @@ jobs:
       - name: unit tests (>= 80% on lib/)
         run: npm run coverage
       - run: npm run build
+      - name: performance budget (shell + Home <= 250 KB gzipped, frontend-spec 6)
+        run: npm run size
       - run: npm audit --omit=dev --audit-level=high
 
   # Spec 9.6: with the ai service absent, the non-AI suite passes. Core's tests never start ai.
@@ -126,3 +128,41 @@ jobs:
       - name: logs on failure
         if: failure()
         run: docker compose -f deploy/compose.yaml logs --tail 200
+
+  # Frontend-spec 9: the Playwright journeys and the axe sweep against the whole stack with `make seed`,
+  # AI through the dev fake provider.
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [core, python, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.19"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: build the web app (the gateway serves it)
+        working-directory: web
+        run: npm ci --no-audit --no-fund && npm run build
+      - name: compose up with the ai profile
+        run: |
+          make env keys
+          docker compose -f deploy/compose.yaml --env-file .env --profile ai up -d --build --wait
+      - name: seed (the demo admin hands out the suite's invites)
+        run: make seed
+      - working-directory: web
+        run: npx playwright install --with-deps chromium
+      - name: playwright
+        working-directory: web
+        run: npx playwright test
+      - name: report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+      - name: logs on failure
+        if: failure()
+        run: docker compose -f deploy/compose.yaml --env-file .env --profile ai logs --tail 200

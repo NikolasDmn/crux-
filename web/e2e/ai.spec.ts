@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectAccessible } from "./support/a11y";
+import { expectAccessible } from "./support/axe";
 import { apiAs, logIn, RUN, SAMPLE_PDF, seededCourse, signedUp, type User } from "./support/stack";
 
 // Journeys 15 and 21, with the dev fake provider (keys starting `fake-valid`): turn AI on and add a

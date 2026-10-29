@@ -298,7 +298,8 @@ function Heatmap({ s, colors, tz }: { s: WeekSummary; colors: Record<string, str
         <SectionLabel>Day by day</SectionLabel>
         <TableToggle table={table} onChange={setTable} />
       </div>
-      <div className="overflow-x-auto">
+      {/* Scrolls sideways on a phone: focusable so the keyboard can scroll it too (2.7). */}
+      <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Day by day">
         <table className="w-full min-w-[480px] border-separate border-spacing-1 text-sm">
           <thead>
             <tr>

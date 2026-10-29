@@ -456,6 +456,13 @@
             "title": "Nightlygeneration",
             "type": "boolean"
           },
+          "providers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Providers",
+            "type": "array"
+          },
           "shareAnswers": {
             "title": "Shareanswers",
             "type": "boolean"
@@ -487,7 +494,8 @@
           "monthlyCapMicroUsd",
           "consentPolicyVersion",
           "currentPolicyVersion",
-          "consentedAt"
+          "consentedAt",
+          "providers"
         ],
         "title": "SettingsView",
         "type": "object"

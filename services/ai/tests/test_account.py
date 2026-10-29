@@ -49,6 +49,7 @@ async def test_settings_keys_tutors_gate_budget() -> None:
         # Opt-in: off by default, and turning it on needs the policy version.
         s = await account.get_settings(deps, USER)
         assert not s.enabled and s.current_policy_version == deps.settings.consent_policy_version
+        assert "fake" in s.providers and "anthropic" in s.providers
         with pytest.raises(ValidationFailed):
             await account.patch_settings(deps, USER, account.SettingsPatch(enabled=True))
         with pytest.raises(AiDisabled) as e:

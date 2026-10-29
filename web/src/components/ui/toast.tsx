@@ -39,7 +39,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             onOpenChange={(open) => !open && setItems((xs) => xs.filter((x) => x.id !== t.id))}
             className={cn(
               "flex items-center gap-4 rounded-[10px] px-4 py-3 shadow-raised",
-              t.tone === "danger" ? "bg-danger text-white" : "bg-primary text-primary-text",
+              t.tone === "danger" ? "bg-danger text-danger-on" : "bg-primary text-primary-text",
             )}
           >
             <R.Description className="min-w-0 flex-1">{t.message}</R.Description>

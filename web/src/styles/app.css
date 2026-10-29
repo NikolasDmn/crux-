@@ -35,6 +35,7 @@
   --color-danger: var(--danger);
   --color-danger-bg: var(--danger-bg);
   --color-danger-text: var(--danger-text);
+  --color-danger-on: var(--danger-on);
   --color-warning: var(--warning);
   --color-warning-bg: var(--warning-bg);
   --color-warning-text: var(--warning-text);

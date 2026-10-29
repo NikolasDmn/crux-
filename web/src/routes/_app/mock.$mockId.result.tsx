@@ -11,7 +11,7 @@ import { Field, Select, Textarea } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/misc";
 import { OptionRow } from "@/components/ui/option-row";
 import { useToast } from "@/components/ui/toast";
-import { AskButton } from "@/features/ai/ask-panel";
+import { AskButton } from "@/features/ai/ask";
 import { getQuestion } from "@/features/bank/api";
 import { CardDialog, type CardDraft } from "@/features/flash/components/card-dialog";
 import { QuestionImage } from "@/features/files/question-image";

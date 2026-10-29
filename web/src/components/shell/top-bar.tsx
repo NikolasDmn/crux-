@@ -101,6 +101,7 @@ export function TopBar({ onMenu, onSearch, title }: { onMenu: () => void; onSear
       <span className="min-w-0 flex-1 truncate text-sm text-muted">{title}</span>
       <button
         type="button"
+        aria-label={t("nav.search")}
         onClick={onSearch}
         className="flex h-8 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm text-muted hover:text-text"
       >

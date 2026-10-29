@@ -28,9 +28,13 @@ export default defineConfig({
     {
       name: "desktop",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
-      testIgnore: /a11y/,
+      testIgnore: /a11y\.spec/,
     },
     // Every screen through axe, in light and dark, at 1280 and 375 px (spec 2.7, 9).
-    { name: "a11y", testMatch: /a11y/, use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } } },
+    {
+      name: "a11y",
+      testMatch: /a11y\.spec/,
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
+    },
   ],
 });

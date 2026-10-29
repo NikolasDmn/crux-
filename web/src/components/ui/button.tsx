@@ -12,7 +12,7 @@ export const buttonStyles = cva(
         primary: "border-transparent bg-primary text-primary-text hover:opacity-90",
         secondary: "border-border bg-surface text-text hover:bg-sunken",
         ghost: "border-transparent bg-transparent text-text hover:bg-sunken",
-        destructive: "border-transparent bg-danger text-white hover:opacity-90",
+        destructive: "border-transparent bg-danger text-danger-on hover:opacity-90",
         link: "h-auto border-transparent bg-transparent p-0 text-text underline-offset-4 hover:underline",
       },
       size: {

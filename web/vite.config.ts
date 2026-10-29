@@ -76,7 +76,7 @@ export default defineConfig({
     },
   },
   // No data: URLs: the CSP allows fonts and images from 'self' only.
-  build: { outDir: "dist", sourcemap: true, target: "es2022", assetsInlineLimit: 0 },
+  build: { outDir: "dist", sourcemap: true, target: "es2022", assetsInlineLimit: 0, manifest: true },
   test: {
     environment: "jsdom",
     globals: true,

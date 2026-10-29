@@ -1,13 +1,12 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Sparkles, ThumbsDown, ThumbsUp, X } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Markdown } from "@/components/markdown";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Select, Textarea } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/misc";
-import { Tooltip } from "@/components/ui/overlays";
 import { keys as lectureKeys, useLectures } from "@/features/lectures/api";
 import { api, ApiError, unwrap } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -39,53 +38,8 @@ import {
 // The Ask AI side panel (frontend-spec 4, 5.5): a conversation anchored to the material, lecture,
 // question, mock or course; a tutor picker; the reply streams through <Markdown> with `[p.N]`
 // citation chips that open the viewer at that page; "Context used" under every reply; "Answered by"
-// when a fallback model wrote it; thumbs up/down; past conversations on the same thing.
-
-const Ctx = createContext<{ open: (t: AskTarget) => void } | null>(null);
-
-export function useAsk() {
-  const c = useContext(Ctx);
-  if (!c) throw new Error("useAsk outside AskProvider");
-  return c;
-}
-
-export function AskProvider({ children }: { children: ReactNode }) {
-  const [target, setTarget] = useState<AskTarget | null>(null);
-  const [n, setN] = useState(0);
-  const open = useCallback((t: AskTarget) => {
-    setTarget(t);
-    setN((x) => x + 1);
-  }, []);
-  const value = useMemo(() => ({ open }), [open]);
-  return (
-    <Ctx.Provider value={value}>
-      {children}
-      {target ? <AskPanel key={n} target={target} onClose={() => setTarget(null)} /> : null}
-    </Ctx.Provider>
-  );
-}
-
-/** "Ask AI" for a page (2.5): hidden while AI is off or unreachable, disabled with the reason when
- *  blocked here. */
-export function AskButton({ target, size = "sm" }: { target: AskTarget; size?: "sm" | "md" }) {
-  const gate = useAi("MaterialChat", target.courseId);
-  const { open } = useAsk();
-  if (!gate.visible) return null;
-  const why = gate.allowed ? null : reasonText(gate.reason, target.courseId);
-  const button = (
-    <Button size={size} disabled={!gate.allowed} onClick={() => open(target)}>
-      <Sparkles aria-hidden="true" />
-      Ask AI
-    </Button>
-  );
-  return why ? (
-    <Tooltip label={why.text}>
-      <span tabIndex={0}>{button}</span>
-    </Tooltip>
-  ) : (
-    button
-  );
-}
+// when a fallback model wrote it; thumbs up/down; past conversations on the same thing. Loaded only
+// when opened (./ask.tsx), so its Markdown and maths stay out of the shell's bundle (spec 6).
 
 /** fileId → its material in this course, for citations and "Context used". */
 function useCourseFiles(courseId: string) {
@@ -105,7 +59,7 @@ function useCourseFiles(courseId: string) {
   return map;
 }
 
-function AskPanel({ target, onClose }: { target: AskTarget; onClose: () => void }) {
+export function AskPanel({ target, onClose }: { target: AskTarget; onClose: () => void }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const gate = useAi("MaterialChat", target.courseId);

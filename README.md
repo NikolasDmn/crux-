@@ -55,6 +55,23 @@ DB integration tests read `CRUX_TEST_MYSQL_URL` (default in the Makefile:
 `mysql://crux_test:crux-test@127.0.0.1:3306`). Each test creates its own database, migrates it from
 empty, and drops it. Without the variable they skip, and they say so.
 
+End to end (Playwright, frontend-spec 9): the 22 journeys and an axe sweep of every screen in light
+and dark at 1280 and 375 px, against the running stack with the dev fake AI provider.
+
+```bash
+make up-ai seed                          # the stack, the demo admin (it hands out the invites)
+cd web && npx playwright install chromium
+npm run e2e                              # all of it; `npx playwright test --project a11y` for the sweep
+npm run size                             # after a build: shell + Home JS <= 250 KB gzipped
+```
+
+The suite signs up new users each run (invites from the demo admin, verification links from Mailpit
+on :8025), so runs never collide. It clears the signup rate limits with `make unlock` and skips the
+7-day wait of "Free up space" with `make purge-now FILE=<id>`; set `CRUX_E2E_UNLOCK` and
+`CRUX_E2E_PURGE` to other commands (`{file}` is filled in) where `make` can't reach Docker, e.g.
+through WSL. `CRUX_E2E_BASE_URL` points it at `npm run dev` (http://localhost:5173) instead of the
+gateway.
+
 ## Environment
 
 All settings are env vars prefixed `CRUX_`; see [`.env.example`](.env.example) for the full list

@@ -2685,6 +2685,8 @@ export interface components {
             monthlyCapMicroUsd: number | null;
             /** Nightlygeneration */
             nightlyGeneration: boolean;
+            /** Providers */
+            providers: string[];
             /** Shareanswers */
             shareAnswers: boolean;
             /** Sharemistakes */

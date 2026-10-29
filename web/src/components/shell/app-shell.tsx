@@ -8,7 +8,7 @@ import { Sidebar } from "@/components/shell/sidebar";
 import { TopBar } from "@/components/shell/top-bar";
 import { Kbd } from "@/components/ui/misc";
 import { Dialog } from "@/components/ui/overlays";
-import { AskProvider } from "@/features/ai/ask-panel";
+import { AskProvider } from "@/features/ai/ask";
 import { useNotifyStream } from "@/features/notify/api";
 import { startActivity } from "@/lib/activity";
 import { typingIn } from "@/lib/keyboard";

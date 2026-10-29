@@ -94,6 +94,8 @@ class SettingsView(Camel):
     consent_policy_version: str | None
     current_policy_version: str
     consented_at: str | None
+    #: The providers a key can be added for here.
+    providers: list[str]
 
 
 async def _view(deps: Deps, s: AsyncSession, user_ref: str) -> SettingsView:
@@ -108,6 +110,7 @@ async def _view(deps: Deps, s: AsyncSession, user_ref: str) -> SettingsView:
         consent_policy_version=row.ConsentPolicyVersion if row else None,
         current_policy_version=deps.settings.consent_policy_version,
         consented_at=iso(row.ConsentedAt) if row and row.ConsentedAt else None,
+        providers=offered(deps),
     )
 
 
@@ -275,8 +278,13 @@ async def _verify(deps: Deps, provider: str, api_key: str) -> str:
         return "Unverified"
 
 
+def offered(deps: Deps) -> list[str]:
+    """The providers a key can be added for: the dev fake only where this server allows it."""
+    return [p for p in models.PROVIDERS if p in deps.providers and (p != "fake" or deps.settings.fake_allowed)]
+
+
 async def add_key(deps: Deps, user: Principal, inp: KeyInput) -> KeyView:
-    allowed = [p for p in models.PROVIDERS if p in deps.providers and (p != "fake" or deps.settings.fake_allowed)]
+    allowed = offered(deps)
     if inp.provider not in allowed:
         raise ValidationFailed.field("provider", "unknown", f"Use one of {', '.join(allowed)}.")
     status = await _verify(deps, inp.provider, inp.api_key.strip())

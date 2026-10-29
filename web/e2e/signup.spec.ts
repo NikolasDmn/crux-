@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectAccessible } from "./support/a11y";
+import { expectAccessible } from "./support/axe";
 import { createInvite, newUser, verifyToken } from "./support/stack";
 
 // Journey 1: sign up with an invite, then verify the email from the link.

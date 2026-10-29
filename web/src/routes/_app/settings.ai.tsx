@@ -43,10 +43,6 @@ import { formatInZone } from "@/lib/time";
 // tutors, the monthly cap and usage. AI is opt-in (2.5): with it off, only the switch shows.
 export const Route = createFileRoute("/_app/settings/ai")({ component: Ai });
 
-const PROVIDERS = import.meta.env.DEV
-  ? (["anthropic", "openai", "google", "mistral", "fake"] as const)
-  : (["anthropic", "openai", "google", "mistral"] as const);
-
 function usePatch() {
   const patch = usePatchAiSettings();
   const toast = useToast();
@@ -182,7 +178,8 @@ function Sharing({ s }: { s: AiSettings }) {
   );
 }
 
-function AddKey() {
+/** `providers` comes from the server: the dev fake shows only where the ai service allows it. */
+function AddKey({ providers }: { providers: string[] }) {
   const add = useAddKey();
   const toast = useToast();
   const [provider, setProvider] = useState<string>("anthropic");
@@ -214,9 +211,9 @@ function AddKey() {
       <Field label="Provider" error={errors.provider}>
         {(ids) => (
           <Select {...ids} value={provider} onChange={(e) => setProvider(e.currentTarget.value)}>
-            {PROVIDERS.map((p) => (
+            {providers.map((p) => (
               <option key={p} value={p}>
-                {PROVIDER_LABEL[p]}
+                {PROVIDER_LABEL[p] ?? p}
               </option>
             ))}
           </Select>
@@ -306,7 +303,7 @@ function Keys({ s }: { s: AiSettings }) {
       ) : (
         <p className="m-0 text-muted">No keys yet. AI needs one from a provider you have an account with.</p>
       )}
-      <AddKey />
+      <AddKey providers={s.providers} />
       {def ? (
         <Field
           label="Model"

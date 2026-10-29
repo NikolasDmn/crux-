@@ -3,7 +3,7 @@ import { Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useCourse } from "@/features/courses/api";
 import { useLectures, useMaterial } from "@/features/lectures/api";
-import { AskButton, useAsk } from "./ask-panel";
+import { AskButton, useAsk } from "./ask";
 import { useAi } from "./api";
 import type { AskTarget } from "./lib/chat";
 

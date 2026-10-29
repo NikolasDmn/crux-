@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectAccessible } from "./support/a11y";
+import { expectAccessible } from "./support/axe";
 import { apiAs, logIn, RUN, SAMPLE_PDF, seededCourse, signedUp, stackCommand } from "./support/stack";
 
 // Journey 16: free up space on a material, undo, free again; once the original is gone, uploading

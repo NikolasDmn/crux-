@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { expectAccessible } from "./support/a11y";
+import { expectAccessible } from "./support/axe";
 import { logIn, RUN, SAMPLE_PDF, signedUp, type User } from "./support/stack";
 
 // A user's first week (frontend-spec 9, journeys 2-14, 19, 20): one course built by hand, a mock in

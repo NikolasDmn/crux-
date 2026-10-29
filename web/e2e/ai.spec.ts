@@ -110,12 +110,27 @@ test("15d. set up a course with AI and apply", async () => {
   await page.goto("/courses/new");
   await page.getByRole("radio", { name: "Set up with AI" }).click();
   await uploadReady(page);
+  await page.getByLabel("Turn past exams into questions").check(); // question proposals too
   await page.getByRole("button", { name: "Read my files" }).click();
   await expect(page).toHaveURL(/\/imports\/[0-9A-Z]{26}/);
   const apply = page.getByRole("button", { name: "Apply accepted" });
   await expect(apply).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("Demo import").first()).toBeVisible();
   await expectAccessible(page, "import review");
+  // A proposed MC question's options can be fixed before applying.
+  const question = page.getByRole("listitem").filter({ hasText: "Which statement about" });
+  await question.getByRole("button", { name: "Edit" }).click();
+  const edit = page.getByRole("dialog", { name: "Edit question" });
+  await edit.getByLabel("Option B", { exact: true }).fill("The second one, reworded");
+  await edit.getByLabel("Option B is correct").check();
+  await edit.getByRole("button", { name: "Add option" }).click();
+  await expect(edit.getByText("Fill in every option, or remove the empty one.")).toBeVisible();
+  await edit.getByLabel("Option C", { exact: true }).fill("A third one");
+  await expectAccessible(page, "edit proposal");
+  await edit.getByRole("button", { name: "Save" }).click();
+  await expect(edit).toHaveCount(0);
+  await expect(question.getByText("Edited")).toBeVisible();
+  await expect(question.getByText("The second one, reworded")).toBeVisible();
   await apply.click();
   await expect(page).toHaveURL(/\/c\/[0-9A-Z]{26}/, { timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "Demo import", level: 1 })).toBeVisible();

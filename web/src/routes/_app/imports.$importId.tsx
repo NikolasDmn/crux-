@@ -1,6 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { CircleAlert, CircleCheck, CircleDot } from "lucide-react";
+import { CircleAlert, CircleCheck, CircleDot, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { Markdown } from "@/components/markdown";
 import { Badge } from "@/components/ui/badge";
@@ -27,8 +27,11 @@ import {
   editsFor,
   effective,
   KIND_TITLE,
+  optionsProblem,
   readField,
+  readOptions,
   selected,
+  type OptionEdit,
   STATUS_TEXT,
   summary,
   working,
@@ -315,7 +318,8 @@ function ProposalCard({
     <li
       className={cn(
         "flex gap-3 rounded-lg border border-border bg-surface p-3",
-        !on && "opacity-70",
+        // Not chosen: a dashed outline and tint, not opacity (that dropped the text below contrast).
+        !on && "border-dashed bg-sunken/50",
         p.status === "Failed" && "border-danger/50",
       )}
     >
@@ -394,9 +398,15 @@ function EditDialog({ importId, p, onClose }: { importId: string; p: ProposalVie
   const payload = effective(p);
   const fields = EDIT_FIELDS[p.kind] ?? [];
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.key, readField(payload, f.key)])));
+  // An MC question's options: text, which one is right, add and remove.
+  const [options, setOptions] = useState<OptionEdit[]>(() => (p.kind === "Question" ? readOptions(payload) : []));
+  const problem = optionsProblem(options);
   const errors = fieldErrors(patch.error);
+  const setOption = (i: number, o: Partial<OptionEdit>) =>
+    setOptions(options.map((x, n) => (n === i ? { ...x, ...o } : o.isCorrect ? { ...x, isCorrect: false } : x)));
   const save = () => {
-    const edits = editsFor(p.kind, payload, values);
+    if (problem) return;
+    const edits = editsFor(p.kind, payload, values, options.length ? options : undefined);
     if (!Object.keys(edits).length) return onClose();
     patch.mutate({ proposalId: p.id, body: { edits, status: "Accepted" } }, { onSuccess: onClose });
   };
@@ -409,7 +419,7 @@ function EditDialog({ importId, p, onClose }: { importId: string; p: ProposalVie
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={patch.isPending} onClick={save}>
+          <Button variant="primary" disabled={patch.isPending || !!problem} onClick={save}>
             Save
           </Button>
         </>
@@ -437,6 +447,54 @@ function EditDialog({ importId, p, onClose }: { importId: string; p: ProposalVie
           }
         </Field>
       ))}
+      {options.length ? (
+        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend className="mb-1.5 text-sm font-medium">Options</legend>
+          <div role="radiogroup" aria-label="Correct option" className="flex flex-col gap-2">
+            {options.map((o, i) => {
+              const letter = String.fromCharCode(65 + i);
+              return (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="correct"
+                    className="size-4 accent-[var(--primary)]"
+                    aria-label={`Option ${letter} is correct`}
+                    checked={o.isCorrect}
+                    onChange={() => setOption(i, { isCorrect: true })}
+                  />
+                  <Input
+                    aria-label={`Option ${letter}`}
+                    value={o.text}
+                    onChange={(e) => setOption(i, { text: e.currentTarget.value })}
+                  />
+                  <Button
+                    size="iconSm"
+                    variant="ghost"
+                    aria-label={`Remove option ${letter}`}
+                    disabled={options.length <= 2}
+                    onClick={() => setOptions(options.filter((_, n) => n !== i))}
+                  >
+                    <X />
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={options.length >= 8}
+              onClick={() => setOptions([...options, { text: "", isCorrect: false }])}
+            >
+              <Plus aria-hidden="true" />
+              Add option
+            </Button>
+            {problem ? <span className="text-sm text-danger-text">{problem}</span> : null}
+          </div>
+        </fieldset>
+      ) : null}
     </Dialog>
   );
 }

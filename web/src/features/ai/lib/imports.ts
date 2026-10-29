@@ -182,11 +182,37 @@ export function readField(payload: Record<string, unknown>, key: string): string
   return v === null || v === undefined ? "" : String(v);
 }
 
-/** The `edits` object for changed fields; a question's content is sent whole (edits merge shallowly). */
+export interface OptionEdit {
+  text: string;
+  isCorrect: boolean;
+}
+
+/** An MC question proposal's options (empty for anything else). */
+export function readOptions(payload: Record<string, unknown>): OptionEdit[] {
+  const c = (payload.content ?? {}) as { options?: unknown };
+  if (!Array.isArray(c.options)) return [];
+  return c.options.map((o) => {
+    const x = (o ?? {}) as { text?: unknown; isCorrect?: unknown };
+    return { text: typeof x.text === "string" ? x.text : "", isCorrect: x.isCorrect === true };
+  });
+}
+
+/** Why these options can't be saved, or null. */
+export function optionsProblem(options: OptionEdit[]): string | null {
+  if (!options.length) return null;
+  if (options.length < 2) return "Give at least two options.";
+  if (options.some((o) => !o.text.trim())) return "Fill in every option, or remove the empty one.";
+  if (options.filter((o) => o.isCorrect).length !== 1) return "Mark exactly one option correct.";
+  return null;
+}
+
+/** The `edits` object for changed fields; a question's content is sent whole (edits merge shallowly).
+ *  `options` (an MC question's) are included when they changed. */
 export function editsFor(
   kind: string,
   payload: Record<string, unknown>,
   values: Record<string, string>,
+  options?: OptionEdit[],
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of EDIT_FIELDS[kind] ?? []) {
@@ -196,6 +222,10 @@ export function editsFor(
     const [a, b] = f.key.split(".");
     if (b) out[a!] = { ...((out[a!] ?? payload[a!] ?? {}) as Record<string, unknown>), [b]: v };
     else out[a!] = v;
+  }
+  if (options && JSON.stringify(options) !== JSON.stringify(readOptions(payload))) {
+    const content = (out.content ?? payload.content ?? {}) as Record<string, unknown>;
+    out.content = { ...content, options: options.map((o) => ({ text: o.text.trim(), isCorrect: o.isCorrect })) };
   }
   return out;
 }

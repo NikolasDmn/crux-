@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { applyBlocker, defaultSelected, editsFor, readField, selected, summary, type Proposal } from "./imports";
+import {
+  applyBlocker,
+  defaultSelected,
+  editsFor,
+  optionsProblem,
+  readField,
+  readOptions,
+  selected,
+  summary,
+  type Proposal,
+} from "./imports";
 
 const p = (over: Partial<Proposal>): Proposal => ({
   id: "p",
@@ -46,5 +56,55 @@ describe("imports", () => {
     expect(applyBlocker(true, [p({ kind: "Component" })])).toBe("Accept the course first.");
     expect(applyBlocker(true, [p({ kind: "Course" }), p({ kind: "Component" })])).toBeNull();
     expect(applyBlocker(false, [p({ status: "Rejected" })])).toBe("Select at least one proposal.");
+  });
+});
+
+describe("question options in an edit", () => {
+  const payload = {
+    type: "MC",
+    content: {
+      prompt: "P",
+      options: [
+        { text: "a", isCorrect: true },
+        { text: "b", isCorrect: false },
+      ],
+    },
+  };
+  it("reads them and sends the whole content when they change", () => {
+    const opts = readOptions(payload);
+    expect(opts).toEqual([
+      { text: "a", isCorrect: true },
+      { text: "b", isCorrect: false },
+    ]);
+    expect(editsFor("Question", payload, { "content.prompt": "P", "content.explanation": "" }, opts)).toEqual({});
+    const changed = [
+      { text: "a", isCorrect: false },
+      { text: " b ", isCorrect: true },
+    ];
+    expect(editsFor("Question", payload, { "content.prompt": "P", "content.explanation": "" }, changed)).toEqual({
+      content: {
+        prompt: "P",
+        options: [
+          { text: "a", isCorrect: false },
+          { text: "b", isCorrect: true },
+        ],
+      },
+    });
+  });
+  it("needs two filled options and exactly one correct", () => {
+    expect(optionsProblem([{ text: "a", isCorrect: true }])).toMatch(/two/);
+    expect(
+      optionsProblem([
+        { text: "a", isCorrect: true },
+        { text: "", isCorrect: false },
+      ]),
+    ).toMatch(/Fill/);
+    expect(
+      optionsProblem([
+        { text: "a", isCorrect: true },
+        { text: "b", isCorrect: true },
+      ]),
+    ).toMatch(/exactly one/);
+    expect(optionsProblem([])).toBeNull();
   });
 });

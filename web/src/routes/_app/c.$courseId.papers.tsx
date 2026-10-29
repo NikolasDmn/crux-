@@ -73,7 +73,13 @@ function PaperCard({ courseId, paper, onEdit }: { courseId: string; paper: Paper
   return (
     <Card className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{paper.label}</span>
+        <Link
+          to="/c/$courseId/p/$paperId"
+          params={{ courseId, paperId: paper.id }}
+          className="font-medium underline-offset-4 hover:underline"
+        >
+          {paper.label}
+        </Link>
         <span className="font-mono text-xs text-muted">{paper.paperKey}</span>
         {paper.examDate ? <span className="text-sm text-muted">{paper.examDate}</span> : null}
         <Badge kind="status" tone={KEY_TONE[paper.keyStatus as keyof typeof KEY_TONE] ?? "neutral"}>

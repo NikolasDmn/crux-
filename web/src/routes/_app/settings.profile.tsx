@@ -13,6 +13,7 @@ import type { User } from "@/features/auth/api";
 import { NewPasswordField } from "@/features/auth/components/password-field";
 import { browserZone } from "@/lib/time";
 import { conflictCurrent, fieldCodes, fieldErrors, messageFor } from "@/lib/errors";
+import { AppearanceCard } from "@/components/shell/account-menu";
 
 // Profile (frontend-spec 4): name, username, time zone, password. The email is shown, not edited:
 // changing it needs a re-verification flow the backend doesn't have yet (decided 2026-10-29).
@@ -227,6 +228,7 @@ function Profile() {
   return (
     <>
       <Details />
+      <AppearanceCard />
       <Password />
     </>
   );

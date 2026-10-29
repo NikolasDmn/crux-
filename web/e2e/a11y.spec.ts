@@ -37,7 +37,9 @@ test.beforeAll(async ({ browser }) => {
     { id: string }[] | { items: { id: string }[] };
   ids.questionId = (Array.isArray(questions) ? questions : questions.items)[0]!.id;
   await post(api, `courses/${courseId}/flashcards`, { componentId: lectureId, front: "Mean?", back: "Sum over n" });
-  await post(api, `courses/${courseId}/papers`, { paperKey: "2025-06", label: "June 2025", examDate: "2025-06-20" });
+  ids.paperId = (
+    await post(api, `courses/${courseId}/papers`, { paperKey: "2025-06", label: "June 2025", examDate: "2025-06-20" })
+  ).id;
   ids.openMock = (await post(api, `courses/${courseId}/mocks`, { name: "Not started", n: 5 })).id;
   ids.doneMock = (await post(api, `courses/${courseId}/mocks`, { name: "Handed in", n: 5 })).id;
   await post(api, `mocks/${ids.doneMock}/start`);
@@ -77,6 +79,7 @@ const SCREENS: [string, () => string][] = [
   ["question", () => `${c()}/q/${ids.questionId}`],
   ["edit question", () => `${c()}/q/${ids.questionId}/edit`],
   ["past papers", () => `${c()}/papers`],
+  ["past paper", () => `${c()}/p/${ids.paperId}`],
   ["mocks", () => `${c()}/mocks`],
   ["cards", () => `${c()}/cards`],
   ["course plan", () => `${c()}/plan`],

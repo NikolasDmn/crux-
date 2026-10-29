@@ -52,6 +52,7 @@ import { Route as AppCCourseIdBankIndexRouteImport } from './routes/_app/c.$cour
 import { Route as AppCCourseIdBankNewRouteImport } from './routes/_app/c.$courseId.bank.new'
 import { Route as AppCCourseIdLComponentIdRouteImport } from './routes/_app/c.$courseId.l.$componentId'
 import { Route as AppCCourseIdMMaterialIdRouteImport } from './routes/_app/c.$courseId.m.$materialId'
+import { Route as AppCCourseIdPPaperIdRouteImport } from './routes/_app/c.$courseId.p.$paperId'
 import { Route as AppCCourseIdQQuestionIdIndexRouteImport } from './routes/_app/c.$courseId.q.$questionId.index'
 import { Route as AppCCourseIdQQuestionIdEditRouteImport } from './routes/_app/c.$courseId.q.$questionId.edit'
 
@@ -271,6 +272,11 @@ const AppCCourseIdMMaterialIdRoute = AppCCourseIdMMaterialIdRouteImport.update({
   path: '/m/$materialId',
   getParentRoute: () => AppCCourseIdRoute,
 } as any)
+const AppCCourseIdPPaperIdRoute = AppCCourseIdPPaperIdRouteImport.update({
+  id: '/p/$paperId',
+  path: '/p/$paperId',
+  getParentRoute: () => AppCCourseIdRoute,
+} as any)
 const AppCCourseIdQQuestionIdIndexRoute =
   AppCCourseIdQQuestionIdIndexRouteImport.update({
     id: '/q/$questionId/',
@@ -326,6 +332,7 @@ export interface FileRoutesByFullPath {
   '/c/$courseId/bank/new': typeof AppCCourseIdBankNewRoute
   '/c/$courseId/l/$componentId': typeof AppCCourseIdLComponentIdRoute
   '/c/$courseId/m/$materialId': typeof AppCCourseIdMMaterialIdRoute
+  '/c/$courseId/p/$paperId': typeof AppCCourseIdPPaperIdRoute
   '/c/$courseId/bank/': typeof AppCCourseIdBankIndexRoute
   '/c/$courseId/q/$questionId/edit': typeof AppCCourseIdQQuestionIdEditRoute
   '/c/$courseId/q/$questionId/': typeof AppCCourseIdQQuestionIdIndexRoute
@@ -370,6 +377,7 @@ export interface FileRoutesByTo {
   '/c/$courseId/bank/new': typeof AppCCourseIdBankNewRoute
   '/c/$courseId/l/$componentId': typeof AppCCourseIdLComponentIdRoute
   '/c/$courseId/m/$materialId': typeof AppCCourseIdMMaterialIdRoute
+  '/c/$courseId/p/$paperId': typeof AppCCourseIdPPaperIdRoute
   '/c/$courseId/bank': typeof AppCCourseIdBankIndexRoute
   '/c/$courseId/q/$questionId/edit': typeof AppCCourseIdQQuestionIdEditRoute
   '/c/$courseId/q/$questionId': typeof AppCCourseIdQQuestionIdIndexRoute
@@ -418,6 +426,7 @@ export interface FileRoutesById {
   '/_app/c/$courseId/bank/new': typeof AppCCourseIdBankNewRoute
   '/_app/c/$courseId/l/$componentId': typeof AppCCourseIdLComponentIdRoute
   '/_app/c/$courseId/m/$materialId': typeof AppCCourseIdMMaterialIdRoute
+  '/_app/c/$courseId/p/$paperId': typeof AppCCourseIdPPaperIdRoute
   '/_app/c/$courseId/bank/': typeof AppCCourseIdBankIndexRoute
   '/_app/c/$courseId/q/$questionId/edit': typeof AppCCourseIdQQuestionIdEditRoute
   '/_app/c/$courseId/q/$questionId/': typeof AppCCourseIdQQuestionIdIndexRoute
@@ -466,6 +475,7 @@ export interface FileRouteTypes {
     | '/c/$courseId/bank/new'
     | '/c/$courseId/l/$componentId'
     | '/c/$courseId/m/$materialId'
+    | '/c/$courseId/p/$paperId'
     | '/c/$courseId/bank/'
     | '/c/$courseId/q/$questionId/edit'
     | '/c/$courseId/q/$questionId/'
@@ -510,6 +520,7 @@ export interface FileRouteTypes {
     | '/c/$courseId/bank/new'
     | '/c/$courseId/l/$componentId'
     | '/c/$courseId/m/$materialId'
+    | '/c/$courseId/p/$paperId'
     | '/c/$courseId/bank'
     | '/c/$courseId/q/$questionId/edit'
     | '/c/$courseId/q/$questionId'
@@ -557,6 +568,7 @@ export interface FileRouteTypes {
     | '/_app/c/$courseId/bank/new'
     | '/_app/c/$courseId/l/$componentId'
     | '/_app/c/$courseId/m/$materialId'
+    | '/_app/c/$courseId/p/$paperId'
     | '/_app/c/$courseId/bank/'
     | '/_app/c/$courseId/q/$questionId/edit'
     | '/_app/c/$courseId/q/$questionId/'
@@ -875,6 +887,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCCourseIdMMaterialIdRouteImport
       parentRoute: typeof AppCCourseIdRoute
     }
+    '/_app/c/$courseId/p/$paperId': {
+      id: '/_app/c/$courseId/p/$paperId'
+      path: '/p/$paperId'
+      fullPath: '/c/$courseId/p/$paperId'
+      preLoaderRoute: typeof AppCCourseIdPPaperIdRouteImport
+      parentRoute: typeof AppCCourseIdRoute
+    }
     '/_app/c/$courseId/q/$questionId/': {
       id: '/_app/c/$courseId/q/$questionId/'
       path: '/q/$questionId'
@@ -928,6 +947,7 @@ interface AppCCourseIdRouteChildren {
   AppCCourseIdBankNewRoute: typeof AppCCourseIdBankNewRoute
   AppCCourseIdLComponentIdRoute: typeof AppCCourseIdLComponentIdRoute
   AppCCourseIdMMaterialIdRoute: typeof AppCCourseIdMMaterialIdRoute
+  AppCCourseIdPPaperIdRoute: typeof AppCCourseIdPPaperIdRoute
   AppCCourseIdBankIndexRoute: typeof AppCCourseIdBankIndexRoute
   AppCCourseIdQQuestionIdEditRoute: typeof AppCCourseIdQQuestionIdEditRoute
   AppCCourseIdQQuestionIdIndexRoute: typeof AppCCourseIdQQuestionIdIndexRoute
@@ -945,6 +965,7 @@ const AppCCourseIdRouteChildren: AppCCourseIdRouteChildren = {
   AppCCourseIdBankNewRoute: AppCCourseIdBankNewRoute,
   AppCCourseIdLComponentIdRoute: AppCCourseIdLComponentIdRoute,
   AppCCourseIdMMaterialIdRoute: AppCCourseIdMMaterialIdRoute,
+  AppCCourseIdPPaperIdRoute: AppCCourseIdPPaperIdRoute,
   AppCCourseIdBankIndexRoute: AppCCourseIdBankIndexRoute,
   AppCCourseIdQQuestionIdEditRoute: AppCCourseIdQQuestionIdEditRoute,
   AppCCourseIdQQuestionIdIndexRoute: AppCCourseIdQQuestionIdIndexRoute,

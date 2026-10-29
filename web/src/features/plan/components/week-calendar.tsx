@@ -169,6 +169,35 @@ export function WeekCalendar({
     );
   };
 
+  // Drag down an empty part of a day to draw a new entry; releasing opens the add dialog with
+  // that span. A plain click does nothing (double-click still adds an hour).
+  const [sketch, setSketch] = useState<{ day: number; a: number; b: number } | null>(null);
+  const sketchAt = (ev: ReactPointerEvent<HTMLDivElement>, i: number) => {
+    if (ev.button !== 0 || ev.target !== ev.currentTarget) return;
+    const box = ev.currentTarget.getBoundingClientRect();
+    const minute = (clientY: number) => clamp(snap(top + (clientY - box.top) / PX_PER_MIN), 0, 24 * 60);
+    const a = minute(ev.clientY);
+    let last = { day: i, a, b: a };
+    setSketch(last);
+    const onMove = (e: PointerEvent) => {
+      last = { day: i, a, b: minute(e.clientY) };
+      setSketch(last);
+    };
+    const onUp = (e: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      setSketch(null);
+      const from = Math.min(last.a, last.b);
+      const to = Math.max(last.a, last.b);
+      if (e.type === "pointercancel" || to - from < SNAP_MIN) return;
+      onAdd({ startAt: atMinute(days[i]!, from), endAt: atMinute(days[i]!, to) });
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  };
+
   const addAt = (ev: React.MouseEvent<HTMLDivElement>, i: number) => {
     if (ev.target !== ev.currentTarget) return;
     const y = ev.clientY - ev.currentTarget.getBoundingClientRect().top;
@@ -256,8 +285,21 @@ export function WeekCalendar({
                 key={i}
                 className="relative border-l border-border"
                 onDoubleClick={(ev) => addAt(ev, i)}
-                title="Double-click to add"
+                onPointerDown={(ev) => sketchAt(ev, i)}
+                title="Drag to add, or double-click"
               >
+                {sketch?.day === i && sketch.a !== sketch.b ? (
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-1 z-10 rounded-md border-2 border-dashed border-text/40 bg-sunken/60 px-1.5 text-xs text-muted tnum"
+                    style={{
+                      top: (Math.min(sketch.a, sketch.b) - top) * PX_PER_MIN,
+                      height: Math.abs(sketch.b - sketch.a) * PX_PER_MIN,
+                    }}
+                  >
+                    {hhmm(Math.min(sketch.a, sketch.b))}–{hhmm(Math.max(sketch.a, sketch.b))}
+                  </div>
+                ) : null}
                 {inDay.map((p) => {
                   const live = drag?.entry.id === p.e.id ? drag : null;
                   const start = live?.start ?? p.start;

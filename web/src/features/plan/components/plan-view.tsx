@@ -114,7 +114,8 @@ export function PlanView({
               onAdd={(draft) => setOpen({ draft: { ...draft, courseId } })}
             />
             <p className="m-0 mt-2 text-sm text-muted">
-              Drag to move, drag the bottom edge to resize, double-click an empty slot to add. Moving an entry pins it.
+              Drag an empty slot to add, drag an entry to move it, drag its bottom edge to resize. Moving an entry pins
+              it.
             </p>
           </div>
           <Agenda days={days} entries={entries} colors={colors} onOpen={(entry) => setOpen({ entry })} />

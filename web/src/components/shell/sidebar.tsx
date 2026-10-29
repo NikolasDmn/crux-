@@ -13,6 +13,7 @@ import {
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Dot, Mark } from "@/components/ui/misc";
+import { AccountMenu } from "@/components/shell/account-menu";
 import { useAnswerInvitation, useCourses, useInvitations, useNextExams } from "@/features/courses/api";
 import { useDueCount } from "@/features/flash/api";
 import { useUnreadCount } from "@/features/notify/api";
@@ -185,6 +186,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink to="/settings" icon={<Settings />}>
           {t("nav.settings")}
         </NavLink>
+        <div className="mt-2 border-t border-border pt-2">
+          <AccountMenu />
+        </div>
       </div>
     </nav>
   );

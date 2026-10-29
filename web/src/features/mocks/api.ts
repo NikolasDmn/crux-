@@ -99,3 +99,61 @@ export function useReview(id: string) {
     },
   });
 }
+
+// AI grading (frontend-spec 4, mock result): suggestions from the ai service, decided in core.
+
+export type AiGrade = Schemas["GradeView"];
+
+/** Suggestions for this mock. While open answers still wait for one, it polls (the ai service
+ *  grades after `mock.submitted`). */
+export function useAiGrades(mock: Mock | undefined) {
+  const on = mock?.gradingMode === "AI";
+  return useQuery({
+    queryKey: ["ai", "grades", mock?.id],
+    enabled: on,
+    queryFn: () => unwrap(api.GET("/ai/grades", { params: { query: { mockId: mock!.id } } })),
+    refetchInterval: (q) => {
+      const open = (mock?.items ?? []).filter((i) => i.type === "Open" && !i.outcome).map((i) => i.order);
+      const have = new Set((q.state.data ?? []).map((g) => g.order));
+      return open.some((o) => !have.has(o)) ? 4000 : false;
+    },
+    retry: false,
+  });
+}
+
+type Decision =
+  | { kind: "accept" | "reject"; order: number; gradeId: string }
+  | { kind: "override"; order: number; gradeId: string; outcome: "Right" | "Partial" | "Wrong" }
+  | { kind: "acceptAll" };
+
+export function useAiDecision(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (d: Decision) => {
+      if (d.kind === "acceptAll")
+        return unwrap(api.POST("/mocks/{id}/ai-grades/accept-all", { params: { path: { id } } }));
+      const path = { params: { path: { id, order: d.order } } };
+      if (d.kind !== "override")
+        return unwrap(
+          api.POST(
+            d.kind === "accept"
+              ? "/mocks/{id}/questions/{order}/ai-grade/accept"
+              : "/mocks/{id}/questions/{order}/ai-grade/reject",
+            { ...path, body: { gradeId: d.gradeId } },
+          ),
+        );
+      return unwrap(
+        api.POST("/mocks/{id}/questions/{order}/ai-grade/override", {
+          ...path,
+          body: { gradeId: d.gradeId, outcome: d.outcome },
+        }),
+      );
+    },
+    onSuccess: (m) => {
+      qc.setQueryData(keys.result(id), m);
+      void qc.invalidateQueries({ queryKey: keys.list(m.courseId) });
+      // The decision reaches the ai service over the bus.
+      setTimeout(() => void qc.invalidateQueries({ queryKey: ["ai", "grades", id] }), 1500);
+    },
+  });
+}

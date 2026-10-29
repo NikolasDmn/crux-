@@ -1,3 +1,5 @@
+import { useAi } from "@/features/ai/api";
+import { reasonText } from "@/features/ai/lib/format";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState, type FormEvent } from "react";
@@ -153,6 +155,7 @@ function Builder({ courseId, onClose }: { courseId: string; onClose: () => void 
   const exam = nextExam(deadlines.data ?? []);
   const hasLayout = !!exam?.layout.length;
   const create = useCreateMock(courseId);
+  const aiGate = useAi("Grading", courseId);
   const [f, setF] = useState(() => ({
     name: "",
     realLayout: hasLayout && (settings.data?.mockRealLayout ?? true),
@@ -162,6 +165,7 @@ function Builder({ courseId, onClose }: { courseId: string; onClose: () => void 
     goEasy: settings.data?.mockGoEasy ?? false,
     missesOnly: false,
     includeDrafts: false,
+    aiGrading: false,
   }));
   const errors = fieldErrors(create.error);
   const general = create.error && !Object.keys(errors).length ? messageFor(create.error) : null;
@@ -180,7 +184,7 @@ function Builder({ courseId, onClose }: { courseId: string; onClose: () => void 
         goEasy: f.goEasy,
         missesOnly: f.missesOnly,
         includeDrafts: f.includeDrafts,
-        gradingMode: "Self",
+        gradingMode: f.aiGrading && aiGate.allowed ? "AI" : "Self",
       },
       { onSuccess: (m) => void navigate({ to: "/mock/$mockId", params: { mockId: m.id } }) },
     );
@@ -300,9 +304,27 @@ function Builder({ courseId, onClose }: { courseId: string; onClose: () => void 
             Include my draft questions
           </label>
         </div>
-        <p className="m-0 text-sm text-muted">
-          Grading: you mark open answers yourself. AI grading arrives with the AI settings.
-        </p>
+        {aiGate.visible ? (
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-1 size-4 accent-[var(--primary)]"
+              disabled={!aiGate.allowed}
+              checked={f.aiGrading && aiGate.allowed}
+              onChange={(e) => setF({ ...f, aiGrading: e.currentTarget.checked })}
+            />
+            <span className="flex flex-col gap-0.5">
+              <span>Grade open answers with AI</span>
+              <span className="text-sm text-muted">
+                {aiGate.allowed
+                  ? "AI suggests a grade and feedback; you accept or change each one."
+                  : (reasonText(aiGate.reason, courseId)?.text ?? "AI grading isn't available here.")}
+              </span>
+            </span>
+          </label>
+        ) : (
+          <p className="m-0 text-sm text-muted">Grading: you mark open answers yourself against the model answer.</p>
+        )}
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>Cancel</Button>
           <Button type="submit" variant="primary" disabled={create.isPending}>

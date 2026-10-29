@@ -16,7 +16,15 @@ import { getQuestion } from "@/features/bank/api";
 import { CardDialog, type CardDraft } from "@/features/flash/components/card-dialog";
 import { QuestionImage } from "@/features/files/question-image";
 import { SLIP_TYPES, useLogSlip } from "@/features/mistakes/api";
-import { useResult, useReview, type Item, type Mock } from "@/features/mocks/api";
+import {
+  useAiDecision,
+  useAiGrades,
+  useResult,
+  useReview,
+  type AiGrade,
+  type Item,
+  type Mock,
+} from "@/features/mocks/api";
 import { scoreText } from "@/features/mocks/lib/taking";
 import { fieldErrors, messageFor } from "@/lib/errors";
 
@@ -32,11 +40,12 @@ const TONE = { Right: "success", Partial: "warning", Wrong: "danger", Blank: "ne
 function Result() {
   const { mockId } = Route.useParams();
   const r = useResult(mockId);
+  const grades = useAiGrades(r.data);
   if (r.isPending) return <Skeleton className="h-96" />;
   if (r.isError) return <Banner tone="danger">{messageFor(r.error)}</Banner>;
   const m = r.data;
   const items = [...m.items].sort((a, b) => a.order - b.order);
-  const toGrade = items.filter((i) => i.type === "Open" && !i.outcome && m.gradingMode === "Self").length;
+  const toGrade = items.filter((i) => i.type === "Open" && !i.outcome).length;
   const misses = items.filter((i) => i.outcome && i.outcome !== "Right").length;
 
   return (
@@ -61,7 +70,9 @@ function Result() {
           <span className="font-mono text-3xl font-semibold tnum">{scoreText(m.score, m.maxScore)}</span>
         </span>
       </div>
-      {toGrade ? (
+      {m.gradingMode === "AI" ? (
+        <AiBanner mock={m} grades={grades.data} failed={grades.isError} />
+      ) : toGrade ? (
         <Banner tone="notice">
           Mark your {toGrade} open {toGrade === 1 ? "answer" : "answers"} against the model answer to finish the score.
         </Banner>
@@ -70,17 +81,22 @@ function Result() {
         <Banner tone="notice">Every miss is fixed or shown. All answers are open now.</Banner>
       ) : null}
       {items.map((it) => (
-        <ItemCard key={it.order} mock={m} item={it} />
+        <ItemCard
+          key={it.order}
+          mock={m}
+          item={it}
+          suggestion={grades.data?.find((g) => g.order === it.order && g.status === "Pending")}
+        />
       ))}
     </div>
   );
 }
 
-function ItemCard({ mock, item }: { mock: Mock; item: Item }) {
+function ItemCard({ mock, item, suggestion }: { mock: Mock; item: Item; suggestion: AiGrade | undefined }) {
   const review = useReview(mock.id);
   const toast = useToast();
   const qc = useQueryClient();
-  const [slip, setSlip] = useState(false);
+  const [slip, setSlip] = useState<{ type: string; description: string } | null>(null);
   const [card, setCard] = useState<CardDraft | null>(null);
   // A card from a missed question: its lecture, the prompt, and the right answer with the why.
   const makeCard = async () => {
@@ -108,7 +124,8 @@ function ItemCard({ mock, item }: { mock: Mock; item: Item }) {
   };
   const k = item.key;
   const miss = !!item.outcome && item.outcome !== "Right";
-  const needsGrade = item.type === "Open" && !item.outcome && mock.gradingMode === "Self";
+  // Self-grading stays open in AI mode too, also while a suggestion waits.
+  const needsGrade = item.type === "Open" && !item.outcome;
   const options = (item.options ?? []) as { id: string; text: string; isCorrect?: boolean | null }[];
   const run = (a: Parameters<typeof review.mutate>[0]) =>
     review.mutate(a, { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) });
@@ -199,9 +216,13 @@ function ItemCard({ mock, item }: { mock: Mock; item: Item }) {
         </div>
       ) : null}
 
+      {suggestion && !item.outcome ? <Suggestion mock={mock} grade={suggestion} onSlip={(s) => setSlip(s)} /> : null}
+
       {needsGrade ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted">Compared with the model answer:</span>
+          <span className="text-sm text-muted">
+            {suggestion ? "Or mark it yourself:" : "Compared with the model answer:"}
+          </span>
           {(["Right", "Partial", "Wrong"] as const).map((o) => (
             <Button
               key={o}
@@ -228,7 +249,7 @@ function ItemCard({ mock, item }: { mock: Mock; item: Item }) {
             </Button>
           ) : null}
           {item.slipProposed && !slip ? (
-            <Button size="sm" variant="ghost" onClick={() => setSlip(true)}>
+            <Button size="sm" variant="ghost" onClick={() => setSlip({ type: "Concept", description: "" })}>
               Log a slip
             </Button>
           ) : null}
@@ -239,18 +260,30 @@ function ItemCard({ mock, item }: { mock: Mock; item: Item }) {
           ) : null}
         </div>
       ) : null}
-      {slip ? <SlipForm mock={mock} item={item} onDone={() => setSlip(false)} /> : null}
+      {slip ? (
+        <SlipForm key={slip.description} mock={mock} item={item} initial={slip} onDone={() => setSlip(null)} />
+      ) : null}
       {card ? <CardDialog courseId={mock.courseId} draft={card} onClose={() => setCard(null)} /> : null}
     </Card>
   );
 }
 
 /** "What went wrong?" for a missed item; it becomes a slip (and maybe a weak spot). */
-function SlipForm({ mock, item, onDone }: { mock: Mock; item: Item; onDone: () => void }) {
+function SlipForm({
+  mock,
+  item,
+  initial,
+  onDone,
+}: {
+  mock: Mock;
+  item: Item;
+  initial: { type: string; description: string };
+  onDone: () => void;
+}) {
   const log = useLogSlip();
   const toast = useToast();
-  const [type, setType] = useState<string>("Concept");
-  const [description, setDescription] = useState("");
+  const [type, setType] = useState<string>(initial.type);
+  const [description, setDescription] = useState(initial.description);
   const errors = fieldErrors(log.error);
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -307,5 +340,148 @@ function SlipForm({ mock, item, onDone }: { mock: Mock; item: Item; onDone: () =
         </Button>
       </div>
     </form>
+  );
+}
+
+/** AI mode: still grading, or suggestions waiting with "Accept all". */
+function AiBanner({ mock, grades, failed }: { mock: Mock; grades: AiGrade[] | undefined; failed: boolean }) {
+  const decide = useAiDecision(mock.id);
+  const toast = useToast();
+  const open = mock.items.filter((i) => i.type === "Open" && !i.outcome);
+  const pending = (grades ?? []).filter((g) => g.status === "Pending" && open.some((i) => i.order === g.order));
+  if (!open.length) return null;
+  if (failed)
+    return (
+      <Banner tone="notice">AI suggestions can't be reached right now. Mark your open answers yourself below.</Banner>
+    );
+  if (!pending.length)
+    return (
+      <Banner tone="notice">
+        AI is grading your {open.length} open {open.length === 1 ? "answer" : "answers"}. Suggestions show up here; you
+        can also mark them yourself.
+      </Banner>
+    );
+  return (
+    <Banner tone="notice">
+      <span className="flex flex-wrap items-center gap-3">
+        <span className="flex-1">
+          {pending.length} AI {pending.length === 1 ? "suggestion waits" : "suggestions wait"} for you. Nothing counts
+          until you accept it.
+        </span>
+        <Button
+          size="sm"
+          disabled={decide.isPending}
+          onClick={() =>
+            decide.mutate(
+              { kind: "acceptAll" },
+              {
+                onSuccess: () => toast({ message: "Accepted" }),
+                onError: (e) => toast({ message: messageFor(e), tone: "danger" }),
+              },
+            )
+          }
+        >
+          Accept all
+        </Button>
+      </span>
+    </Banner>
+  );
+}
+
+type SlipDraft = { type?: string; description?: string };
+
+/** One AI suggestion: grade and feedback, Accept / Override / Reject, and its slip drafts. */
+function Suggestion({
+  mock,
+  grade,
+  onSlip,
+}: {
+  mock: Mock;
+  grade: AiGrade;
+  onSlip: (s: { type: string; description: string }) => void;
+}) {
+  const decide = useAiDecision(mock.id);
+  const toast = useToast();
+  const [override, setOverride] = useState<"Right" | "Partial" | "Wrong" | null>(null);
+  const [dismissed, setDismissed] = useState<number[]>([]);
+  const onError = (e: unknown) => toast({ message: messageFor(e), tone: "danger" });
+  const slips = (grade.slips as SlipDraft[])
+    .map((s, i) => ({ ...s, i }))
+    .filter((s) => s.description && !dismissed.includes(s.i));
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-dashed border-border p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.06em] text-muted">AI suggests</span>
+        <Badge kind="status" tone={TONE[grade.outcome as keyof typeof TONE] ?? "neutral"}>
+          {grade.outcome}
+        </Badge>
+        <span className="font-mono tnum text-muted">
+          {grade.grade}/{grade.maxGrade}
+        </span>
+      </div>
+      {grade.feedback ? <Markdown>{grade.feedback}</Markdown> : null}
+      {slips.length ? (
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {slips.map((s) => (
+            <li key={s.i} className="flex flex-wrap items-center gap-2">
+              <span className="min-w-0 flex-1">
+                <span className="text-muted">Slip ({s.type}): </span>
+                {s.description}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onSlip({ type: s.type ?? "Concept", description: s.description ?? "" })}
+              >
+                Log it
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setDismissed([...dismissed, s.i])}>
+                Dismiss
+              </Button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={decide.isPending}
+          onClick={() => decide.mutate({ kind: "accept", order: grade.order, gradeId: grade.id }, { onError })}
+        >
+          Accept
+        </Button>
+        <Select
+          aria-label="Your own grade"
+          className="h-8 w-36 text-sm"
+          value={override ?? ""}
+          onChange={(e) => setOverride((e.currentTarget.value || null) as typeof override)}
+        >
+          <option value="">Override…</option>
+          <option value="Right">Right</option>
+          <option value="Partial">Partly</option>
+          <option value="Wrong">Wrong</option>
+        </Select>
+        {override ? (
+          <Button
+            size="sm"
+            disabled={decide.isPending}
+            onClick={() =>
+              decide.mutate({ kind: "override", order: grade.order, gradeId: grade.id, outcome: override }, { onError })
+            }
+          >
+            Save {override === "Partial" ? "Partly" : override}
+          </Button>
+        ) : null}
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={decide.isPending}
+          onClick={() => decide.mutate({ kind: "reject", order: grade.order, gradeId: grade.id }, { onError })}
+        >
+          Reject
+        </Button>
+      </div>
+    </div>
   );
 }

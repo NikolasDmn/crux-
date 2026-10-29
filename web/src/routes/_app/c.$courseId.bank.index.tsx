@@ -23,12 +23,13 @@ import {
   type BankFilters,
 } from "@/features/bank/lib/filters";
 import { useLectures } from "@/features/lectures/api";
+import { GenerateButton } from "@/features/ai/generate";
 import { messageFor } from "@/lib/errors";
 
 // Question bank (frontend-spec 4): a table with filters (lecture, type, source, paper, key
 // reliability, review state, untested) and search, kept in the URL; badges for Generated, Draft,
 // Disputed and Private; bulk archive; export of the filtered list (Markdown/JSON, in the browser).
-// "Generate questions" joins with the AI step (8).
+// "Generate questions" (AI gate) writes new ones for a lecture.
 export const Route = createFileRoute("/_app/c/$courseId/bank/")({
   validateSearch: (s: Record<string, unknown>): BankFilters => readFilters(s),
   component: Bank,
@@ -114,6 +115,7 @@ function Bank() {
             <MenuItem onSelect={() => exportAs("json")}>JSON ({rows.length})</MenuItem>
           </MenuContent>
         </Menu>
+        <GenerateButton courseId={courseId} componentId={f.componentId} />
         <Button asChild size="sm" variant="primary">
           <Link to="/c/$courseId/bank/new" params={{ courseId }}>
             <Plus className="size-4" aria-hidden="true" />

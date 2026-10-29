@@ -31,8 +31,8 @@ import { fieldErrors, messageFor } from "@/lib/errors";
 // Mock result and review (frontend-spec 4): the score (open answers: Right 1, Partial 0.5); per
 // question Right/Wrong/Blank with confidence (a lucky guess counts as a miss); right answers show
 // their key, misses stay hidden until "Show answer"; "I fixed this"; self-grading of open answers;
-// proposed slips to log. Keys render only when the API returned them (5.3). AI grading review
-// joins with step 8, "make a flashcard" with step 5.
+// proposed slips to log, "make a flashcard". Keys render only when the API returned them (5.3). In AI
+// grading mode: each suggestion with Accept / Override / Reject, its slip drafts, and "Accept all".
 export const Route = createFileRoute("/_app/mock/$mockId/result")({ component: Result });
 
 const TONE = { Right: "success", Partial: "warning", Wrong: "danger", Blank: "neutral" } as const;

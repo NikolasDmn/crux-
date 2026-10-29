@@ -21,7 +21,7 @@ import { fieldErrors, messageFor } from "@/lib/errors";
 import { formatInZone } from "@/lib/time";
 
 // Mocks (frontend-spec 4): past mocks, sure-vs-unsure per lecture, and the New mock builder (real
-// exam layout, lectures, n, time limit, go easy, misses only, grading Self; AI grading with step 8).
+// exam layout, lectures, n, time limit, go easy, misses only, grading Self or AI with the gate open).
 export const Route = createFileRoute("/_app/c/$courseId/mocks")({ component: Mocks });
 
 const STATUS: Record<string, "info" | "warning" | "success" | "neutral"> = {

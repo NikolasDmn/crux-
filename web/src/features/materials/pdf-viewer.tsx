@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/misc";
 
 // pdf.js viewer (frontend-spec 0, 4): pages render as they scroll into view, each with a text layer
-// so text can be selected (Ask AI about it arrives with step 8). Reports the page in view.
+// so text can be selected (and asked about: Ask AI). Reports the page in view.
 // Embedded fonts are drawn as paths (disableFontFace): loading them as data: URLs would need the CSP
 // to allow font-src data:.
 

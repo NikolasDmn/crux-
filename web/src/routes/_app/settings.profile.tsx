@@ -28,7 +28,12 @@ function Details() {
   const { setUser } = useAuth();
   const patch = usePatchMe();
   const toast = useToast();
-  const blank = (u: User) => ({ firstName: u.firstName, lastName: u.lastName, username: u.username, timeZone: u.timeZone });
+  const blank = (u: User) => ({
+    firstName: u.firstName,
+    lastName: u.lastName,
+    username: u.username,
+    timeZone: u.timeZone,
+  });
   const [f, setF] = useState(() => blank(user));
   const [conflict, setConflict] = useState<User | null>(null);
   useEffect(() => setF(blank(user)), [user]);
@@ -38,7 +43,13 @@ function Details() {
 
   const send = (version: number) =>
     patch.mutate(
-      { version, firstName: f.firstName.trim(), lastName: f.lastName.trim(), username: f.username.trim(), timeZone: f.timeZone },
+      {
+        version,
+        firstName: f.firstName.trim(),
+        lastName: f.lastName.trim(),
+        username: f.username.trim(),
+        timeZone: f.timeZone,
+      },
       {
         onSuccess: () => toast({ message: "Saved" }),
         onError: (e) => {
@@ -62,12 +73,20 @@ function Details() {
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="First name" error={errors.firstName}>
-            {(ids) => <Input {...ids} value={f.firstName} onChange={(e) => setF({ ...f, firstName: e.currentTarget.value })} />}
+            {(ids) => (
+              <Input {...ids} value={f.firstName} onChange={(e) => setF({ ...f, firstName: e.currentTarget.value })} />
+            )}
           </Field>
           <Field label="Last name" error={errors.lastName}>
-            {(ids) => <Input {...ids} value={f.lastName} onChange={(e) => setF({ ...f, lastName: e.currentTarget.value })} />}
+            {(ids) => (
+              <Input {...ids} value={f.lastName} onChange={(e) => setF({ ...f, lastName: e.currentTarget.value })} />
+            )}
           </Field>
-          <Field label="Username" error={errors.username} hint="You can log in with it, and people share courses with it.">
+          <Field
+            label="Username"
+            error={errors.username}
+            hint="You can log in with it, and people share courses with it."
+          >
             {(ids) => (
               <Input
                 {...ids}

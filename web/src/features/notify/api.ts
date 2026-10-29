@@ -32,7 +32,13 @@ export function useInbox(unreadOnly: boolean) {
     queryFn: ({ pageParam }) =>
       unwrap(
         api.GET("/notify/inbox", {
-          params: { query: { limit: PAGE, ...(unreadOnly ? { unread: true } : {}), ...(pageParam ? { cursor: pageParam } : {}) } },
+          params: {
+            query: {
+              limit: PAGE,
+              ...(unreadOnly ? { unread: true } : {}),
+              ...(pageParam ? { cursor: pageParam } : {}),
+            },
+          },
         }),
       ),
     getNextPageParam: (last) => last.nextCursor ?? null,
@@ -68,8 +74,7 @@ export function usePreferences() {
 export function useSetPreferences() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (preferences: PreferenceChange[]) =>
-      unwrap(api.PUT("/notify/preferences", { body: { preferences } })),
+    mutationFn: (preferences: PreferenceChange[]) => unwrap(api.PUT("/notify/preferences", { body: { preferences } })),
     onSuccess: (view) => qc.setQueryData(keys.prefs, view),
   });
 }

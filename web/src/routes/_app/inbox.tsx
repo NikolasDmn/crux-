@@ -39,10 +39,7 @@ function InvitationActions({ courseId }: { courseId: string }) {
   if (!invitations.data?.some((i) => i.courseId === courseId))
     return <span className="text-sm text-muted">{t("inbox.answered")}</span>;
   const reply = (accept: boolean) =>
-    answer.mutate(
-      { courseId, accept },
-      { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) },
-    );
+    answer.mutate({ courseId, accept }, { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) });
   return (
     <div className="flex gap-2">
       <Button size="sm" variant="primary" disabled={answer.isPending} onClick={() => reply(true)}>
@@ -81,7 +78,8 @@ function Actions({ item }: { item: InboxItem }) {
   const courseId = str(p.courseId);
   const fileId = str(p.fileId);
   if (item.kind === "course.shared" && courseId) return <InvitationActions courseId={courseId} />;
-  if (item.kind === "account.export_ready" && fileId) return <ExportAction fileId={fileId} expiresAt={str(p.expiresAt)} />;
+  if (item.kind === "account.export_ready" && fileId)
+    return <ExportAction fileId={fileId} expiresAt={str(p.expiresAt)} />;
   return null;
 }
 
@@ -146,7 +144,9 @@ function Inbox() {
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="m-0 flex-1 text-xl font-semibold tracking-[-0.01em]">
           {t("nav.inbox")}
-          {unread ? <span className="ml-2 text-base font-normal text-muted tnum">{t("inbox.unread", { n: unread })}</span> : null}
+          {unread ? (
+            <span className="ml-2 text-base font-normal text-muted tnum">{t("inbox.unread", { n: unread })}</span>
+          ) : null}
         </h1>
         <Segmented
           size="sm"
@@ -161,7 +161,9 @@ function Inbox() {
         <Button
           size="sm"
           disabled={!unread || markAll.isPending}
-          onClick={() => markAll.mutate(undefined, { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) })}
+          onClick={() =>
+            markAll.mutate(undefined, { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) })
+          }
         >
           {t("inbox.markAll")}
         </Button>

@@ -9,7 +9,7 @@ export type UploadPhase =
   | { phase: "scanning" }
   | { phase: "extracting" }
   | { phase: "ready"; pageCount: number | null }
-  | { phase: "failed"; message: string };
+  | { phase: "failed"; message: string; quota?: boolean };
 
 export const ACCEPT = "application/pdf";
 export const MAX_BYTES = 100 * 1024 * 1024;

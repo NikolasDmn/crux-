@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronLeft } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -9,17 +9,32 @@ import { ProgressBar } from "@/components/ui/progress";
 import { Banner } from "@/components/ui/banner";
 import { EmptyList } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/misc";
-import { fileUrl, getFile, pageText } from "@/features/files/api";
+import { useUser } from "@/app/auth";
+import { useToast } from "@/components/ui/toast";
+import {
+  fileUrl,
+  getFile,
+  markRestored,
+  pageText,
+  RESTORED,
+  thumbnailUrl,
+  useCancelFree,
+  useUploads,
+} from "@/features/files/api";
+import { ACCEPT, phaseLabel, sameOrigin } from "@/features/files/lib/upload";
+import type { Material } from "@/features/lectures/api";
+import { canEdit, isOwner } from "@/features/courses/lib/roles";
+import { messageFor } from "@/lib/errors";
+import { formatInZone } from "@/lib/time";
 import { useCourse } from "@/features/courses/api";
-import { canEdit } from "@/features/courses/lib/roles";
 import { useMaterial } from "@/features/lectures/api";
 import { useChecks, type MaterialCheck } from "@/features/practice/api";
 import { CheckBlock, ManageChecksDialog, QuizDialog } from "@/features/practice/components";
 import { afterSection, reached, readShare, splitSections } from "@/features/practice/lib/placement";
 import { track } from "@/lib/activity";
 
-// The material viewer (frontend-spec 4): pdf.js or markdown; a purged original shows its extracted
-// text per page with a banner. Page views go to the activity queue. Check questions follow their
+// The material viewer (frontend-spec 4): pdf.js or markdown; a purged original shows its page
+// thumbnails if kept, else its extracted text per page, with a banner and (Editors) Re-upload. Page views go to the activity queue. Check questions follow their
 // page (PDF) or section (notes); without any, the end offers a quick quiz on the lecture. Ask AI
 // arrives with step 8.
 const PdfViewer = lazy(() => import("@/features/materials/pdf-viewer").then((m) => ({ default: m.PdfViewer })));
@@ -38,7 +53,43 @@ function PurgedText({ fileId }: { fileId: string }) {
     enabled: pages > 0,
     queryFn: () => Promise.all(Array.from({ length: pages }, (_, i) => pageText(fileId, i + 1))),
   });
-  if (texts.isPending) return <Skeleton className="h-96" />;
+  // Thumbnails exist only when the owner keeps them; a 404 on page 1 means text it is.
+  const thumbs = useQuery({
+    queryKey: ["file", fileId, "thumbnails"],
+    enabled: pages > 0,
+    retry: false,
+    staleTime: 4 * 60_000,
+    queryFn: async () => {
+      const first = await thumbnailUrl(fileId, 1).catch(() => null);
+      if (!first) return null;
+      const rest = await Promise.all(
+        Array.from({ length: pages - 1 }, (_, i) => thumbnailUrl(fileId, i + 2).catch(() => null)),
+      );
+      return [first, ...rest].map((t) => (t ? sameOrigin(t.url, location.origin) : null));
+    },
+  });
+  if (texts.isPending || thumbs.isPending) return <Skeleton className="h-96" />;
+  const textOf = new Map((texts.data ?? []).map((t) => [t.page, t.text]));
+  if (thumbs.data)
+    return (
+      <div className="flex flex-col gap-6">
+        {thumbs.data.map((src, i) => (
+          <section key={i} className="flex flex-col gap-2">
+            <h3 className="m-0 text-xs font-medium uppercase tracking-[0.06em] text-muted">Page {i + 1}</h3>
+            {src ? (
+              <img
+                src={src}
+                alt={`Page ${i + 1}: ${(textOf.get(i + 1) ?? "").slice(0, 200)}`}
+                loading="lazy"
+                className="w-full max-w-[640px] rounded-md border border-border bg-white"
+              />
+            ) : (
+              <p className="m-0 max-w-[72ch] whitespace-pre-wrap">{textOf.get(i + 1) || "(no text on this page)"}</p>
+            )}
+          </section>
+        ))}
+      </div>
+    );
   return (
     <div className="flex flex-col gap-6">
       {(texts.data ?? []).map((t) => (
@@ -48,6 +99,80 @@ function PurgedText({ fileId }: { fileId: string }) {
         </section>
       ))}
     </div>
+  );
+}
+
+/** Re-upload of a removed original (spec 5.1): only the same bytes bring it back, checked on the hash
+ *  before anything is sent. */
+function Reupload({ courseId, fileId }: { courseId: string; fileId: string }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const file = useQuery({ queryKey: ["file", fileId], queryFn: () => getFile(fileId) });
+  const { uploads, add } = useUploads({
+    courseId,
+    check: (hash) =>
+      file.data && hash !== file.data.sha256
+        ? "That isn't the same PDF. Add a different file from the lecture page."
+        : null,
+    onClean: (f) => {
+      markRestored(qc, f.id);
+      void qc.invalidateQueries({ queryKey: ["file", fileId] });
+      toast({ message: RESTORED });
+    },
+  });
+  const last = uploads.at(-1);
+  return (
+    <span className="flex flex-wrap items-center gap-3">
+      <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-border bg-surface px-3 text-sm hover:bg-sunken focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-focus">
+        Re-upload
+        <input
+          type="file"
+          accept={ACCEPT}
+          className="sr-only"
+          disabled={!file.data}
+          onChange={(e) => {
+            const f = e.currentTarget.files?.[0];
+            if (f) add([f]);
+            e.currentTarget.value = "";
+          }}
+        />
+      </label>
+      {last ? (
+        <span
+          className={last.state.phase === "failed" ? "text-sm text-danger-text" : "text-sm text-muted"}
+          aria-live="polite"
+        >
+          {phaseLabel(last.state)}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** A removal is pending: when it happens, and Undo for the owner. */
+function PendingBanner({ m, owner }: { m: Material; owner: boolean }) {
+  const user = useUser();
+  const cancel = useCancelFree();
+  const toast = useToast();
+  return (
+    <Banner tone="notice">
+      <span className="flex flex-wrap items-center gap-3">
+        <span className="flex-1">
+          The original is removed to save space
+          {m.originalPurgeAt ? ` on ${formatInZone(m.originalPurgeAt, user.timeZone, "d MMM")}` : " soon"}. Its text
+          stays.
+        </span>
+        {owner ? (
+          <Button
+            size="sm"
+            disabled={cancel.isPending}
+            onClick={() => cancel.mutate(m.id, { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) })}
+          >
+            Undo
+          </Button>
+        ) : null}
+      </span>
+    </Banner>
   );
 }
 
@@ -126,14 +251,20 @@ function Viewer() {
       {m.fileId && m.originalStatus === "Purged" ? (
         <>
           <Banner tone="notice">
-            Original removed to save space. Re-upload the same PDF to restore it; your questions and notes stay
-            connected.
+            <span className="flex flex-wrap items-center gap-3">
+              <span className="flex-1">
+                Original removed to save space. Re-upload the same PDF to restore it; your questions and notes stay
+                connected.
+              </span>
+              {editor ? <Reupload courseId={courseId} fileId={m.fileId} /> : null}
+            </span>
           </Banner>
           <PurgedText fileId={m.fileId} />
         </>
       ) : m.fileId ? (
         url.data ? (
           <>
+            {m.originalStatus === "PendingPurge" ? <PendingBanner m={m} owner={isOwner(course.data?.myRole)} /> : null}
             {pages ? (
               <ProgressBar
                 value={maxPage}

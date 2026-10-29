@@ -54,8 +54,8 @@ function Exports() {
     <Card className="flex flex-col gap-4">
       <SectionLabel>Your data</SectionLabel>
       <p className="m-0 text-muted">
-        A zip of everything you've made in Crux: courses you own with their files, your answers, cards, plan and
-        notes. It takes a few minutes; the inbox tells you when it's ready, and the link works for 24 hours.
+        A zip of everything you've made in Crux: courses you own with their files, your answers, cards, plan and notes.
+        It takes a few minutes; the inbox tells you when it's ready, and the link works for 24 hours.
       </p>
       <Button className="self-start" disabled={busy || request.isPending} onClick={start}>
         {busy ? "Export in progress…" : "Export my data"}
@@ -128,7 +128,11 @@ function NewInvite({ onCreated }: { onCreated: (i: CreatedInvite) => void }) {
     <form className="flex flex-col gap-3" onSubmit={submit} noValidate>
       {create.error && !Object.keys(errors).length ? <Banner tone="danger">{messageFor(create.error)}</Banner> : null}
       <div className="grid gap-3 sm:grid-cols-[1fr_7rem_7rem]">
-        <Field label="Email (optional)" error={errors.email} hint="Only this address can use it, and we email the link.">
+        <Field
+          label="Email (optional)"
+          error={errors.email}
+          hint="Only this address can use it, and we email the link."
+        >
           {(ids) => <Input {...ids} type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} />}
         </Field>
         <Field label="Uses" error={errors.maxUses}>
@@ -277,7 +281,9 @@ function DeleteDialog({ open, onClose, deletion }: { open: boolean; onClose: () 
       description="Everything goes after 14 days: your courses, files, answers and cards. Until then you can cancel."
     >
       <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
-        {schedule.error && !Object.keys(errors).length ? <Banner tone="danger">{messageFor(schedule.error)}</Banner> : null}
+        {schedule.error && !Object.keys(errors).length ? (
+          <Banner tone="danger">{messageFor(schedule.error)}</Banner>
+        ) : null}
         {deletion.sharedCourses.length ? (
           <div className="flex flex-col gap-3">
             <span className="text-sm font-medium">Courses others use</span>

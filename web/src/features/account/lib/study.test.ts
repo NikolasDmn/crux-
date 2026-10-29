@@ -23,7 +23,13 @@ describe("study settings", () => {
 
   it("fills the planner defaults when extra is empty", () => {
     const f = fromSettings(settings());
-    expect(f).toMatchObject({ studyStart: "09:00", studyEnd: "22:00", dailyHours: "4", oneCourse: true, retention: "90" });
+    expect(f).toMatchObject({
+      studyStart: "09:00",
+      studyEnd: "22:00",
+      dailyHours: "4",
+      oneCourse: true,
+      retention: "90",
+    });
   });
 
   it("round-trips and keeps other extra keys", () => {
@@ -32,7 +38,13 @@ describe("study settings", () => {
     expect(f).toMatchObject({ studyStart: "08:30", dailyHours: "6", oneCourse: false });
     const p = toPatch({ ...f, retention: "85", oneCourse: true }, s);
     expect(p.flashRetention).toBeCloseTo(0.85);
-    expect(p.extra).toEqual({ studyStart: "08:30", studyEnd: "22:00", dailyHours: 6, multiCoursePerDay: false, theme: "dark" });
+    expect(p.extra).toEqual({
+      studyStart: "08:30",
+      studyEnd: "22:00",
+      dailyHours: 6,
+      multiCoursePerDay: false,
+      theme: "dark",
+    });
   });
 
   it("ignores a stored time that isn't on the 15-minute grid", () => {

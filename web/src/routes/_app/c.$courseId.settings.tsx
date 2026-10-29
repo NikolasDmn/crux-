@@ -25,9 +25,10 @@ import { ColourPicker } from "@/features/courses/components/colour-picker";
 import { canEdit, isOwner, normalizeCode } from "@/features/courses/lib/roles";
 import { conflictCurrent, fieldErrors, messageFor } from "@/lib/errors";
 import { formatInZone } from "@/lib/time";
+import { CourseStorage } from "@/features/materials/course-storage";
 
 // Course settings (frontend-spec 4): details (colour and grade scale are the Owner's), sharing,
-// subscription, delete to Trash. Storage ("Free up space") joins with build step 7.
+// subscription, Storage ("Free up space", undo for 7 days), delete to Trash.
 export const Route = createFileRoute("/_app/c/$courseId/settings")({ component: Settings });
 
 function Details({ course }: { course: Course }) {
@@ -378,10 +379,7 @@ function Settings() {
       <Details course={c} />
       <Sharing course={c} />
       <Subscription course={c} />
-      <Card className="flex flex-col gap-2">
-        <SectionLabel>Storage</SectionLabel>
-        <p className="m-0 text-muted">Freeing up space from originals arrives with build step 7.</p>
-      </Card>
+      <CourseStorage course={c} />
       {isOwner(c.myRole) ? <Danger course={c} /> : null}
     </div>
   );

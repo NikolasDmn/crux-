@@ -1,6 +1,9 @@
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, BASE, unwrap, type Schemas } from "@/lib/api";
 import { messageFor } from "@/lib/errors";
+import type { Material } from "@/features/lectures/api";
+import { quotaDetail } from "./lib/storage";
 import { openStream, type Stream } from "@/lib/sse";
 import { sseTicket } from "@/features/notify/api";
 import { failureText, precheck, sameOrigin, sha256, type UploadPhase } from "./lib/upload";
@@ -28,6 +31,82 @@ export function pageText(id: string, page: number) {
 
 export function getFile(id: string) {
   return unwrap(api.GET("/files/{file_id}", { params: { path: { file_id: id } } }));
+}
+
+export function thumbnailUrl(id: string, page: number) {
+  return unwrap(api.GET("/files/{file_id}/pages/{page}/thumbnail", { params: { path: { file_id: id, page } } }));
+}
+
+// Storage saver (frontend-spec 4: /settings/storage and the course's Storage section).
+
+export type StorageView = Schemas["StorageView"];
+const storageKey = ["files", "storage"] as const;
+
+export function useStorage() {
+  return useQuery({ queryKey: storageKey, queryFn: () => unwrap(api.GET("/files/storage")) });
+}
+
+export function useStorageSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Schemas["StorageSettings"]) => unwrap(api.PATCH("/files/storage/settings", { body })),
+    onSuccess: (v) => qc.setQueryData(storageKey, v),
+  });
+}
+
+/** A material's purge state changed: its lecture list, the viewer and the quota view. */
+function materialChanged(qc: QueryClient, m: Material) {
+  qc.setQueryData<Material[]>(["lecture", m.componentId, "materials"], (list) =>
+    list?.map((x) => (x.id === m.id ? m : x)),
+  );
+  void qc.invalidateQueries({ queryKey: ["material", m.id] });
+  void qc.invalidateQueries({ queryKey: storageKey });
+}
+
+export const RESTORED = "Restored: your questions and notes are reconnected";
+
+/** A re-upload of a purged original brought the same file back (spec 5.1). files tells core over the
+ *  bus, so show it present now and refetch once core has caught up. */
+export function markRestored(qc: QueryClient, fileId: string) {
+  const present = (m: Material) =>
+    m.fileId === fileId ? { ...m, originalStatus: "Present", originalPurgeAt: null } : m;
+  qc.setQueriesData<Material[]>({ queryKey: ["lecture"] }, (list) => (Array.isArray(list) ? list.map(present) : list));
+  qc.setQueriesData<{ material: Material }>({ queryKey: ["material"] }, (d) =>
+    d?.material ? { ...d, material: present(d.material) } : d,
+  );
+  void qc.invalidateQueries({ queryKey: storageKey });
+  setTimeout(() => {
+    void qc.invalidateQueries({ queryKey: ["lecture"] });
+    void qc.invalidateQueries({ queryKey: ["material"] });
+  }, 3000);
+}
+
+export function useFreeMaterial() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(api.POST("/materials/{id}/free-space", { params: { path: { id } } })),
+    onSuccess: (m) => materialChanged(qc, m),
+  });
+}
+
+export function useCancelFree() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(api.POST("/materials/{id}/free-space/cancel", { params: { path: { id } } })),
+    onSuccess: (m) => materialChanged(qc, m),
+  });
+}
+
+export function useFreeCourse(courseId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.POST("/courses/{id}/free-space", { params: { path: { id: courseId } } })),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["lecture"] });
+      void qc.invalidateQueries({ queryKey: ["material"] });
+      void qc.invalidateQueries({ queryKey: storageKey });
+    },
+  });
 }
 
 /** PUT to the signed URL with progress (fetch can't report upload progress). */
@@ -99,15 +178,20 @@ export interface Upload {
 export function useUploads({
   courseId,
   onClean,
+  check,
 }: {
   courseId?: string;
   onClean: (file: FileView, name: string) => void;
+  /** Runs on the hash before anything is sent; a message stops the upload (e.g. "not the same PDF"). */
+  check?: (sha256: string) => string | null;
 }) {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const streams = useRef<Stream[]>([]);
   const aborts = useRef<AbortController[]>([]);
   const cleanRef = useRef(onClean);
   cleanRef.current = onClean;
+  const checkRef = useRef(check);
+  checkRef.current = check;
 
   useEffect(
     () => () => {
@@ -142,6 +226,11 @@ export function useUploads({
               file,
               () => new Worker(new URL("./lib/hash.worker.ts", import.meta.url), { type: "module" }),
             );
+            const refused = checkRef.current?.(hash);
+            if (refused) {
+              set({ phase: "failed", message: refused });
+              return;
+            }
             set({ phase: "starting" });
             const started = await unwrap(
               api.POST("/files/uploads", {
@@ -200,9 +289,12 @@ export function useUploads({
             if (abort.signal.aborted) return;
             set({
               phase: "failed",
+              ...(quotaDetail(e) ? { quota: true } : {}),
               message:
                 e instanceof ApiError
-                  ? messageFor(e)
+                  ? quotaDetail(e)
+                    ? `${messageFor(e)} ${quotaDetail(e)}.`
+                    : messageFor(e)
                   : e instanceof Error && e.message.startsWith("upload failed")
                     ? "The upload didn't go through. Try again."
                     : messageFor(e),

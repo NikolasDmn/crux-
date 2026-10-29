@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { ConflictDialog } from "@/components/conflict-dialog";
 import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Card, SectionLabel } from "@/components/ui/card";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Check, Field, Input, Select } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
 import { usePatchSettings, type Settings } from "@/features/account/api";
@@ -16,33 +16,6 @@ import { conflictCurrent, fieldErrors, messageFor } from "@/lib/errors";
 // (15-minute steps, at least 1 h, default 09:00–22:00), daily hours and one course a day. A planner
 // setting rebuilds the plan at once (core does it on save).
 export const Route = createFileRoute("/_app/settings/study")({ component: Study });
-
-function Check({
-  checked,
-  onChange,
-  label,
-  hint,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-  label: ReactNode;
-  hint?: ReactNode;
-}) {
-  return (
-    <label className="flex items-start gap-2.5">
-      <input
-        type="checkbox"
-        className="mt-1 size-4 accent-[var(--text)]"
-        checked={checked}
-        onChange={(e) => onChange(e.currentTarget.checked)}
-      />
-      <span className="flex flex-col gap-0.5">
-        <span>{label}</span>
-        {hint ? <span className="text-sm text-muted">{hint}</span> : null}
-      </span>
-    </label>
-  );
-}
 
 function StudyForm({ settings }: { settings: Settings }) {
   const patch = usePatchSettings();
@@ -117,7 +90,9 @@ function StudyForm({ settings }: { settings: Settings }) {
           label="One course a day"
           hint="Turn off to mix courses within a day."
         />
-        <p className="m-0 text-sm text-muted">Saving a change here rebuilds your plan. Entries you moved or pinned stay.</p>
+        <p className="m-0 text-sm text-muted">
+          Saving a change here rebuilds your plan. Entries you moved or pinned stay.
+        </p>
       </Card>
       <Card className="flex flex-col gap-4">
         <SectionLabel>Flashcards</SectionLabel>

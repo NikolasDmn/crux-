@@ -37,7 +37,17 @@ function Toggle({
   );
 }
 
-function Row({ k, prefs, busy, set }: { k: KindPreference; prefs: Preferences; busy: boolean; set: (kind: string, channel: Channel, on: boolean) => void }) {
+function Row({
+  k,
+  prefs,
+  busy,
+  set,
+}: {
+  k: KindPreference;
+  prefs: Preferences;
+  busy: boolean;
+  set: (kind: string, channel: Channel, on: boolean) => void;
+}) {
   const emailOk = prefs.email.verified && !prefs.email.suppressed;
   return (
     <tr className="border-t border-border">
@@ -52,7 +62,12 @@ function Row({ k, prefs, busy, set }: { k: KindPreference; prefs: Preferences; b
             Always
           </span>
         ) : (
-          <Toggle label={`${k.label} in the inbox`} checked={k.inApp} disabled={busy} onChange={(v) => set(k.kind, "InApp", v)} />
+          <Toggle
+            label={`${k.label} in the inbox`}
+            checked={k.inApp}
+            disabled={busy}
+            onChange={(v) => set(k.kind, "InApp", v)}
+          />
         )}
       </td>
       <td className="w-24 py-3 text-center">

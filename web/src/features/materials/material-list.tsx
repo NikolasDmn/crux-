@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { FileText, MoreHorizontal, NotebookText, X } from "lucide-react";
 import { useState } from "react";
@@ -8,7 +9,7 @@ import { DropBox, EmptyList } from "@/components/ui/empty";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Dialog, Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/overlays";
 import { useToast } from "@/components/ui/toast";
-import { useUploads } from "@/features/files/api";
+import { markRestored, RESTORED, useUploads } from "@/features/files/api";
 import { ACCEPT, formatBytes, phaseLabel } from "@/features/files/lib/upload";
 import {
   useCreateMaterial,
@@ -174,13 +175,21 @@ export function MaterialList({
   const remove = useDeleteMaterial(componentId);
   const toast = useToast();
   const [editing, setEditing] = useState<Material | "new-notes" | null>(null);
+  const qc = useQueryClient();
   const { uploads, add, dismiss } = useUploads({
     courseId,
-    onClean: (file, name) =>
+    onClean: (file, name) => {
+      // The same bytes as a removed original: files hands back that file, already attached here.
+      if (materials.data?.some((m) => m.fileId === file.id)) {
+        markRestored(qc, file.id);
+        toast({ message: RESTORED });
+        return;
+      }
       create.mutate(
         { key: idempotencyKey(), fields: { fileId: file.id, title: name.replace(/\.pdf$/i, ""), kind: "Slides" } },
         { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) },
-      ),
+      );
+    },
   });
 
   const list = materials.data ?? [];
@@ -259,6 +268,14 @@ export function MaterialList({
                 )}
               >
                 {phaseLabel(u.state)}
+                {u.state.phase === "failed" && u.state.quota ? (
+                  <>
+                    {" "}
+                    <Link to="/settings/storage" className="underline underline-offset-4">
+                      Storage
+                    </Link>
+                  </>
+                ) : null}
               </span>
               {u.state.phase === "uploading" ? (
                 <span className="h-1 w-20 overflow-hidden rounded-full bg-sunken" aria-hidden="true">

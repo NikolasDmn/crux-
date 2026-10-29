@@ -79,3 +79,34 @@ export function Field({ label, error, warning, hint, className, children }: Fiel
     </div>
   );
 }
+
+/** A checkbox with a label and an optional muted hint under it. */
+export function Check({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: ReactNode;
+  hint?: ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <label className="flex items-start gap-2.5">
+      <input
+        type="checkbox"
+        className="mt-1 size-4 accent-[var(--text)]"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.currentTarget.checked)}
+      />
+      <span className="flex flex-col gap-0.5">
+        <span>{label}</span>
+        {hint ? <span className="text-sm text-muted">{hint}</span> : null}
+      </span>
+    </label>
+  );
+}

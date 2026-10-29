@@ -49,7 +49,7 @@ export class ApiError extends Error {
 
 // ---------- refresh ----------
 
-let refreshing: Promise<boolean> | null = null;
+let refreshing: Promise<Schemas["SessionResponse"] | null> | null = null;
 let onSignedOut: () => void = () => {};
 
 /** Called once at start-up: where to go when the session can't be refreshed. */
@@ -58,19 +58,20 @@ export function setSignedOutHandler(fn: () => void): void {
 }
 
 /** `POST /auth/refresh` with the HttpOnly cookie. Concurrent callers share one request. */
-export function refresh(): Promise<boolean> {
+/** The new session (its user included), or null when there is none. */
+export function refresh(): Promise<Schemas["SessionResponse"] | null> {
   refreshing ??= (async () => {
     try {
       const r = await fetch(`${BASE}/auth/refresh`, { method: "POST", credentials: "include" });
       if (!r.ok) {
         setToken(null);
-        return false;
+        return null;
       }
       const body = (await r.json()) as Schemas["SessionResponse"];
       setToken(body.accessToken);
-      return true;
+      return body;
     } catch {
-      return false;
+      return null;
     } finally {
       queueMicrotask(() => {
         refreshing = null;

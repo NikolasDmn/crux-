@@ -46,14 +46,9 @@ export function me(): Promise<User> {
 }
 
 /** At start-up: a session from the refresh cookie, if there is one. */
+/** The refresh answers with the user too: no second round trip before the first screen (spec 6). */
 export async function restore(): Promise<User | null> {
-  if (!(await refresh())) return null;
-  try {
-    return await me();
-  } catch {
-    setToken(null);
-    return null;
-  }
+  return (await refresh())?.user ?? null;
 }
 
 export function deletionStatus() {

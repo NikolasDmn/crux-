@@ -45,6 +45,51 @@ function pdfjsAssets(): Plugin {
   };
 }
 
+// Spec 6: Home on a cold load. The shell and Home route chunks are only found once the router
+// runs; preload them from index.html so they load alongside the entry, not after it.
+function preloadFirstScreen(): Plugin {
+  const routes = [
+    /src\/routes\/_app\.tsx\?tsr-split=component$/,
+    /src\/routes\/_app\/index\.tsx\?tsr-split=component$/,
+  ];
+  return {
+    name: "crux-preload-first-screen",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(_html, ctx) {
+        const bundle = ctx.bundle;
+        if (!bundle) return [];
+        const chunks = Object.values(bundle).filter((c) => c.type === "chunk");
+        // Just the two route chunks: preloading their imports too (40-odd small files) and the font
+        // competed with the stylesheet and made the first paint later, not sooner.
+        const files = chunks
+          .filter((c) => c.facadeModuleId && routes.some((r) => r.test(c.facadeModuleId!)))
+          .map((c) => c.fileName);
+        // The text font too: otherwise it's found only once the stylesheet applies, and the largest
+        // text (Home's heading) repaints when it finally arrives.
+        const font = Object.values(bundle).find((a) => /geist-latin-wght-normal.*\.woff2$/.test(a.fileName));
+        return [
+          ...files.map((f) => ({
+            tag: "link",
+            attrs: { rel: "modulepreload", href: `/${f}` },
+            injectTo: "head" as const,
+          })),
+          ...(font
+            ? [
+                {
+                  tag: "link",
+                  attrs: { rel: "preload", as: "font", type: "font/woff2", href: `/${font.fileName}`, crossorigin: "" },
+                  injectTo: "head" as const,
+                },
+              ]
+            : []),
+        ];
+      },
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     tanstackRouter({
@@ -56,6 +101,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     pdfjsAssets(),
+    preloadFirstScreen(),
   ],
   resolve: {
     alias: [
@@ -76,7 +122,13 @@ export default defineConfig({
     },
   },
   // No data: URLs: the CSP allows fonts and images from 'self' only.
-  build: { outDir: "dist", sourcemap: true, target: "es2022", assetsInlineLimit: 0, manifest: true },
+  build: {
+    outDir: "dist",
+    sourcemap: true,
+    target: "es2022",
+    assetsInlineLimit: 0,
+    manifest: true,
+  },
   test: {
     environment: "jsdom",
     globals: true,

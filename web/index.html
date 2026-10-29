@@ -8,9 +8,39 @@
     <title>Crux</title>
     <!-- Applies the saved theme before first paint (a file, not inline: CSP script-src 'self'). -->
     <script src="/theme-init.js"></script>
+    <!-- The grounds before the stylesheet arrives (inline styles are allowed: style-src 'unsafe-inline'). -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #fafaf9;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]),
+        html:not([data-theme="light"]) body {
+          background: #161618;
+        }
+      }
+      html[data-theme="dark"],
+      html[data-theme="dark"] body {
+        background: #161618;
+      }
+      #boot {
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Painted at once, replaced when the app mounts (spec 6: first paint before the bundle). -->
+    <div id="root">
+      <div id="boot" role="status" aria-label="Loading Crux">
+        <img src="/crux-mark.svg" width="40" height="40" alt="" />
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

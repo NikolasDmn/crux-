@@ -6,8 +6,10 @@ import { useCourse, useDeadlines, nextExam } from "@/features/courses/api";
 import { ApiError } from "@/lib/api";
 import { relativeDays } from "@/lib/time";
 import { useUser } from "@/app/auth";
+import { CourseAskButton } from "@/features/ai/course-ask";
 
-// Every course page (frontend-spec 4, 5.2): --course set on the layout root, a header and the tabs.
+// Every course page (frontend-spec 4, 5.2): --course set on the layout root, a header (with Ask AI)
+// and the tabs.
 export const Route = createFileRoute("/_app/c/$courseId")({ component: CourseLayout });
 
 const TABS: { to: string; label: string; exact?: boolean }[] = [
@@ -47,11 +49,14 @@ function CourseLayout() {
             <Dot className="size-2.5" />
             <h1 className="m-0 text-xl font-semibold tracking-[-0.01em]">{course.data.name}</h1>
             <span className="font-mono text-sm text-muted">{course.data.code}</span>
-            {exam ? (
-              <span className="ml-auto text-sm text-muted">
-                {exam.type === "Resit" ? "Resit" : "Exam"} {relativeDays(exam.startsAt, user.timeZone)}
-              </span>
-            ) : null}
+            <span className="ml-auto flex items-center gap-3">
+              {exam ? (
+                <span className="text-sm text-muted">
+                  {exam.type === "Resit" ? "Resit" : "Exam"} {relativeDays(exam.startsAt, user.timeZone)}
+                </span>
+              ) : null}
+              <CourseAskButton courseId={courseId} />
+            </span>
           </div>
         ) : (
           <Skeleton className="h-7 w-72" />

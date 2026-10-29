@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { api, unwrap, type Schemas } from "@/lib/api";
+import { api, ApiError, unwrap, type Schemas } from "@/lib/api";
+import { readEvents, type SseEvent } from "@/lib/stream";
 
 export type AiSettings = Schemas["AiSettingsView"];
 export type AiSettingsPatch = Schemas["AiSettingsPatch"];
@@ -133,5 +134,70 @@ export function usePutCourseAi(courseId: string) {
       qc.setQueryData(keys.course(courseId), v);
       gateChanged(qc);
     },
+  });
+}
+
+// Ask AI (frontend-spec 5.5).
+
+export type Conversation = Schemas["ConversationView"];
+export type Message = Schemas["MessageView"];
+
+export function useConversations(courseId: string, scope: string, materialId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ["ai", "conversations", courseId, scope, materialId ?? null],
+    enabled,
+    queryFn: () =>
+      unwrap(
+        api.GET("/ai/conversations", {
+          params: { query: { courseId, scope, ...(materialId ? { materialId } : {}) } },
+        }),
+      ),
+  });
+}
+
+export function useConversation(id: string | null) {
+  return useQuery({
+    queryKey: ["ai", "conversation", id],
+    enabled: !!id,
+    queryFn: () =>
+      unwrap(api.GET("/ai/conversations/{conversation_id}", { params: { path: { conversation_id: id! } } })),
+  });
+}
+
+export function createConversation(body: Schemas["ConversationInput"]) {
+  return unwrap(api.POST("/ai/conversations", { body }));
+}
+
+/**
+ * Sends a message and yields the reply's events as they arrive (2.3: the body of the POST, read
+ * with a stream reader). Gate, budget and rate-limit errors throw before the first event.
+ */
+export async function* sendMessage(
+  conversationId: string,
+  body: Schemas["SendInput"],
+  signal?: AbortSignal,
+): AsyncGenerator<SseEvent> {
+  const { response, error } = await api.POST("/ai/conversations/{conversation_id}/messages", {
+    params: { path: { conversation_id: conversationId } },
+    body,
+    parseAs: "stream",
+    ...(signal ? { signal } : {}),
+  });
+  if (!response.ok) throw ApiError.from(response.status, error);
+  if (!response.body) return;
+  yield* readEvents(response.body);
+}
+
+export function useFeedback(conversationId: string | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ messageId, feedback }: { messageId: number; feedback: "Up" | "Down" | null }) =>
+      unwrap(
+        api.POST("/ai/messages/{message_id}/feedback", {
+          params: { path: { message_id: messageId } },
+          body: { feedback },
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["ai", "conversation", conversationId] }),
   });
 }

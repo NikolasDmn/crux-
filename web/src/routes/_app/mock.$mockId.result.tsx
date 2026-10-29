@@ -11,6 +11,7 @@ import { Field, Select, Textarea } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/misc";
 import { OptionRow } from "@/components/ui/option-row";
 import { useToast } from "@/components/ui/toast";
+import { AskButton } from "@/features/ai/ask-panel";
 import { getQuestion } from "@/features/bank/api";
 import { CardDialog, type CardDraft } from "@/features/flash/components/card-dialog";
 import { QuestionImage } from "@/features/files/question-image";
@@ -55,7 +56,10 @@ function Result() {
             {m.status === "Reviewed" ? "Reviewed" : misses ? `${misses} to review` : "Nothing to review"}
           </span>
         </div>
-        <span className="ml-auto font-mono text-3xl font-semibold tnum">{scoreText(m.score, m.maxScore)}</span>
+        <span className="ml-auto flex items-center gap-4">
+          <AskButton target={{ courseId: m.courseId, scope: "Mock", mockId: m.id, title: m.name }} />
+          <span className="font-mono text-3xl font-semibold tnum">{scoreText(m.score, m.maxScore)}</span>
+        </span>
       </div>
       {toGrade ? (
         <Banner tone="notice">

@@ -11,6 +11,7 @@ const MESSAGES: Record<string, string> = {
   email_unverified: "Verify your email address first.",
   rate_limited: "Too many attempts. Try again in a moment.",
   ai_disabled: "AI is off here.",
+  ai_budget_exceeded: "This month's AI spending cap is reached. Raise it in Settings > AI.",
   mock_time_over: "Time is up for this mock.",
   quota_exceeded: "You're out of storage space.",
   internal: "Something went wrong on our side. Try again.",

@@ -1,5 +1,5 @@
 import "katex/dist/katex.min.css";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
@@ -31,13 +31,23 @@ function Span({ node: _, ...p }: ComponentProps<"span"> & { node?: unknown }) {
   return <span {...p} />;
 }
 
-export function Markdown({ children, className }: { children: string; className?: string }) {
+export function Markdown({
+  children,
+  className,
+  link,
+}: {
+  children: string;
+  className?: string;
+  /** Renders a link itself (e.g. the AI panel's `#p-12` citation chips); `undefined` keeps the default. */
+  link?: (href: string | undefined, children: ReactNode) => ReactNode | undefined;
+}) {
+  const A = ({ node: _, ...p }: ComponentProps<"a"> & { node?: unknown }) => link?.(p.href, p.children) ?? <a {...p} />;
   return (
     <div className={cn("crux-prose", className)}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[[rehypeSanitize, schema], rehypeMath]}
-        components={{ span: Span }}
+        components={link ? { span: Span, a: A } : { span: Span }}
       >
         {normalizeDelimiters(children)}
       </ReactMarkdown>

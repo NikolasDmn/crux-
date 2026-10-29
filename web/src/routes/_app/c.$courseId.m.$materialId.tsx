@@ -10,6 +10,7 @@ import { Banner } from "@/components/ui/banner";
 import { EmptyList } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/misc";
 import { useUser } from "@/app/auth";
+import { SelectionAsk } from "@/features/ai/course-ask";
 import { useToast } from "@/components/ui/toast";
 import {
   fileUrl,
@@ -35,8 +36,8 @@ import { track } from "@/lib/activity";
 
 // The material viewer (frontend-spec 4): pdf.js or markdown; a purged original shows its page
 // thumbnails if kept, else its extracted text per page, with a banner and (Editors) Re-upload. Page views go to the activity queue. Check questions follow their
-// page (PDF) or section (notes); without any, the end offers a quick quiz on the lecture. Ask AI
-// arrives with step 8.
+// page (PDF) or section (notes); without any, the end offers a quick quiz on the lecture. Selecting
+// text in the PDF offers Ask AI about that quote.
 const PdfViewer = lazy(() => import("@/features/materials/pdf-viewer").then((m) => ({ default: m.PdfViewer })));
 
 export const Route = createFileRoute("/_app/c/$courseId/m/$materialId")({
@@ -202,6 +203,7 @@ function Viewer() {
   });
   const pages = fileInfo.data?.pageCount ?? null;
   const [manage, setManage] = useState(false);
+  const pagesRef = useRef<HTMLDivElement>(null);
   const [quiz, setQuiz] = useState(false);
 
   // material.open now, material.close with the seconds spent (spec 5.11).
@@ -274,9 +276,14 @@ function Viewer() {
                 className={readShare(maxPage, pages) >= 1 ? "opacity-70" : undefined}
               />
             ) : null}
-            <Suspense fallback={<Skeleton className="h-[70vh]" />}>
-              <PdfViewer url={url.data.url} initialPage={page ?? m.pageFrom ?? 1} onPage={onPage} />
-            </Suspense>
+            <div ref={pagesRef}>
+              <Suspense fallback={<Skeleton className="h-[70vh]" />}>
+                <PdfViewer url={url.data.url} initialPage={page ?? m.pageFrom ?? 1} onPage={onPage} />
+              </Suspense>
+            </div>
+            {m.aiAllowed ? (
+              <SelectionAsk root={pagesRef} courseId={courseId} materialId={m.id} fileId={m.fileId} title={m.title} />
+            ) : null}
             <CheckBlock checks={reached(checks.data ?? [], maxPage, pages)} materialId={m.id} />
             {checks.data && !checks.data.length && pages && maxPage >= pages ? (
               <EndQuiz onQuiz={() => setQuiz(true)} />

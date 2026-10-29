@@ -50,6 +50,9 @@ async fn fixture(h: &common::Harness, alice: &str, n: usize) -> Fixture {
     let p = call(&h.app, "POST", &format!("/courses/{course}/papers"), Some(alice), Some(json!({"paperKey": "P", "label": "P"})), &[])
         .await
         .json;
+    // A fixture per route: expire the earlier fixtures' invites, or Alice reaches the cap on open
+    // invites (audit M5).
+    sqlx::query("UPDATE Invite SET RevokedAt = UTC_TIMESTAMP()").execute(&h.db.pool).await.unwrap();
     let i = call(&h.app, "POST", "/invites", Some(alice), Some(json!({})), &[]).await.json;
     let q = call(
         &h.app,

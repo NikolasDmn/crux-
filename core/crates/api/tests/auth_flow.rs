@@ -288,6 +288,9 @@ async fn invites_need_verified_email_and_idempotency_replays() {
     assert_eq!(b.status, StatusCode::CREATED);
     assert_eq!(a.json["code"], b.json["code"], "same key, same response");
     assert_eq!(b.headers.get("idempotent-replay").unwrap(), "true");
+    // Audit L3: the key belongs to that request; another body with it is refused, not replayed.
+    let other = call(&h.app, "POST", "/invites", Some(&token), Some(json!({"maxUses": 3})), &key).await;
+    assert_eq!(other.json["error"]["details"]["fields"][0]["code"], "reused", "{}", other.json);
     let n: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM Invite WHERE InvitedBy IS NOT NULL").fetch_one(&h.db.pool).await.unwrap();
     assert_eq!(n.0, 1, "no duplicate row");
 

@@ -347,6 +347,45 @@ pub async fn reset_password(ctx: &Ctx, token: &str, new_password: &str, accept_b
     Ok(())
 }
 
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChangePasswordInput {
+    pub current_password: String,
+    pub new_password: String,
+    /// The user saw the "breached password" warning and chose to keep it.
+    #[serde(default)]
+    pub accept_breached_password: bool,
+}
+
+/// `POST /auth/change-password` (signed in): checks the current password, sets the new one and
+/// signs out every other session. The session behind `refresh_token` (this device) stays.
+pub async fn change_password(ctx: &Ctx, actor: &Actor, input: ChangePasswordInput, refresh_token: Option<&str>) -> AppResult<()> {
+    let mut conn = ctx.pool.acquire().await?;
+    let user = users::by_id(&mut conn, actor.user_id).await?.ok_or(AppError::NotFound)?;
+    drop(conn);
+    let ok = match &user.password_hash {
+        Some(h) => password::verify_blocking(input.current_password.clone(), h.clone()).await,
+        None => false,
+    };
+    if !ok {
+        return Err(ValidationErrors::single("currentPassword", "wrong", "That isn't your password.").into());
+    }
+    let breached = crate::ctx::password_breached(ctx, &input.new_password).await;
+    let mut errors = rules::validate_password(&input.new_password, breached, input.accept_breached_password);
+    if input.new_password == input.current_password {
+        errors.push("newPassword", "same", "Choose a password you aren't using now.");
+    }
+    errors.into_result()?;
+    let hash = password::hash_blocking(input.new_password).await?;
+    let now = ctx.clock.now();
+    let mut tx = crux_repo::begin(&ctx.pool).await?;
+    users::set_password_hash(&mut tx, user.id, &hash).await?;
+    let keep = refresh_token.map(rules::token_hash).unwrap_or_default();
+    sessions::revoke_others(&mut tx, user.id, &keep, now, RevokeReason::PasswordReset).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
 /// `POST /internal/v1/service-token`: other services trade the shared bootstrap secret for a
 /// 5-minute token (spec 3.2; OPEN-QUESTIONS.md).
 pub fn issue_service_token(ctx: &Ctx, presented_secret: &str, caller: &str, audience: &str) -> AppResult<String> {

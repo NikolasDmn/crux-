@@ -234,6 +234,37 @@ async fn verify_email_and_reset_password() {
 }
 
 #[tokio::test]
+async fn change_password_keeps_this_device_and_signs_out_the_rest() {
+    let Some(h) = common::harness().await else { return };
+    let (token, _, here) = signup(&h.app, &h.t.ctx, "chg").await;
+    let login = |pw: &'static str| call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "chg", "password": pw})), &[]);
+    let elsewhere = refresh_cookie(&login("correct horse battery").await.headers).unwrap();
+    let cookie = |c: &str| format!("crux_refresh={c}");
+    let here_hdr = cookie(&here);
+    let here_hdrs = [("cookie", here_hdr.as_str())];
+    let change = |body: serde_json::Value| call(&h.app, "POST", "/auth/change-password", Some(&token), Some(body), &here_hdrs);
+
+    let wrong = change(json!({"currentPassword": "not my password", "newPassword": "a whole new passphrase"})).await;
+    assert_eq!(wrong.status, StatusCode::UNPROCESSABLE_ENTITY, "{}", wrong.json);
+    let f = &wrong.json["error"]["details"]["fields"][0];
+    assert_eq!((f["field"].as_str(), f["code"].as_str()), (Some("currentPassword"), Some("wrong")), "{}", wrong.json);
+    let short = change(json!({"currentPassword": "correct horse battery", "newPassword": "short"})).await;
+    assert_eq!(short.status, StatusCode::UNPROCESSABLE_ENTITY);
+    let anon = call(&h.app, "POST", "/auth/change-password", None, Some(json!({"currentPassword": "x", "newPassword": "y"})), &[]).await;
+    assert_eq!(anon.status, StatusCode::UNAUTHORIZED);
+
+    let ok = change(json!({"currentPassword": "correct horse battery", "newPassword": "a whole new passphrase"})).await;
+    assert_eq!(ok.status, StatusCode::NO_CONTENT, "{}", ok.json);
+    let r = call(&h.app, "POST", "/auth/refresh", None, None, &[("cookie", &cookie(&here))]).await;
+    assert_eq!(r.status, StatusCode::OK, "this device stays signed in");
+    let r = call(&h.app, "POST", "/auth/refresh", None, None, &[("cookie", &cookie(&elsewhere))]).await;
+    assert_eq!(r.status, StatusCode::UNAUTHORIZED, "other devices are signed out");
+    assert_eq!(login("correct horse battery").await.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(login("a whole new passphrase").await.status, StatusCode::OK);
+    h.db.drop_db().await;
+}
+
+#[tokio::test]
 async fn invites_need_verified_email_and_idempotency_replays() {
     let Some(h) = common::harness().await else { return };
     let (token, user, _) = signup(&h.app, &h.t.ctx, "inviter").await;

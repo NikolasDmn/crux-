@@ -107,6 +107,22 @@ pub async fn request_verify_email(State(state): State<AppState>, Auth(actor): Au
     Ok(StatusCode::ACCEPTED)
 }
 
+/// Change the password while signed in. Signs out every other device; this one stays signed in.
+/// The new password's rule errors come under `password` (as at signup and reset).
+#[utoipa::path(post, path = "/auth/change-password", tag = "auth", security(("bearer" = [])),
+    request_body = auth::ChangePasswordInput,
+    responses((status = 204), (status = 401, body = ErrorBody), (status = 422, body = ErrorBody)))]
+pub async fn change_password(
+    State(state): State<AppState>,
+    Auth(actor): Auth,
+    jar: CookieJar,
+    JsonBody(input): JsonBody<auth::ChangePasswordInput>,
+) -> ApiResult<StatusCode> {
+    let token = jar.get(REFRESH_COOKIE).map(|c| c.value().to_string());
+    auth::change_password(&state.ctx, &actor, input, token.as_deref()).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 #[derive(Deserialize, ToSchema)]
 pub struct TokenInput {
     pub token: String,

@@ -65,6 +65,24 @@ pub async fn revoke_all_for_user(conn: &mut MySqlConnection, user_id: i64, at: D
     Ok(res.rows_affected())
 }
 
+/// Every session of the user except the one with `keep_hash` (the device making the change).
+pub async fn revoke_others(
+    conn: &mut MySqlConnection,
+    user_id: i64,
+    keep_hash: &str,
+    at: DateTime<Utc>,
+    reason: RevokeReason,
+) -> RepoResult<u64> {
+    let res = sqlx::query("UPDATE UserSession SET RevokedAt = ?, RevokeReason = ? WHERE UserId = ? AND RevokedAt IS NULL AND TokenHash <> ?")
+        .bind(at)
+        .bind(reason.as_db())
+        .bind(user_id)
+        .bind(keep_hash)
+        .execute(conn)
+        .await?;
+    Ok(res.rows_affected())
+}
+
 /// purge.tokens job: sessions past expiry, or revoked more than `keep_revoked_until` ago (kept a
 /// while so reuse of a rotated token is still detected).
 pub async fn purge(conn: &mut MySqlConnection, now: DateTime<Utc>, revoked_before: DateTime<Utc>) -> RepoResult<u64> {

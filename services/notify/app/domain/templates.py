@@ -55,7 +55,7 @@ def inbox(kind: str, payload: dict[str, Any], tz: str = "Europe/Amsterdam") -> I
         return InboxText(
             f"How did {_exam_name(p)} go?",
             "Record how it went (and the grade when you have it). A fail offers a resit plan.",
-            f"{course_link}/exams?checkin={p.get('deadlineId', '')}" if course else "/",
+            f"{course_link}/exams" if course else "/",
         )
     if kind == "flash.due":
         n = int(p.get("dueCount", 0))
@@ -68,7 +68,7 @@ def inbox(kind: str, payload: dict[str, Any], tz: str = "Europe/Amsterdam") -> I
         return InboxText(
             f"{p.get('mockName', 'Your mock')} is graded",
             p.get("summary", "Open the review to see how you did."),
-            f"/mocks/{p.get('mockId', '')}/review",
+            f"/mock/{p.get('mockId', '')}/result",
         )
     if kind == "import.ready":
         return InboxText(
@@ -87,7 +87,8 @@ def inbox(kind: str, payload: dict[str, Any], tz: str = "Europe/Amsterdam") -> I
         return InboxText(
             f'{who} shared "{p.get("courseName", "a course")}" with you',
             f"As {p.get('role', 'Viewer')}. Accept to add it to your courses.",
-            "/courses?invitations=1",
+            # Accept / Decline sit on the item itself (and in the sidebar).
+            "/inbox",
         )
     if kind == "file.infected":
         return InboxText(

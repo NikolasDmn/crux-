@@ -883,6 +883,25 @@
         ],
         "type": "object"
       },
+      "ChangePasswordInput": {
+        "properties": {
+          "acceptBreachedPassword": {
+            "description": "The user saw the \"breached password\" warning and chose to keep it.",
+            "type": "boolean"
+          },
+          "currentPassword": {
+            "type": "string"
+          },
+          "newPassword": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "type": "object"
+      },
       "CheckInput": {
         "properties": {
           "position": {
@@ -9608,6 +9627,55 @@
         "summary": "A practice, notes, warm-up or review answer. Idempotent on `clientId`.",
         "tags": [
           "practice"
+        ]
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "operationId": "postAuthChangePassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change the password while signed in. Signs out every other device; this one stays signed in.\nThe new password's rule errors come under `password` (as at signup and reset).",
+        "tags": [
+          "auth"
         ]
       }
     },

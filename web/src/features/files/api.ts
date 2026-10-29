@@ -11,6 +11,17 @@ export function fileUrl(id: string) {
   return unwrap(api.GET("/files/{file_id}/url", { params: { path: { file_id: id } } }));
 }
 
+/** Saves a file through its signed URL (on this origin, so the CSP allows it). */
+export async function downloadFile(id: string, name?: string): Promise<void> {
+  const { url } = await fileUrl(id);
+  const a = document.createElement("a");
+  a.href = sameOrigin(url, location.origin);
+  a.download = name ?? "";
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+
 export function pageText(id: string, page: number) {
   return unwrap(api.GET("/files/{file_id}/pages/{page}/text", { params: { path: { file_id: id, page } } }));
 }

@@ -35,6 +35,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(auth::confirm_verify_email))
         .routes(routes!(auth::forgot_password))
         .routes(routes!(auth::reset_password))
+        .routes(routes!(auth::change_password))
         .routes(routes!(me::get_me, me::patch_me))
         .routes(routes!(me::get_settings, me::patch_settings))
         .routes(routes!(me::get_tier))

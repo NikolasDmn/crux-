@@ -35,6 +35,7 @@ pub const ROUTES: &[(&str, &str, Policy)] = &[
     ("POST", "/auth/verify-email/confirm", Policy::Public),
     ("POST", "/auth/password/forgot", Policy::Public),
     ("POST", "/auth/password/reset", Policy::Public),
+    ("POST", "/auth/change-password", Policy::Owns),
     ("GET", "/me", Policy::Owns),
     ("PATCH", "/me", Policy::Owns),
     ("GET", "/me/settings", Policy::Owns),

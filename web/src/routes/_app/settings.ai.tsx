@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useUser } from "@/app/auth";
 import { Badge } from "@/components/ui/badge";
 import { Banner } from "@/components/ui/banner";
@@ -24,7 +24,6 @@ import {
   type Tutor,
 } from "@/features/ai/api";
 import {
-  capToMicro,
   FEATURE_LABEL,
   MAX_TUTOR_TEXT,
   PERSONALITIES,
@@ -33,8 +32,11 @@ import {
   readRules,
   STYLE_LABEL,
   STYLES,
-  usd,
 } from "@/features/ai/lib/format";
+import { usePatchSettings } from "@/features/account/api";
+import { CURRENCIES, capInput, capText, currencyFor, isCurrency, money, type Currency } from "@/features/ai/lib/money";
+import { useSettings } from "@/features/plan/api";
+import type { Schemas } from "@/lib/api";
 import { fieldErrors, messageFor } from "@/lib/errors";
 import { formatInZone } from "@/lib/time";
 
@@ -539,11 +541,30 @@ function Tutors({ s }: { s: AiSettings }) {
   );
 }
 
+/** Your currency for AI money: chosen here (settings.extra.currency), else your region's. */
+function useCurrency(): [Currency, (c: Currency) => void] {
+  const settings = useSettings();
+  const save = usePatchSettings();
+  const extra = (settings.data?.extra ?? {}) as Record<string, unknown>;
+  const cur = isCurrency(extra.currency) ? extra.currency : currencyFor(navigator.language);
+  const set = (c: Currency) => {
+    if (!settings.data) return;
+    save.mutate({
+      version: settings.data.version,
+      extra: { ...extra, currency: c } as unknown as Schemas["SettingsPatch"]["extra"],
+    });
+  };
+  return [cur, set];
+}
+
 function Spending({ s }: { s: AiSettings }) {
   const usage = useUsage();
   const patch = usePatch();
-  const [cap, setCap] = useState(s.monthlyCapMicroUsd ? String(s.monthlyCapMicroUsd / 1_000_000) : "");
-  const parsed = capToMicro(cap);
+  const [cur, setCur] = useCurrency();
+  const [cap, setCap] = useState(() => capText(s.monthlyCapMicroUsd, cur));
+  // Show the cap in the currency once it's known (settings load after the first render).
+  useEffect(() => setCap(capText(s.monthlyCapMicroUsd, cur)), [cur, s.monthlyCapMicroUsd]);
+  const parsed = capInput(cap, cur);
   const current = s.monthlyCapMicroUsd ?? "none";
   return (
     <Card className="flex flex-col gap-4">
@@ -555,10 +576,23 @@ function Spending({ s }: { s: AiSettings }) {
           if (parsed !== null) patch({ monthlyCapMicroUsd: parsed === "none" ? 0 : parsed });
         }}
       >
+        <Field label="Currency" className="w-28">
+          {(ids) => (
+            <Select {...ids} value={cur} onChange={(e) => setCur(e.currentTarget.value as Currency)}>
+              {Object.keys(CURRENCIES).map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </Select>
+          )}
+        </Field>
         <Field
-          label="Monthly cap (USD)"
+          label={`Monthly cap (${cur})`}
           error={parsed === null ? "Use an amount like 5 or 2.50." : undefined}
-          hint="AI stops for the month once its estimated cost reaches this. Empty: no cap."
+          hint={
+            cur === "USD"
+              ? "AI stops for the month once its estimated cost reaches this. Empty: no cap."
+              : "AI stops for the month once its estimated cost reaches this. Providers bill in USD, so other currencies are approximate. Empty: no cap."
+          }
           className="sm:max-w-96"
         >
           {(ids) => <Input {...ids} inputMode="decimal" value={cap} onChange={(e) => setCap(e.currentTarget.value)} />}
@@ -584,12 +618,12 @@ function Spending({ s }: { s: AiSettings }) {
                   <td className="py-2.5 pr-4 font-mono tnum">{m.month}</td>
                   <td className="py-2.5 pr-4 text-right font-mono tnum">{m.runs}</td>
                   <td className="py-2.5 pr-4 text-right font-mono tnum">
-                    {usd(m.spentMicroUsd)}
-                    {m.capMicroUsd ? <span className="text-muted"> / {usd(m.capMicroUsd)}</span> : null}
+                    {money(m.spentMicroUsd, cur)}
+                    {m.capMicroUsd ? <span className="text-muted"> / {money(m.capMicroUsd, cur)}</span> : null}
                   </td>
                   <td className="py-2.5 text-sm text-muted">
                     {Object.entries(m.byFeature)
-                      .map(([f, c]) => `${FEATURE_LABEL[f as keyof typeof FEATURE_LABEL] ?? f} ${usd(c)}`)
+                      .map(([f, c]) => `${FEATURE_LABEL[f as keyof typeof FEATURE_LABEL] ?? f} ${money(c, cur)}`)
                       .join(" · ") || "–"}
                   </td>
                 </tr>

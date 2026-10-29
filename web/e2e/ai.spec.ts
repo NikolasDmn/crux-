@@ -52,6 +52,15 @@ test("15a. turn AI on and add a key", async () => {
   await page.getByLabel("API key", { exact: true }).fill(`fake-valid-${RUN}`);
   await page.getByRole("button", { name: "Add key" }).click();
   await expect(page.getByText(/^Checked /)).toBeVisible();
+
+  // The monthly cap in your own currency (stored in USD; other currencies are approximate).
+  const spending = page.locator("section").filter({ has: page.getByText("Spending", { exact: true }) });
+  await spending.getByLabel("Currency", { exact: true }).selectOption("EUR");
+  await expect(spending.getByLabel("Monthly cap (EUR)")).toBeVisible();
+  await spending.getByLabel("Monthly cap (EUR)").fill("5");
+  await spending.getByRole("button", { name: "Save", exact: true }).click();
+  await page.reload();
+  await expect(spending.getByLabel("Monthly cap (EUR)")).toHaveValue("5");
   await expectAccessible(page, "AI settings, on");
 });
 

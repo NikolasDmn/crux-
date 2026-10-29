@@ -3694,7 +3694,7 @@ export interface components {
             /** Feedback */
             feedback: string | null;
             /** Id */
-            id: number;
+            id: string;
             /** Role */
             role: string;
             /** Servedby */
@@ -5812,7 +5812,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                message_id: number;
+                message_id: string;
             };
             cookie?: never;
         };

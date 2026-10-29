@@ -36,7 +36,7 @@ export interface Citation {
 export interface Reply {
   text: string;
   citations: Citation[];
-  messageId: number | null;
+  messageId: string | null;
   servedBy: string | null;
   contextUsed: ContextUsed | null;
   costMicroUsd: number | null;
@@ -67,7 +67,7 @@ export function applyEvent(r: Reply, event: string, data: unknown): Reply {
       return {
         ...r,
         done: true,
-        messageId: typeof d.messageId === "number" ? d.messageId : null,
+        messageId: typeof d.messageId === "string" ? d.messageId : null,
         servedBy: typeof d.servedBy === "string" ? d.servedBy : null,
         contextUsed: (d.contextUsed as ContextUsed | undefined) ?? null,
         costMicroUsd: typeof d.costMicroUsd === "number" ? d.costMicroUsd : null,

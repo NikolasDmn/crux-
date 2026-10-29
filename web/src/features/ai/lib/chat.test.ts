@@ -8,14 +8,14 @@ describe("chat", () => {
     r = applyEvent(r, "delta", { text: "spread [p.3]." });
     r = applyEvent(r, "citation", { fileId: "f1", page: 3, chunkNo: 0, quote: "spread" });
     r = applyEvent(r, "done", {
-      messageId: 7,
+      messageId: "01MSG0000000000000000000007",
       servedBy: null,
       contextUsed: { shared: ["mistakes"] },
       costMicroUsd: 12,
     });
     expect(r).toMatchObject({
       text: "Variance is spread [p.3].",
-      messageId: 7,
+      messageId: "01MSG0000000000000000000007",
       done: true,
       costMicroUsd: 12,
       contextUsed: { shared: ["mistakes"] },

@@ -194,7 +194,7 @@ export async function* sendMessage(
 export function useFeedback(conversationId: string | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ messageId, feedback }: { messageId: number; feedback: "Up" | "Down" | null }) =>
+    mutationFn: ({ messageId, feedback }: { messageId: string; feedback: "Up" | "Down" | null }) =>
       unwrap(
         api.POST("/ai/messages/{message_id}/feedback", {
           params: { path: { message_id: messageId } },

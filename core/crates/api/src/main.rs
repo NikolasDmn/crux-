@@ -229,6 +229,7 @@ async fn build_ctx(cli: &Cli, pool: crux_repo::MySqlPool) -> anyhow::Result<Ctx>
     });
     anyhow::ensure!(!cli.service_secret.is_empty(), "CRUX_SERVICE_SECRET is required");
     crux_service::prod_guard::check(|k| std::env::var(k).ok())?;
+    crux_domain::page::set_cursor_key(&cli.service_secret);
     let kv = RedisKv::connect(&cli.redis_url).await.context("connect to Redis")?;
     Ok(Ctx {
         pool,

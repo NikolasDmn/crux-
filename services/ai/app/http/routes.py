@@ -132,7 +132,7 @@ async def send_message(conversation_id: str, body: chat.SendInput, user: User, r
 
 
 @router.post("/messages/{message_id}/feedback", status_code=204)
-async def message_feedback(message_id: int, body: chat.FeedbackInput, user: User, request: Request) -> Response:
+async def message_feedback(message_id: str, body: chat.FeedbackInput, user: User, request: Request) -> Response:
     await chat.feedback(deps(request), user, message_id, body)
     return Response(status_code=204)
 

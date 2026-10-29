@@ -53,7 +53,7 @@ class CitationView(Camel):
 
 
 class MessageView(Camel):
-    id: int
+    id: str
     role: str
     content: str
     anchor: dict[str, Any] | None
@@ -178,7 +178,7 @@ async def _messages(s: Any, conv_id: int) -> list[MessageView]:
             )
     return [
         MessageView(
-            id=m.Id,
+            id=m.PublicId,
             role=m.Role,
             content=m.Content,
             anchor=m.Anchor,
@@ -203,7 +203,7 @@ class FeedbackInput(Camel):
     feedback: str | None
 
 
-async def feedback(deps: Deps, user: Principal, message_id: int, inp: FeedbackInput) -> None:
+async def feedback(deps: Deps, user: Principal, message_id: str, inp: FeedbackInput) -> None:
     if inp.feedback not in ("Up", "Down", None):
         raise ValidationFailed.field("feedback", "invalid", "Use Up, Down or null.")
     async with transaction(deps.sessions) as s:
@@ -212,13 +212,15 @@ async def feedback(deps: Deps, user: Principal, message_id: int, inp: FeedbackIn
                 select(message.c.Id)
                 .join(conversation, conversation.c.Id == message.c.ConversationId)
                 .where(
-                    message.c.Id == message_id, conversation.c.UserRef == user.user_ref, message.c.Role == "Assistant"
+                    message.c.PublicId == message_id,
+                    conversation.c.UserRef == user.user_ref,
+                    message.c.Role == "Assistant",
                 )
             )
         ).first()
         if row is None:
             raise NotFound()
-        await s.execute(update(message).where(message.c.Id == message_id).values(Feedback=inp.feedback))
+        await s.execute(update(message).where(message.c.Id == row.Id).values(Feedback=inp.feedback))
 
 
 # ---------- sending ----------
@@ -384,7 +386,12 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
         async with transaction(deps.sessions) as s:
             await s.execute(
                 insert(message).values(
-                    ConversationId=conv.Id, Role="User", Content=inp.content, Anchor=inp.anchor, CreatedAt=utcnow()
+                    PublicId=new_id(),
+                    ConversationId=conv.Id,
+                    Role="User",
+                    Content=inp.content,
+                    Anchor=inp.anchor,
+                    CreatedAt=utcnow(),
                 )
             )
         provider, key = runtime.provider(deps, g)
@@ -432,9 +439,11 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
                 yield event("delta", {"text": chunk})
             reply = prompt.trim_words(reply, prep["max_words"])
         transcript_ref = await _store_transcript(deps, user, run_id, prep, reply)
+        public_id = new_id()
         async with transaction(deps.sessions) as s:
             result = await s.execute(
                 insert(message).values(
+                    PublicId=public_id,
                     ConversationId=conv.Id,
                     Role="Assistant",
                     Content=reply,
@@ -465,7 +474,7 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
         yield event(
             "done",
             {
-                "messageId": msg_id,
+                "messageId": public_id,
                 "costMicroUsd": cost,
                 "servedBy": total.served_by,
                 "contextUsed": prep["context_used"],

@@ -165,6 +165,7 @@ message = Table(
     "AiMessage",
     metadata,
     Column("Id", BigInteger, primary_key=True, autoincrement=True),
+    Column("PublicId", String(26), nullable=False),
     Column("ConversationId", BigInteger, nullable=False),
     Column("Role", String(16), nullable=False),
     Column("Content", Text, nullable=False),

@@ -4018,7 +4018,7 @@
           },
           "id": {
             "title": "Id",
-            "type": "integer"
+            "type": "string"
           },
           "role": {
             "title": "Role",
@@ -9262,7 +9262,7 @@
             "required": true,
             "schema": {
               "title": "Message Id",
-              "type": "integer"
+              "type": "string"
             }
           }
         ],

@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/misc";
 import { useToast } from "@/components/ui/toast";
 import { usePatchSettings, type Settings } from "@/features/account/api";
 import { fromSettings, TIMES, toPatch, type StudyForm as Form } from "@/features/account/lib/study";
+import { useGradeScales } from "@/features/courses/api";
 import { useSettings } from "@/features/plan/api";
 import { conflictCurrent, fieldErrors, messageFor } from "@/lib/errors";
 
@@ -26,6 +27,15 @@ function StudyForm({ settings }: { settings: Settings }) {
   const errors = fieldErrors(patch.error);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF({ ...f, [k]: v });
   const dirty = JSON.stringify(f) !== JSON.stringify(fromSettings(settings));
+  const scales = useGradeScales();
+  const builtIn = (scales.data ?? []).filter((s) => s.builtIn);
+  const isOn = (id: string) => !f.gradeScales || f.gradeScales.includes(id);
+  const toggle = (id: string, on: boolean) => {
+    const now = f.gradeScales ?? builtIn.map((s) => s.id);
+    const next = on ? [...now, id] : now.filter((x) => x !== id);
+    // All of them again: back to "all", so new built-ins show up too.
+    set("gradeScales", next.length === builtIn.length ? null : next);
+  };
 
   const send = (base: Settings) =>
     patch.mutate(
@@ -152,6 +162,23 @@ function StudyForm({ settings }: { settings: Settings }) {
           label="Go easy"
           hint="New mocks pick questions you've already got right less often."
         />
+      </Card>
+      <Card className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          <SectionLabel>Grade scales</SectionLabel>
+          <span className="text-sm text-muted">
+            The ones offered when you pick a course&apos;s scale. Your own scales are always there.
+          </span>
+        </div>
+        {scales.isPending ? (
+          <Skeleton className="h-24" />
+        ) : (
+          <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+            {builtIn.map((sc) => (
+              <Check key={sc.id} label={sc.name} checked={isOn(sc.id)} onChange={(on) => toggle(sc.id, on)} />
+            ))}
+          </div>
+        )}
       </Card>
       <div className="flex gap-2">
         <Button type="submit" variant="primary" disabled={!dirty || patch.isPending}>

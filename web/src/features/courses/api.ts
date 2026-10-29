@@ -1,5 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, idempotencyKey, ifMatch, unwrap, type Schemas } from "@/lib/api";
+import { useSettings } from "@/features/plan/api";
+import { readChosen, shownScales } from "./lib/scales";
 
 export type Course = Schemas["CourseView"];
 export type CourseFields = Schemas["CourseFields"];
@@ -133,6 +135,14 @@ export function useRemoveMember(id: string) {
 
 export function useGradeScales() {
   return useQuery({ queryKey: keys.scales, queryFn: () => unwrap(api.GET("/grade-scales")), staleTime: 5 * 60_000 });
+}
+
+/** The scales a picker offers: the ones chosen in Settings > Study (all until chosen), your own,
+ *  and `keep` (a course's current scale). */
+export function useShownGradeScales(keep?: string | null) {
+  const scales = useGradeScales();
+  const settings = useSettings();
+  return { ...scales, data: scales.data && shownScales(scales.data, readChosen(settings.data?.extra), keep) };
 }
 
 export function useInvitations() {

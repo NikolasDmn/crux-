@@ -4,7 +4,7 @@ import { Banner } from "@/components/ui/banner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/field";
-import { idempotencyKey, useCreateCourse, useGradeScales } from "@/features/courses/api";
+import { idempotencyKey, useCreateCourse, useShownGradeScales } from "@/features/courses/api";
 import { ColourPicker } from "@/features/courses/components/colour-picker";
 import { normalizeCode } from "@/features/courses/lib/roles";
 import { DEFAULT_COURSE_COLOR } from "@/lib/color";
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/_app/courses/new")({ component: NewCourse
 
 function NewCourse() {
   const navigate = useNavigate();
-  const scales = useGradeScales();
+  const scales = useShownGradeScales();
   const create = useCreateCourse();
   const [key] = useState(idempotencyKey);
   const gate = useAi("CourseImport");

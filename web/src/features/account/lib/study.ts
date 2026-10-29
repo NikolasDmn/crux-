@@ -1,4 +1,5 @@
 import type { Schemas } from "@/lib/api";
+import { readChosen } from "@/features/courses/lib/scales";
 import type { Settings } from "../api";
 
 // The Study settings form (frontend-spec 4) and its `/me/settings` patch.
@@ -21,6 +22,8 @@ export interface StudyForm {
   studyEnd: string;
   dailyHours: string;
   oneCourse: boolean;
+  /** Built-in grade scales to offer in pickers; null = all (Settings > Study > Grade scales). */
+  gradeScales: string[] | null;
 }
 
 export function fromSettings(s: Settings): StudyForm {
@@ -36,7 +39,13 @@ export function fromSettings(s: Settings): StudyForm {
     studyEnd: str(x.studyEnd, "22:00"),
     dailyHours: String(typeof x.dailyHours === "number" ? x.dailyHours : DEFAULT_HOURS),
     oneCourse: x.multiCoursePerDay !== true,
+    gradeScales: readChosen(x),
   };
+}
+
+function withoutScales(x: Record<string, unknown>): Record<string, unknown> {
+  const { gradeScales: _, ...rest } = x;
+  return rest;
 }
 
 /** The patch for `/me/settings`. `extra` replaces the stored object, so other keys are kept. */
@@ -48,11 +57,13 @@ export function toPatch(f: StudyForm, current: Settings) {
     mockRealLayout: f.realLayout,
     mockGoEasy: f.goEasy,
     extra: {
-      ...(current.extra as Record<string, unknown>),
+      ...withoutScales(current.extra as Record<string, unknown>),
       studyStart: f.studyStart,
       studyEnd: f.studyEnd,
       dailyHours: Number(f.dailyHours),
       multiCoursePerDay: !f.oneCourse,
+      // Only once chosen: absent means all of them.
+      ...(f.gradeScales ? { gradeScales: f.gradeScales } : {}),
       // The schema types `extra` as a closed object; it's free-form JSON.
     } as unknown as Schemas["SettingsPatch"]["extra"],
   };

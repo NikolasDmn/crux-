@@ -456,3 +456,19 @@ async fn files_and_question_images_stay_in_their_course() {
     assert_eq!((yes.json["allowed"].as_bool(), no.json["allowed"].as_bool()), (Some(true), Some(false)));
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn built_in_grade_scales_cover_the_major_systems() {
+    let Some(h) = common::harness().await else { return };
+    let (t, _, _) = signup(&h.app, &h.t.ctx, "scales").await;
+    let all = call(&h.app, "GET", "/grade-scales", Some(&t), None, &[]).await.json;
+    let names: Vec<&str> = all.as_array().unwrap().iter().filter_map(|s| s["name"].as_str()).collect();
+    for n in ["Percent", "NL 1-10", "US letter (A-F)", "German 1.0-5.0", "French /20", "ECTS (A-F)", "UK degree classes"] {
+        assert!(names.contains(&n), "{n} missing from {names:?}");
+    }
+    let german = all.as_array().unwrap().iter().find(|s| s["name"] == "German 1.0-5.0").unwrap();
+    assert_eq!((german["kind"].as_str(), german["builtIn"].as_bool()), (Some("Letter"), Some(true)));
+    assert_eq!(german["labels"][9]["pass"], true, "4.0 passes");
+    assert_eq!(german["labels"][10]["pass"], false, "5.0 fails");
+    h.db.drop_db().await;
+}

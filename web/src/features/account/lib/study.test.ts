@@ -47,6 +47,14 @@ describe("study settings", () => {
     });
   });
 
+  it("stores the chosen grade scales, and drops them again for all", () => {
+    const s = settings({ gradeScales: ["a"] });
+    const f = fromSettings(s);
+    expect(f.gradeScales).toEqual(["a"]);
+    expect(toPatch({ ...f, gradeScales: ["a", "b"] }, s).extra).toMatchObject({ gradeScales: ["a", "b"] });
+    expect(toPatch({ ...f, gradeScales: null }, s).extra).not.toHaveProperty("gradeScales");
+  });
+
   it("ignores a stored time that isn't on the 15-minute grid", () => {
     expect(fromSettings(settings({ studyStart: "09:07" })).studyStart).toBe("09:00");
   });

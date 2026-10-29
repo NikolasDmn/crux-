@@ -12,7 +12,7 @@ import { Dialog } from "@/components/ui/overlays";
 import { useToast } from "@/components/ui/toast";
 import {
   useCourse,
-  useGradeScales,
+  useShownGradeScales,
   useMembers,
   usePatchCourse,
   useRemoveMember,
@@ -34,7 +34,7 @@ export const Route = createFileRoute("/_app/c/$courseId/settings")({ component: 
 
 function Details({ course }: { course: Course }) {
   const patch = usePatchCourse(course.id);
-  const scales = useGradeScales();
+  const scales = useShownGradeScales(course.gradeScale.id);
   const toast = useToast();
   const owner = isOwner(course.myRole);
   const editor = canEdit(course.myRole);

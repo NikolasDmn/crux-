@@ -99,3 +99,50 @@ export function plainLine(md: string, max = 140): string {
     .trim();
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
+
+export type LinePiece = { text: string } | { tex: string };
+
+/**
+ * A one-line preview (plainLine) as text and inline-maths pieces, so lists show "C₄H₈" and not
+ * "C$4$H$8$". Accepts $…$ and \(…\); a lone $ stays text. `max` counts visible characters (a
+ * formula as half its source) and never cuts a formula in half.
+ */
+export function linePieces(md: string, max = 140): LinePiece[] {
+  // Formulas are found before markdown is stripped: "_" and "*" mean something inside them.
+  const line = md
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  const re = /\$([^$]+)\$|\\\((.+?)\\\)/g;
+  const out: LinePiece[] = [];
+  let used = 0;
+  let at = 0;
+  const pushText = (raw: string) => {
+    const t = raw.replace(/[*_`#>]+/g, "");
+    if (!t) return true;
+    const room = max - used;
+    if (t.length > room) {
+      out.push({ text: `${t.slice(0, Math.max(0, room - 1))}…` });
+      used = max;
+      return false;
+    }
+    out.push({ text: t });
+    used += t.length;
+    return true;
+  };
+  for (const m of line.matchAll(re)) {
+    if (!pushText(line.slice(at, m.index))) return out;
+    const tex = (m[1] ?? m[2] ?? "").trim();
+    const cost = Math.ceil(tex.length / 2);
+    if (used + cost > max) {
+      out.push({ text: "…" });
+      return out;
+    }
+    out.push({ tex });
+    used += cost;
+    at = m.index + m[0].length;
+  }
+  pushText(line.slice(at));
+  return out;
+}

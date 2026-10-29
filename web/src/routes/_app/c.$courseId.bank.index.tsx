@@ -26,6 +26,7 @@ import { useLectures } from "@/features/lectures/api";
 import { GenerateButton } from "@/features/ai/generate";
 import { messageFor } from "@/lib/errors";
 import { useVirtualRows } from "@/components/ui/virtual";
+import { PromptLine } from "@/features/bank/components/prompt-line";
 
 // Question bank (frontend-spec 4): a table with filters (lecture, type, source, paper, key
 // reliability, review state, untested) and search, kept in the URL; badges for Generated, Draft,
@@ -257,7 +258,7 @@ function Bank() {
                         params={{ courseId, questionId: r.id }}
                         className={r.archivedAt ? "text-muted line-through" : "hover:underline"}
                       >
-                        {plainLine(r.current.prompt) || "(no prompt)"}
+                        <PromptLine md={r.current.prompt} empty="(no prompt)" />
                       </Link>
                     </td>
                     <td className="truncate text-muted">

@@ -147,13 +147,6 @@ async fn main() -> anyhow::Result<()> {
             println!("{email} is now an admin");
             return Ok(());
         }
-        Cmd::VerifyUser { login } => {
-            let mut conn = pool.acquire().await?;
-            let u = crux_repo::users::by_login(&mut conn, login).await?.with_context(|| format!("no user {login}"))?;
-            crux_repo::users::set_email_verified(&mut conn, u.id, chrono::Utc::now()).await?;
-            println!("{} ({}) is verified", u.username, u.email);
-            return Ok(());
-        }
         Cmd::ResetPassword { login } => {
             let mut conn = pool.acquire().await?;
             let u = crux_repo::users::by_login(&mut conn, login).await?.with_context(|| format!("no user {login}"))?;
@@ -174,6 +167,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let ctx = build_ctx(&cli, pool.clone()).await?;
+    if let Cmd::VerifyUser { login } = &cli.cmd {
+        // Through the service: user.updated tells notify, which keeps its own copy of the flag.
+        let u = crux_service::auth::mark_email_verified(&ctx, login).await?;
+        println!("{} ({}) is verified", u.username, u.email);
+        return Ok(());
+    }
     if let Cmd::LoadUsers { count, prefix, hours } = &cli.cmd {
         anyhow::ensure!(std::env::var("CRUX_ENV").as_deref() != Ok("prod"), "load-users is for test stacks only");
         for (username, token) in crux_service::auth::load_test_users(&ctx, prefix, *count, *hours).await? {

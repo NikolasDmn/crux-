@@ -52,7 +52,11 @@ function Exams() {
         <Banner tone="notice">Subscribe to this course (on the Overview tab) to add your exam dates.</Banner>
       ) : null}
       <div className="flex items-center justify-between gap-3">
-        <SectionLabel>Exams and deadlines</SectionLabel>
+        <div className="flex flex-col gap-0.5">
+          <SectionLabel>Your exams and deadlines</SectionLabel>
+          {/* Dates belong to each member's subscription (their own exam slot, resit, grade). */}
+          <span className="text-sm text-muted">Only you see these; others in the course keep their own.</span>
+        </div>
         {subscribed ? (
           <Button size="sm" variant="primary" onClick={() => setOpen({ kind: "add" })}>
             <Plus className="size-4" aria-hidden="true" />

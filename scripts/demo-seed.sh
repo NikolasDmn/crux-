@@ -21,8 +21,8 @@ if [ -z "$token" ]; then
     curl -fsS -X POST "$BASE/api/v1/auth/signup" -H 'content-type: application/json' \
         -d "{\"inviteCode\":\"$code\",\"email\":\"demo-admin@crux.test\",\"username\":\"demo-admin\",\"firstName\":\"Demo\",\"lastName\":\"Admin\",\"password\":\"$PW\",\"timeZone\":\"Europe/Amsterdam\"}" >/dev/null
     $COMPOSE exec -T core crux-core make-admin demo-admin@crux.test >/dev/null
-    $COMPOSE exec -T mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD:-crux-root}" -e \
-        "UPDATE crux_core.Users SET EmailVerifiedAt = UTC_TIMESTAMP() WHERE Email = 'demo-admin@crux.test'" 2>/dev/null
+    # Verified the way the link does it (user.updated), so notify knows too.
+    $COMPOSE exec -T core crux-core verify-user demo-admin@crux.test >/dev/null
     token=$(login)
 fi
 api() { curl -fsS -X "$1" "$BASE/api/v1$2" -H "authorization: Bearer $token" -H 'content-type: application/json' ${3:+-d "$3"}; }
@@ -36,7 +36,7 @@ if [ -n "$WPW" ]; then
     else
         wcode=$($COMPOSE exec -T core crux-core create-invite | tr -d '')
         curl -fsS -o /dev/null -X POST "$BASE/api/v1/auth/signup" -H 'content-type: application/json'             -d "{\"inviteCode\":\"$wcode\",\"email\":\"webtest@crux.test\",\"username\":\"webtest\",\"firstName\":\"Web\",\"lastName\":\"Tester\",\"password\":\"$WPW\",\"timeZone\":\"Europe/Amsterdam\",\"acceptBreachedPassword\":true}"
-        $COMPOSE exec -T mysql mysql -uroot -p"${MYSQL_ROOT_PASSWORD:-crux-root}" -e             "UPDATE crux_core.Users SET EmailVerifiedAt = UTC_TIMESTAMP() WHERE Email = 'webtest@crux.test'" 2>/dev/null
+        $COMPOSE exec -T core crux-core verify-user webtest@crux.test >/dev/null
         echo "webtest ready (verified)"
     fi
 fi

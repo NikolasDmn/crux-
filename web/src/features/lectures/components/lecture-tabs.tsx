@@ -9,11 +9,11 @@ import { Card } from "@/components/ui/card";
 import { EmptyList } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/misc";
 import { useQuestions, type Question } from "@/features/bank/api";
-import { plainLine } from "@/features/bank/lib/filters";
 import { useSlips } from "@/features/mistakes/api";
 import { SlipList } from "@/features/mistakes/components/slip-list";
 import { api, unwrap } from "@/lib/api";
 import { formatInZone } from "@/lib/time";
+import { PromptLine } from "@/features/bank/components/prompt-line";
 
 // A lecture's Questions, Slips and Sessions tabs (frontend-spec 4).
 
@@ -48,7 +48,7 @@ export function LectureQuestions({ courseId, componentId }: { courseId: string; 
                   params={{ courseId, questionId: q.id }}
                   className="min-w-0 flex-1 truncate hover:underline"
                 >
-                  {plainLine(q.current.prompt) || "(no prompt)"}
+                  <PromptLine md={q.current.prompt} empty="(no prompt)" />
                 </Link>
                 {q.reviewState === "Draft" ? (
                   <Badge kind="status" tone="warning">

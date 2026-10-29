@@ -7,9 +7,9 @@ import { useToast } from "@/components/ui/toast";
 import { usePreferences, useSetPreferences, type KindPreference, type Preferences } from "@/features/notify/api";
 import { messageFor } from "@/lib/errors";
 
-// Notifications (frontend-spec 4): kinds × channels (In-app, Email), all off by default. Kinds that
-// need an answer always show in the inbox (locked on). Email needs a verified address and stops
-// after a bounce or unsubscribe. Turning a kind on doesn't bring back past items.
+// Notifications (frontend-spec 4): kinds × channels (In-app, Email), all off by default. Kinds you
+// have to act on (or asked for) always reach the inbox: they sit in their own group, where only email
+// can be switched. Email needs a verified address and stops after a bounce or unsubscribe.
 export const Route = createFileRoute("/_app/settings/notifications")({ component: Notifications });
 
 type Channel = "InApp" | "Email";
@@ -57,9 +57,9 @@ function Row({
       </td>
       <td className="w-24 py-3 text-center">
         {k.inAppAlways ? (
-          <span className="inline-flex items-center gap-1 text-sm text-muted" title="Always on: it needs an answer">
+          <span className="inline-flex items-center gap-1 text-sm text-muted">
             <Lock className="size-3.5" aria-hidden />
-            Always
+            <span className="sr-only">Always in the inbox</span>
           </span>
         ) : (
           <Toggle
@@ -94,9 +94,6 @@ function Notifications() {
 
   return (
     <>
-      <p className="m-0 text-muted">
-        Everything is off until you turn it on. Turning one on starts from now; it doesn't bring back earlier ones.
-      </p>
       {p.email.suppressed ? (
         <Banner tone="warning">
           Emails to {p.email.address ?? "your address"} have stopped (it bounced, or you used an unsubscribe link).
@@ -115,9 +112,26 @@ function Notifications() {
             </tr>
           </thead>
           <tbody>
-            {p.kinds.map((k) => (
-              <Row key={k.kind} k={k} prefs={p} busy={save.isPending} set={set} />
-            ))}
+            {p.kinds
+              .filter((k) => !k.inAppAlways)
+              .map((k) => (
+                <Row key={k.kind} k={k} prefs={p} busy={save.isPending} set={set} />
+              ))}
+          </tbody>
+          <tbody>
+            <tr className="border-t border-border">
+              <th colSpan={3} scope="rowgroup" className="pb-1 pt-5 text-left font-normal">
+                <div className="text-xs font-medium uppercase tracking-[0.06em] text-muted">Always in your inbox</div>
+                <div className="text-sm text-muted">
+                  Things you have to act on or asked for yourself. You can also get them by email.
+                </div>
+              </th>
+            </tr>
+            {p.kinds
+              .filter((k) => k.inAppAlways)
+              .map((k) => (
+                <Row key={k.kind} k={k} prefs={p} busy={save.isPending} set={set} />
+              ))}
           </tbody>
         </table>
       </Card>

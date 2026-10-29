@@ -205,14 +205,10 @@ function Sharing({ course }: { course: Course }) {
 
   return (
     <Card className="flex flex-col gap-4">
-      <SectionLabel>Sharing</SectionLabel>
+      <SectionLabel>{canEdit(course.myRole) ? "Sharing" : "Membership"}</SectionLabel>
       {owner ? (
         <form className="grid gap-3 sm:grid-cols-[1fr_140px_auto] sm:items-end" onSubmit={submit} noValidate>
-          <Field
-            label="Username or email"
-            error={errors.usernameOrEmail}
-            hint="An email without an account gets an invite to sign up."
-          >
+          <Field label="Username or email" error={errors.usernameOrEmail}>
             {(ids) => <Input {...ids} value={who} onChange={(e) => setWho(e.currentTarget.value)} />}
           </Field>
           <Field label="Role" error={errors.role}>
@@ -223,21 +219,26 @@ function Sharing({ course }: { course: Course }) {
               </Select>
             )}
           </Field>
-          <Button type="submit" variant="primary" disabled={!who.trim() || share.isPending} className="sm:mb-[22px]">
+          <Button type="submit" variant="primary" disabled={!who.trim() || share.isPending}>
             Share
           </Button>
+          {/* Under the whole row, so the three controls line up. */}
+          <p className="m-0 text-sm text-muted sm:col-span-3">An email without an account gets an invite to sign up.</p>
           {share.error && !Object.keys(errors).length ? (
             <p className="m-0 text-sm text-danger-text sm:col-span-3">{messageFor(share.error)}</p>
           ) : null}
         </form>
       ) : null}
-      {members.isPending ? (
+      {!canEdit(course.myRole) ? null : members.isPending ? (
         <Skeleton className="h-20" />
       ) : (
         <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
           <li className="flex items-center gap-3 py-2">
-            <span className="flex-1">{members.data?.owner.name}</span>
+            {/* The owner arrives as a username: shown like the members' @handle. */}
+            <span className="min-w-0 flex-1 truncate text-muted">@{members.data?.owner.name}</span>
             <Badge kind="label">Owner</Badge>
+            {/* Where the members' Remove sits, so the badges line up. */}
+            {owner ? <span className="w-[72px] shrink-0" aria-hidden="true" /> : null}
           </li>
           {members.data?.members.map((m) => (
             <li key={m.userId} className="flex items-center gap-3 py-2">
@@ -267,19 +268,19 @@ function Sharing({ course }: { course: Course }) {
           ))}
         </ul>
       )}
-      {!owner && me ? (
-        <div className="flex justify-end">
-          <Button
-            variant="secondary"
-            disabled={remove.isPending}
-            onClick={() => remove.mutate(me.userId, { onSuccess: () => void navigate({ to: "/" }) })}
-          >
-            Leave course
-          </Button>
+      {!owner ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="m-0 flex-1 text-sm text-muted">Shared with you by {course.owner.name}.</p>
+          {me ? (
+            <Button
+              variant="secondary"
+              disabled={remove.isPending}
+              onClick={() => remove.mutate(me.userId, { onSuccess: () => void navigate({ to: "/" }) })}
+            >
+              Leave course
+            </Button>
+          ) : null}
         </div>
-      ) : null}
-      {course.myRole !== "Owner" && !me ? (
-        <p className="m-0 text-sm text-muted">Shared with you by {course.owner.name}.</p>
       ) : null}
     </Card>
   );
@@ -377,11 +378,12 @@ function Settings() {
   const c = course.data;
   return (
     <div className="flex max-w-[760px] flex-col gap-4">
-      <Details course={c} />
+      {/* A viewer can't change details, sharing or storage: those cards stay out of their way. */}
+      {canEdit(c.myRole) ? <Details course={c} /> : null}
       <Sharing course={c} />
       <Subscription course={c} />
       <CourseAiSettings courseId={c.id} />
-      <CourseStorage course={c} />
+      {isOwner(c.myRole) ? <CourseStorage course={c} /> : null}
       {isOwner(c.myRole) ? <Danger course={c} /> : null}
     </div>
   );

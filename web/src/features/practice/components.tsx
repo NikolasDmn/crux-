@@ -9,10 +9,10 @@ import { Input, Select } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/misc";
 import { Dialog } from "@/components/ui/overlays";
 import { useQuestions, type Question } from "@/features/bank/api";
-import { plainLine } from "@/features/bank/lib/filters";
 import { fetchQuiz, useSetChecks, type MaterialCheck } from "@/features/practice/api";
 import { PracticeQuestionCard, type PracticeQuestion } from "@/features/practice/practice-question";
 import { fieldErrors, messageFor } from "@/lib/errors";
+import { PromptLine } from "@/features/bank/components/prompt-line";
 
 const OUTCOME_TONE = { Right: "success", Partial: "warning", Wrong: "danger", Blank: "neutral" } as const;
 
@@ -219,7 +219,9 @@ export function ManageChecksDialog({
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
           {rows.map((r, n) => (
             <li key={r.questionId} className="grid grid-cols-[1fr_6.5rem_auto] items-center gap-2">
-              <span className="min-w-0 truncate text-sm">{plainLine(prompt(r.questionId), 90)}</span>
+              <span className="min-w-0 truncate text-sm">
+                <PromptLine md={prompt(r.questionId)} max={90} />
+              </span>
               <Input
                 aria-label={`After ${unit}`}
                 inputMode="numeric"
@@ -266,7 +268,7 @@ export function ManageChecksDialog({
             .filter((q) => !rows.some((r) => r.questionId === q.id))
             .map((q) => (
               <option key={q.id} value={q.id}>
-                {q.type} · {plainLine(q.current.prompt, 80)}
+                {q.type} · <PromptLine md={q.current.prompt} max={80} />
               </option>
             ))}
         </Select>

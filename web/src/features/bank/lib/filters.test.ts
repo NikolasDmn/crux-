@@ -1,6 +1,29 @@
 import { describe, expect, it } from "vitest";
 import type { Question } from "@/features/bank/api";
-import { activeCount, plainLine, readFilters, toJson, toMarkdown, toQuery } from "./filters";
+import { activeCount, linePieces, plainLine, readFilters, toJson, toMarkdown, toQuery } from "./filters";
+
+describe("linePieces", () => {
+  it("splits inline maths out of a one-line preview", () => {
+    expect(linePieces("Degrees of unsaturation for C$4$H$8$?")).toEqual([
+      { text: "Degrees of unsaturation for C" },
+      { tex: "4" },
+      { text: "H" },
+      { tex: "8" },
+      { text: "?" },
+    ]);
+    expect(linePieces("Mean \\(\\bar{x}\\) of **data**")).toEqual([
+      { text: "Mean " },
+      { tex: "\\bar{x}" },
+      { text: " of data" },
+    ]);
+    expect(linePieces("Costs $5 today")).toEqual([{ text: "Costs $5 today" }]);
+    expect(linePieces("Find _the_ $x_1 \\cdot y^*$")).toEqual([{ text: "Find the " }, { tex: "x_1 \\cdot y^*" }]);
+  });
+  it("shortens without cutting a formula", () => {
+    expect(linePieces("abcdef $x^2 + y^2$ tail", 8)).toEqual([{ text: "abcdef " }, { text: "…" }]);
+    expect(linePieces("a".repeat(20), 10)).toEqual([{ text: `${"a".repeat(9)}…` }]);
+  });
+});
 
 const q = (patch: Partial<Question["current"]> = {}, type = "MC"): Question =>
   ({

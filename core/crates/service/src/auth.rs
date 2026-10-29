@@ -319,6 +319,21 @@ pub async fn confirm_verify_email(ctx: &Ctx, token: &str) -> AppResult<UserView>
     Ok(UserView::from(&u))
 }
 
+/// `crux-core verify-user`: mark an email verified without the link (a trial without email, seeding).
+/// Emits user.updated like the link does, so notify's copy of the flag follows.
+pub async fn mark_email_verified(ctx: &Ctx, login: &str) -> anyhow::Result<UserRow> {
+    let mut tx = crux_repo::begin(&ctx.pool).await?;
+    let u = users::by_login(&mut tx, &rules::normalize_email(login)).await?.ok_or_else(|| anyhow::anyhow!("no user {login}"))?;
+    users::set_email_verified(&mut tx, u.id, ctx.clock.now()).await?;
+    let u = users::by_id(&mut tx, u.id).await?.ok_or_else(|| anyhow::anyhow!("user {login} vanished"))?;
+    let tier = tiers::by_id(&mut tx, u.tier_id).await?.ok_or_else(|| anyhow::anyhow!("no tier"))?;
+    emit(&mut tx, ctx, topics::USER_UPDATED, Some(&u.public_id), user_payload(&u, tier.storage_quota_bytes))
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    tx.commit().await?;
+    Ok(u)
+}
+
 /// `POST /auth/password/forgot {email}`: always succeeds, so it can't be used to probe accounts.
 pub async fn forgot_password(ctx: &Ctx, email: &str, client: &ClientInfo) -> AppResult<()> {
     let email = rules::normalize_email(email);

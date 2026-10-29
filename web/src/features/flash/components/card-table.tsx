@@ -9,12 +9,12 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from "@/components/ui/overla
 import { useToast } from "@/components/ui/toast";
 import { useCourse } from "@/features/courses/api";
 import { canEdit } from "@/features/courses/lib/roles";
-import { plainLine } from "@/features/bank/lib/filters";
 import { useCardFlags, useCards, type Card } from "@/features/flash/api";
 import { CardDialog } from "@/features/flash/components/card-dialog";
 import { useLectures } from "@/features/lectures/api";
 import { messageFor } from "@/lib/errors";
 import { useVirtualRows } from "@/components/ui/virtual";
+import { PromptLine } from "@/features/bank/components/prompt-line";
 
 /** A course's (or one lecture's) cards: code, front, source, lapses; edit, suspend, warm-up flag. */
 export function CardTable({ courseId, componentId }: { courseId: string; componentId?: string }) {
@@ -81,7 +81,7 @@ export function CardTable({ courseId, componentId }: { courseId: string; compone
                         className="max-w-full truncate text-left hover:underline"
                         onClick={() => setOpen(c)}
                       >
-                        {plainLine(c.front) || "(empty)"}
+                        <PromptLine md={c.front} empty="(empty)" />
                       </button>
                     </td>
                     <td className="font-mono tnum">{c.progress.lapses}</td>

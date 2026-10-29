@@ -110,10 +110,12 @@ function NewInvite({ onCreated }: { onCreated: (i: CreatedInvite) => void }) {
   const [uses, setUses] = useState("1");
   const [days, setDays] = useState("14");
   const errors = fieldErrors(create.error);
+  const personal = !!email.trim();
   const submit = (e: FormEvent) => {
     e.preventDefault();
     create.mutate(
-      { key, email: email.trim() || null, maxUses: Number(uses), expiresInDays: Number(days) },
+      // An invite for one address is used once; only an open code can be shared with several people.
+      { key, email: personal ? email.trim() : null, maxUses: personal ? 1 : Number(uses), expiresInDays: Number(days) },
       {
         onSuccess: (i) => {
           onCreated(i);
@@ -127,23 +129,21 @@ function NewInvite({ onCreated }: { onCreated: (i: CreatedInvite) => void }) {
   return (
     <form className="flex flex-col gap-3" onSubmit={submit} noValidate>
       {create.error && !Object.keys(errors).length ? <Banner tone="danger">{messageFor(create.error)}</Banner> : null}
-      <div className="grid gap-3 sm:grid-cols-[1fr_7rem_7rem]">
-        <Field
-          label="Email (optional)"
-          error={errors.email}
-          hint="Only this address can use it, and we email the link."
-        >
+      <div className={personal ? "grid gap-3 sm:grid-cols-[1fr_7rem]" : "grid gap-3 sm:grid-cols-[1fr_7rem_7rem]"}>
+        <Field label="Email (optional)" error={errors.email}>
           {(ids) => <Input {...ids} type="email" value={email} onChange={(e) => setEmail(e.currentTarget.value)} />}
         </Field>
-        <Field label="Uses" error={errors.maxUses}>
-          {(ids) => (
-            <Select {...ids} value={uses} onChange={(e) => setUses(e.currentTarget.value)}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <option key={n}>{n}</option>
-              ))}
-            </Select>
-          )}
-        </Field>
+        {personal ? null : (
+          <Field label="People" error={errors.maxUses}>
+            {(ids) => (
+              <Select {...ids} value={uses} onChange={(e) => setUses(e.currentTarget.value)}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n}>{n}</option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
         <Field label="Valid for" error={errors.expiresInDays}>
           {(ids) => (
             <Select {...ids} value={days} onChange={(e) => setDays(e.currentTarget.value)}>
@@ -156,6 +156,11 @@ function NewInvite({ onCreated }: { onCreated: (i: CreatedInvite) => void }) {
           )}
         </Field>
       </div>
+      <p className="m-0 text-sm text-muted">
+        {personal
+          ? "We email the link to this address, and only it can sign up with it."
+          : "You get a code to pass on yourself; that many people can sign up with it."}
+      </p>
       <Button type="submit" className="self-start" disabled={create.isPending}>
         Create invite
       </Button>

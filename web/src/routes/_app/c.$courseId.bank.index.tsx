@@ -25,6 +25,7 @@ import {
 import { useLectures } from "@/features/lectures/api";
 import { GenerateButton } from "@/features/ai/generate";
 import { messageFor } from "@/lib/errors";
+import { useVirtualRows } from "@/components/ui/virtual";
 
 // Question bank (frontend-spec 4): a table with filters (lecture, type, source, paper, key
 // reliability, review state, untested) and search, kept in the URL; badges for Generated, Draft,
@@ -58,6 +59,7 @@ function Bank() {
   }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const rows = useMemo(() => (list.data?.pages ?? []).flatMap((p) => p.items as Question[]), [list.data]);
+  const virt = useVirtualRows<HTMLTableSectionElement>(rows.length, 33);
   const code = useMemo(() => {
     const m = new Map((lectures.data ?? []).map((l) => [l.id, l.code]));
     return (id: string) => m.get(id) ?? "?";
@@ -221,103 +223,120 @@ function Bank() {
                 <th className="w-10 py-2 pr-2" />
               </tr>
             </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="h-8 border-t border-border hover:bg-sunken">
-                  {editor ? (
-                    <td className="px-3">
-                      <input
-                        type="checkbox"
-                        aria-label={`Select question ${plainLine(r.current.prompt, 40)}`}
-                        className="size-4 accent-[var(--primary)] align-middle"
-                        checked={picked.has(r.id)}
-                        onChange={() => toggle(r.id)}
-                      />
-                    </td>
-                  ) : null}
-                  <td className="pl-3 font-mono text-xs">{code(r.componentId)}</td>
-                  <td className="text-muted">{r.type}</td>
-                  <td className="max-w-0 truncate pr-3">
-                    <Link
-                      to="/c/$courseId/q/$questionId"
-                      params={{ courseId, questionId: r.id }}
-                      className={r.archivedAt ? "text-muted line-through" : "hover:underline"}
-                    >
-                      {plainLine(r.current.prompt) || "(no prompt)"}
-                    </Link>
-                  </td>
-                  <td className="truncate text-muted">
-                    {r.paperQuestionNo ? `Q${r.paperQuestionNo}` : (r.sourceLabel ?? r.source)}
-                  </td>
-                  <td className="pr-3">
-                    <span className="flex flex-wrap justify-end gap-1">
-                      {r.source === "Generated" ? (
-                        <Badge kind="status" tone="info">
-                          Generated
-                        </Badge>
-                      ) : null}
-                      {r.reviewState === "Draft" ? (
-                        <Badge kind="status" tone="warning">
-                          Draft
-                        </Badge>
-                      ) : null}
-                      {r.current.keyReliability === "Disputed" ? (
-                        <Badge kind="status" tone="danger">
-                          Disputed
-                        </Badge>
-                      ) : null}
-                      {r.private ? <Badge kind="status">Private</Badge> : null}
-                    </span>
-                  </td>
-                  <td className="pr-2">
-                    {editor || r.private ? (
-                      <Menu>
-                        <MenuTrigger asChild>
-                          <Button size="iconSm" variant="ghost" aria-label="Question actions">
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </MenuTrigger>
-                        <MenuContent align="end">
-                          <MenuItem
-                            onSelect={() =>
-                              void navigate({
-                                to: "/c/$courseId/q/$questionId/edit",
-                                params: { courseId, questionId: r.id },
-                              })
-                            }
-                          >
-                            Edit
-                          </MenuItem>
-                          {r.reviewState === "Draft" ? (
-                            <MenuItem
-                              onSelect={() =>
-                                action.mutate(
-                                  { id: r.id, action: "approve" },
-                                  { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) },
-                                )
-                              }
-                            >
-                              Approve
-                            </MenuItem>
-                          ) : null}
-                          {!r.archivedAt ? (
-                            <MenuItem
-                              onSelect={() =>
-                                action.mutate(
-                                  { id: r.id, action: "archive" },
-                                  { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) },
-                                )
-                              }
-                            >
-                              Archive
-                            </MenuItem>
-                          ) : null}
-                        </MenuContent>
-                      </Menu>
-                    ) : null}
-                  </td>
+            <tbody ref={virt.ref}>
+              {virt.before ? (
+                <tr aria-hidden="true" style={{ height: virt.before }}>
+                  <td colSpan={editor ? 7 : 6} />
                 </tr>
-              ))}
+              ) : null}
+              {virt.indices
+                .map((i) => rows[i]!)
+                .map((r, n) => (
+                  <tr
+                    key={r.id}
+                    ref={virt.measure}
+                    data-index={virt.indices[n]}
+                    className="h-8 border-t border-border hover:bg-sunken"
+                  >
+                    {editor ? (
+                      <td className="px-3">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select question ${plainLine(r.current.prompt, 40)}`}
+                          className="size-4 accent-[var(--primary)] align-middle"
+                          checked={picked.has(r.id)}
+                          onChange={() => toggle(r.id)}
+                        />
+                      </td>
+                    ) : null}
+                    <td className="pl-3 font-mono text-xs">{code(r.componentId)}</td>
+                    <td className="text-muted">{r.type}</td>
+                    <td className="max-w-0 truncate pr-3">
+                      <Link
+                        to="/c/$courseId/q/$questionId"
+                        params={{ courseId, questionId: r.id }}
+                        className={r.archivedAt ? "text-muted line-through" : "hover:underline"}
+                      >
+                        {plainLine(r.current.prompt) || "(no prompt)"}
+                      </Link>
+                    </td>
+                    <td className="truncate text-muted">
+                      {r.paperQuestionNo ? `Q${r.paperQuestionNo}` : (r.sourceLabel ?? r.source)}
+                    </td>
+                    <td className="pr-3">
+                      <span className="flex flex-wrap justify-end gap-1">
+                        {r.source === "Generated" ? (
+                          <Badge kind="status" tone="info">
+                            Generated
+                          </Badge>
+                        ) : null}
+                        {r.reviewState === "Draft" ? (
+                          <Badge kind="status" tone="warning">
+                            Draft
+                          </Badge>
+                        ) : null}
+                        {r.current.keyReliability === "Disputed" ? (
+                          <Badge kind="status" tone="danger">
+                            Disputed
+                          </Badge>
+                        ) : null}
+                        {r.private ? <Badge kind="status">Private</Badge> : null}
+                      </span>
+                    </td>
+                    <td className="pr-2">
+                      {editor || r.private ? (
+                        <Menu>
+                          <MenuTrigger asChild>
+                            <Button size="iconSm" variant="ghost" aria-label="Question actions">
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </MenuTrigger>
+                          <MenuContent align="end">
+                            <MenuItem
+                              onSelect={() =>
+                                void navigate({
+                                  to: "/c/$courseId/q/$questionId/edit",
+                                  params: { courseId, questionId: r.id },
+                                })
+                              }
+                            >
+                              Edit
+                            </MenuItem>
+                            {r.reviewState === "Draft" ? (
+                              <MenuItem
+                                onSelect={() =>
+                                  action.mutate(
+                                    { id: r.id, action: "approve" },
+                                    { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) },
+                                  )
+                                }
+                              >
+                                Approve
+                              </MenuItem>
+                            ) : null}
+                            {!r.archivedAt ? (
+                              <MenuItem
+                                onSelect={() =>
+                                  action.mutate(
+                                    { id: r.id, action: "archive" },
+                                    { onError: (e) => toast({ message: messageFor(e), tone: "danger" }) },
+                                  )
+                                }
+                              >
+                                Archive
+                              </MenuItem>
+                            ) : null}
+                          </MenuContent>
+                        </Menu>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              {virt.after ? (
+                <tr aria-hidden="true" style={{ height: virt.after }}>
+                  <td colSpan={editor ? 7 : 6} />
+                </tr>
+              ) : null}
             </tbody>
           </table>
           {list.hasNextPage ? (

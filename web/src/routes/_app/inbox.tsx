@@ -15,6 +15,7 @@ import { cn } from "@/lib/cn";
 import { messageFor } from "@/lib/errors";
 import { formatInZone, relativeDays } from "@/lib/time";
 import { t } from "@/lib/t";
+import { useVirtualRows } from "@/components/ui/virtual";
 
 // Inbox (frontend-spec 4): delivered in-app notifications, live over SSE (the shell keeps the
 // stream open), cursor paging, mark one / all read, deep links, and the inline actions: course
@@ -83,7 +84,15 @@ function Actions({ item }: { item: InboxItem }) {
   return null;
 }
 
-function Row({ item }: { item: InboxItem }) {
+function Row({
+  item,
+  index,
+  measure,
+}: {
+  item: InboxItem;
+  index: number;
+  measure?: ((el: Element | null) => void) | undefined;
+}) {
   const user = useUser();
   const navigate = useNavigate();
   const markRead = useMarkRead();
@@ -97,7 +106,7 @@ function Row({ item }: { item: InboxItem }) {
     if (href) void navigate({ href });
   };
   return (
-    <li className="flex gap-3 px-5 py-3.5">
+    <li ref={measure} data-index={index} className="flex gap-3 px-5 py-3.5">
       <span
         aria-hidden
         className={cn("mt-[7px] size-2 shrink-0 rounded-full", unread ? "bg-primary" : "bg-transparent")}
@@ -138,6 +147,7 @@ function Inbox() {
   const toast = useToast();
   const items = inbox.data?.pages.flatMap((p) => p.items) ?? [];
   const unread = inbox.data?.pages[0]?.unread ?? 0;
+  const virt = useVirtualRows<HTMLUListElement>(items.length, 76);
 
   return (
     <div className="flex max-w-[760px] flex-col gap-4">
@@ -187,10 +197,12 @@ function Inbox() {
         />
       ) : (
         <Card className="p-0">
-          <ul className="m-0 flex list-none flex-col divide-y divide-border p-0">
-            {items.map((i) => (
-              <Row key={i.id} item={i} />
+          <ul ref={virt.ref} className="m-0 flex list-none flex-col divide-y divide-border p-0">
+            {virt.before ? <li aria-hidden="true" style={{ height: virt.before }} /> : null}
+            {virt.indices.map((n) => (
+              <Row key={items[n]!.id} item={items[n]!} index={n} measure={virt.measure} />
             ))}
+            {virt.after ? <li aria-hidden="true" style={{ height: virt.after }} /> : null}
           </ul>
         </Card>
       )}

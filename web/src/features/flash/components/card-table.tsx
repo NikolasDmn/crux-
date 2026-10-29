@@ -14,6 +14,7 @@ import { useCardFlags, useCards, type Card } from "@/features/flash/api";
 import { CardDialog } from "@/features/flash/components/card-dialog";
 import { useLectures } from "@/features/lectures/api";
 import { messageFor } from "@/lib/errors";
+import { useVirtualRows } from "@/components/ui/virtual";
 
 /** A course's (or one lecture's) cards: code, front, source, lapses; edit, suspend, warm-up flag. */
 export function CardTable({ courseId, componentId }: { courseId: string; componentId?: string }) {
@@ -27,6 +28,8 @@ export function CardTable({ courseId, componentId }: { courseId: string; compone
   const [open, setOpen] = useState<Card | "new" | null>(null);
   const fail = (e: unknown) => toast({ message: messageFor(e), tone: "danger" });
   const list = [...(cards.data ?? [])].sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  const virt = useVirtualRows<HTMLTableSectionElement>(list.length, 33);
+  const cols = componentId ? 5 : 6;
 
   return (
     <div className="flex flex-col gap-3">
@@ -57,11 +60,17 @@ export function CardTable({ courseId, componentId }: { courseId: string; compone
                 <th className="w-10 py-2 pr-2" />
               </tr>
             </thead>
-            <tbody>
-              {list.map((c) => {
+            <tbody ref={virt.ref}>
+              {virt.before ? (
+                <tr aria-hidden="true" style={{ height: virt.before }}>
+                  <td colSpan={cols} />
+                </tr>
+              ) : null}
+              {virt.indices.map((n) => {
+                const c = list[n]!;
                 const mine = c.personal || editor;
                 return (
-                  <tr key={c.id} className="h-8 border-t border-border">
+                  <tr key={c.id} ref={virt.measure} data-index={n} className="h-8 border-t border-border">
                     <td className="pl-4 font-mono text-xs">{c.code}</td>
                     {!componentId ? (
                       <td className="font-mono text-xs text-muted">{code.get(c.componentId) ?? ""}</td>
@@ -125,6 +134,11 @@ export function CardTable({ courseId, componentId }: { courseId: string; compone
                   </tr>
                 );
               })}
+              {virt.after ? (
+                <tr aria-hidden="true" style={{ height: virt.after }}>
+                  <td colSpan={cols} />
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </Panel>

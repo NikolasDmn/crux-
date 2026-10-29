@@ -20,6 +20,7 @@ class ObjectStore(Protocol):
     async def size(self, key: str) -> int | None: ...
     def read(self, key: str) -> AsyncIterator[bytes]: ...
     async def delete(self, key: str) -> None: ...
+    async def copy(self, src: str, dst: str) -> None: ...
     async def put_bytes(self, key: str, data: bytes, content_type: str) -> None: ...
     async def put_file(self, key: str, fileobj: Any, content_type: str) -> None: ...
 
@@ -110,6 +111,12 @@ class S3Store:
     async def delete(self, key: str) -> None:
         await asyncio.to_thread(lambda: self._s3.delete_object(Bucket=self.bucket, Key=key))
 
+    async def copy(self, src: str, dst: str) -> None:
+        """Server-side copy (no bytes through this service)."""
+        await asyncio.to_thread(
+            lambda: self._s3.copy_object(Bucket=self.bucket, Key=dst, CopySource={"Bucket": self.bucket, "Key": src})
+        )
+
     async def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
         await asyncio.to_thread(
             lambda: self._s3.put_object(Bucket=self.bucket, Key=key, Body=data, ContentType=content_type)
@@ -151,6 +158,9 @@ class MemoryStore:
 
     async def delete(self, key: str) -> None:
         self.objects.pop(key, None)
+
+    async def copy(self, src: str, dst: str) -> None:
+        self.objects[dst] = self.objects[src]
 
     async def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
         self.objects[key] = data

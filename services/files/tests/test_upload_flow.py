@@ -118,6 +118,26 @@ async def test_upload_scan_extract_and_read() -> None:
         assert (await svc.get(deps, STRANGER, f.id)).id == f.id, "readers of a course that uses the file"
 
 
+async def test_a_second_put_after_complete_cant_swap_the_file() -> None:
+    """Audit H2: the checked bytes move to a key the client has no URL for."""
+    async with env() as (deps, store, _):
+        data = make_pdf(["The real slides."])
+        started = await svc.start_upload(
+            deps,
+            OWNER,
+            svc.UploadInput(file_name="a.pdf", size_bytes=len(data), sha256=hashlib.sha256(data).hexdigest()),
+        )
+        async with deps.sessions() as s:
+            upload_key = (await repo.by_public_id(s, started.file.id)).StorageKey
+        store.put(upload_key, data)
+        await svc.complete_upload(deps, OWNER, started.file.id)
+        store.put(upload_key, make_pdf(["Swapped in after the check."]))  # the URL is still valid
+        async with deps.sessions() as s:
+            row = await repo.by_public_id(s, started.file.id)
+        assert row.StorageKey != upload_key
+        assert store.objects[row.StorageKey] == data
+
+
 async def test_dedupe_quota_and_rejections() -> None:
     async with env(quota=2_000) as (deps, store, _):
         small = make_pdf(["tiny"])

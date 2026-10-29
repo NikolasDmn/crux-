@@ -1,6 +1,10 @@
 from functools import lru_cache
 
+from pydantic import model_validator
+
 from crux_common.settings import CommonSettings
+
+DEV_S3_SECRET = "crux-dev-secret"  # noqa: S105 - the published dev default, refused in prod
 
 
 class Settings(CommonSettings):
@@ -12,7 +16,7 @@ class Settings(CommonSettings):
     #: The gateway proxies /<bucket>/* to the store, so it's the app's own origin (same-origin, no CORS).
     s3_public_endpoint: str = "http://localhost:8000"
     s3_access_key: str = "crux"
-    s3_secret_key: str = "crux-dev-secret"  # noqa: S105 - dev default; set in .env
+    s3_secret_key: str = DEV_S3_SECRET
     s3_bucket: str = "crux-files"
     s3_region: str = "us-east-1"
 
@@ -30,6 +34,13 @@ class Settings(CommonSettings):
 
     #: Tesseract languages for OCR (D2-8: English).
     ocr_languages: str = "eng"
+
+    @model_validator(mode="after")
+    def _no_dev_store_keys_in_prod(self) -> "Settings":
+        # The dev key is in the repo, and the store is reachable through the site (audit C1).
+        if self.env == "prod" and self.s3_secret_key == DEV_S3_SECRET:
+            raise ValueError("CRUX_S3_SECRET_KEY is the published dev default; set a real one for prod.")
+        return self
 
     @property
     def allowed_types(self) -> set[str]:

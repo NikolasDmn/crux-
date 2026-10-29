@@ -180,16 +180,21 @@ async def start_upload(deps: Deps, user: Principal, inp: UploadInput) -> UploadS
         )
 
 
-async def _reject_upload(deps: Deps, s: Any, row: Any, rejection: Rejection) -> None:
-    await deps.store.delete(row.StorageKey)
+async def _reject_upload(deps: Deps, s: Any, row: Any, rejection: Rejection, key: str | None = None) -> None:
+    await deps.store.delete(key or row.StorageKey)
     await storage.release_reserved(s, row.OwnerUserRef, row.SizeBytes)
     await repo.set_status(s, row.Id, "Uploading", "Deleted", StorageKey=None)
 
 
 async def complete_upload(deps: Deps, user: Principal, file_ref: str) -> FileView:
     """Spec 6.1 step 2: check size and sha256 from the stored object, sniff the type, settle the
-    quota, set Active and queue the scan."""
+    quota, set Active and queue the scan.
+
+    The checks run on a server-side copy at a key the client never got a URL for, and the upload
+    key is deleted first: a second PUT to the still-valid upload URL can't swap the bytes after
+    the hash and the scan (audit H2)."""
     rejection: Rejection | None = None
+    final: str | None = None
     async with transaction(deps.sessions) as s:
         row = await repo.by_public_id(s, file_ref, for_update=True)
         if row is None or user.user_ref not in (row.UploadedByUserRef, row.OwnerUserRef):
@@ -202,16 +207,22 @@ async def complete_upload(deps: Deps, user: Principal, file_ref: str) -> FileVie
         if size != row.SizeBytes:
             rejection = Rejection("size", "The uploaded file's size doesn't match.")
         else:
-            sha, head, _ = await sha256_and_head(deps.store, row.StorageKey)
-            if sha != row.Sha256:
+            final = f"{row.StorageKey.rsplit('/', 1)[0]}/{new_id()}"
+            await deps.store.copy(row.StorageKey, final)
+            await deps.store.delete(row.StorageKey)
+            sha, head, total = await sha256_and_head(deps.store, final)
+            if total != row.SizeBytes:
+                rejection = Rejection("size", "The uploaded file's size doesn't match.")
+            elif sha != row.Sha256:
                 rejection = Rejection("checksum", "The uploaded file doesn't match its sha256.")
             elif not rules.sniff_ok(row.MimeType, head):
                 rejection = Rejection("type", "That isn't a PDF.")
         if rejection is not None:
-            await _reject_upload(deps, s, row, rejection)
+            await _reject_upload(deps, s, row, rejection, final)
         else:
+            assert final is not None
             await storage.settle(s, row.OwnerUserRef, row.SizeBytes)
-            await repo.set_status(s, row.Id, "Uploading", "Active")
+            await repo.set_status(s, row.Id, "Uploading", "Active", StorageKey=final)
             if row.ScanStatus == "Clean":
                 # A restored original (same bytes as before its purge): no new scan or extract.
                 await saver.restored(s, deps.contracts, row)

@@ -377,6 +377,30 @@ async fn import_apply_is_ordered_checked_and_idempotent() {
     assert_eq!(r.json["courseId"].as_str(), Some(course.as_str()));
     let r = call(&h.app, "GET", &format!("/internal/v1/ai/paper?user={bob}&paper={paper}"), None, None, &headers).await;
     assert_eq!(r.status, StatusCode::NOT_FOUND);
+
+    // A paper proposal (or the user's edit of one) naming someone else's file fails, like the
+    // public papers route would (audit H3): a paper grants its readers the file.
+    h.t.files.put(crux_clients::files::FileInfo {
+        id: "01FILEOFBOB000000000000000".into(),
+        owner_ref: bob.clone(),
+        uploaded_by_ref: Some(bob.clone()),
+        course_ref: None,
+        purpose: "Original".into(),
+        status: "Active".into(),
+        scan_status: "Clean".into(),
+        extract_status: "Done".into(),
+        sha256: "0".repeat(64),
+        size_bytes: 10,
+        page_count: Some(1),
+        file_name: "private.pdf".into(),
+    });
+    let steal = json!({"user": me, "importRef": "01IMPORT000000000000000004", "course": course, "proposals": [
+        p("01PROPOSAL0000000000000030", "Paper", "p9", None, json!({"paperKey": "2024-X", "fileRef": "01FILEOFBOB000000000000000"}))
+    ]});
+    let r = call(&h.app, "POST", "/internal/v1/import/apply", None, Some(steal), &headers).await;
+    assert_eq!(r.status, StatusCode::OK, "{}", r.json);
+    assert_eq!(r.json["created"].as_array().map(Vec::len), Some(0), "{}", r.json);
+    assert_eq!(r.json["failed"][0]["proposalRef"], "01PROPOSAL0000000000000030", "{}", r.json);
     let _ = bt;
     h.db.drop_db().await;
 }

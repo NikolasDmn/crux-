@@ -38,7 +38,9 @@
 	# catch-all below would otherwise answer /internal/* with index.html.
 	# Also under the service prefixes: /api/v1/internal/* and /api/v1/<service>/internal/* would
 	# otherwise reach the services after the prefix is stripped.
-	@internal path_regexp internal ^/(api/v1/([a-z]+/)?)?internal(/|$)
+	# Case-insensitive, and tolerant of doubled slashes: Caddy's `path` matchers (the handles below)
+	# ignore case, so /API/V1/Internal/... would otherwise reach a service (audit H1).
+	@internal path_regexp internal (?i)^/+(api/+v1/+([a-z]+/+)?)?internal(/|$)
 	handle @internal {
 		respond 404
 	}
@@ -46,8 +48,17 @@
 	# The object store, same-origin: the browser PUTs uploads and GETs downloads with pre-signed
 	# URLs signed for this host (files: CRUX_S3_PUBLIC_ENDPOINT). Caddy passes the Host header
 	# through unchanged, so the signature still matches at the store.
-	handle /crux-files/* {
+	# Only pre-signed requests (the signature is in the query): a header-signed call would be an admin
+	# using the store's own keys, which never needs to come through the public site (audit C1).
+	@presigned {
+		path /crux-files/*
+		query X-Amz-Signature=*
+	}
+	handle @presigned {
 		reverse_proxy s3:8333
+	}
+	handle /crux-files/* {
+		respond 403
 	}
 
 	handle /api/v1/files/* {

@@ -1,5 +1,8 @@
 # Crux: full stack on one host (backend-spec section 1).
 # Local:  docker compose -f deploy/compose.yaml --env-file .env up --build   (or: make up)
+# Only the gateway listens beyond this machine: MySQL, Redis, the object store and Mailpit are
+# published on 127.0.0.1 for local tools (CRUX_BIND_HOST to change that), never on every
+# interface (audit C2).
 # Profiles: "ai" adds the ai service + worker (the non-AI product runs without it, spec 1 / 9.6);
 #           "monitoring" adds Grafana + Loki (later milestone).
 
@@ -7,7 +10,7 @@ name: crux
 
 x-python-env: &python-env
   CRUX_ENV: ${CRUX_ENV:-dev}
-  CRUX_REDIS_URL: redis://redis:6379/0
+  CRUX_REDIS_URL: redis://:${CRUX_REDIS_PASSWORD:-crux-redis-dev}@redis:6379/0
   CRUX_CORE_INTERNAL_URL: http://core:8080
   CRUX_JWKS_URL: http://core:8080/internal/v1/jwks
   CRUX_S3_ENDPOINT: http://s3:8333
@@ -53,7 +56,7 @@ services:
       CRUX_FILES_DB_PASSWORD: ${CRUX_FILES_DB_PASSWORD:-crux-files}
       CRUX_AI_DB_PASSWORD: ${CRUX_AI_DB_PASSWORD:-crux-ai}
       CRUX_NOTIFY_DB_PASSWORD: ${CRUX_NOTIFY_DB_PASSWORD:-crux-notify}
-    ports: ["${CRUX_MYSQL_PORT:-3306}:3306"]
+    ports: ["${CRUX_BIND_HOST:-127.0.0.1}:${CRUX_MYSQL_PORT:-3306}:3306"]
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
@@ -66,21 +69,32 @@ services:
   redis:
     restart: unless-stopped
     image: redis:7.4
-    ports: ["${CRUX_REDIS_PORT:-6379}:6379"]
+    command: ["redis-server", "--requirepass", "${CRUX_REDIS_PASSWORD:-crux-redis-dev}"]
+    environment:
+      # redis-cli inside the container (healthcheck, `make unlock`) authenticates with this.
+      REDISCLI_AUTH: ${CRUX_REDIS_PASSWORD:-crux-redis-dev}
+    ports: ["${CRUX_BIND_HOST:-127.0.0.1}:${CRUX_REDIS_PORT:-6379}:6379"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
 
   # S3-compatible object store (spec 1 names MinIO; its images are no longer published, see
-  # OPEN-QUESTIONS.md S-7). Credentials live in seaweedfs/s3.json and must match CRUX_S3_*.
+  # OPEN-QUESTIONS.md S-7). Its one identity is written at start from CRUX_S3_* (audit C1: the
+  # keys used to sit in a committed file).
   s3:
     restart: unless-stopped
     image: chrislusf/seaweedfs:3.80
-    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024
-    ports: ["${CRUX_S3_PORT:-8333}:8333"]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        printf '{"identities":[{"name":"crux","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","Write","List","Tagging"]}]}'           "$$CRUX_S3_ACCESS_KEY" "$$CRUX_S3_SECRET_KEY" > /tmp/s3.json
+        exec weed server -dir=/data -s3 -s3.port=8333 -s3.config=/tmp/s3.json -master.volumeSizeLimitMB=1024
+    environment:
+      CRUX_S3_ACCESS_KEY: ${CRUX_S3_ACCESS_KEY:-crux}
+      CRUX_S3_SECRET_KEY: ${CRUX_S3_SECRET_KEY:-crux-dev-secret}
+    ports: ["${CRUX_BIND_HOST:-127.0.0.1}:${CRUX_S3_PORT:-8333}:8333"]
     volumes:
       - s3-data:/data
-      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
 
   clamav:
     restart: unless-stopped
@@ -90,7 +104,7 @@ services:
   mailpit:
     restart: unless-stopped
     image: axllent/mailpit:v1.20
-    ports: ["8025:8025"]
+    ports: ["${CRUX_BIND_HOST:-127.0.0.1}:8025:8025"]
 
   core:
     restart: unless-stopped
@@ -98,7 +112,7 @@ services:
     environment:
       CRUX_ENV: ${CRUX_ENV:-dev}
       CRUX_DATABASE_URL: mysql://crux_core:${CRUX_CORE_DB_PASSWORD:-crux-core}@mysql:3306/crux_core
-      CRUX_REDIS_URL: redis://redis:6379/0
+      CRUX_REDIS_URL: redis://:${CRUX_REDIS_PASSWORD:-crux-redis-dev}@redis:6379/0
       CRUX_JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_ed25519.pem
       CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET:-dev-service-secret-change-me}
       CRUX_COOKIE_SECURE: ${CRUX_COOKIE_SECURE:-false}
@@ -123,7 +137,7 @@ services:
     command: ["crux-core", "jobs"]
     environment:
       CRUX_DATABASE_URL: mysql://crux_core:${CRUX_CORE_DB_PASSWORD:-crux-core}@mysql:3306/crux_core
-      CRUX_REDIS_URL: redis://redis:6379/0
+      CRUX_REDIS_URL: redis://:${CRUX_REDIS_PASSWORD:-crux-redis-dev}@redis:6379/0
       CRUX_JWT_PRIVATE_KEY_FILE: /run/secrets/jwt_ed25519.pem
       CRUX_SERVICE_SECRET: ${CRUX_SERVICE_SECRET:-dev-service-secret-change-me}
     volumes:

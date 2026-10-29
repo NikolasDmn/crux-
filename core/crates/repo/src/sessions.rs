@@ -73,13 +73,14 @@ pub async fn revoke_others(
     at: DateTime<Utc>,
     reason: RevokeReason,
 ) -> RepoResult<u64> {
-    let res = sqlx::query("UPDATE UserSession SET RevokedAt = ?, RevokeReason = ? WHERE UserId = ? AND RevokedAt IS NULL AND TokenHash <> ?")
-        .bind(at)
-        .bind(reason.as_db())
-        .bind(user_id)
-        .bind(keep_hash)
-        .execute(conn)
-        .await?;
+    let res =
+        sqlx::query("UPDATE UserSession SET RevokedAt = ?, RevokeReason = ? WHERE UserId = ? AND RevokedAt IS NULL AND TokenHash <> ?")
+            .bind(at)
+            .bind(reason.as_db())
+            .bind(user_id)
+            .bind(keep_hash)
+            .execute(conn)
+            .await?;
     Ok(res.rows_affected())
 }
 

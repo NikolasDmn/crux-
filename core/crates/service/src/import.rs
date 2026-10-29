@@ -276,6 +276,13 @@ async fn apply_one(
         "Paper" => {
             let public_id = ctx.ids.ulid();
             let key = s(v, "paperKey").ok_or("paperKey: required")?;
+            // The payload (and the user's edits to it) are untrusted: a fileRef must pass the same
+            // check as `POST /courses/{id}/papers`, or a paper would grant its readers any file (audit H3).
+            let course = course_row(tx, actor, course_id.expect("checked")).await.map_err(db)?;
+            let file = match s(v, "fileRef").or(p.source_file_ref.as_deref()) {
+                Some(r) => Some(crate::catalog::usable_file(ctx, actor, &course, r, "fileRef").await.map_err(db)?),
+                None => None,
+            };
             let id = crux_repo::catalog::insert_paper(
                 tx,
                 &public_id,
@@ -284,7 +291,7 @@ async fn apply_one(
                     paper_key: &key.chars().take(32).collect::<String>(),
                     label: &s(v, "label").unwrap_or(key).chars().take(255).collect::<String>(),
                     exam_date: s(v, "examDate").and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok()),
-                    file_ref: s(v, "fileRef").or(p.source_file_ref.as_deref()),
+                    file_ref: file.as_ref().map(|f| f.id.as_str()),
                     total_questions: v.get("totalQuestions").and_then(Value::as_i64).map(|x| x as i32),
                     key_status: s(v, "keyStatus").filter(|k| ["Official", "Partial", "Derived", "None"].contains(k)).unwrap_or("None"),
                     note: s(v, "note"),

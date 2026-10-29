@@ -11,6 +11,9 @@ export function QuestionImage({ fileId, className }: { fileId: string; className
     queryKey: ["file", fileId, "url"],
     queryFn: () => fileUrl(fileId),
     staleTime: 5 * 60_000,
+    // A just-uploaded image isn't served until its virus scan is done: keep asking for ~20 s.
+    retry: 12,
+    retryDelay: 1500,
   });
   if (url.isError) return <p className="m-0 text-sm text-muted">The figure for this question couldn't load.</p>;
   if (!url.data) return <Skeleton className={cn("h-40", className)} />;

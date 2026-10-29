@@ -437,6 +437,15 @@ async fn files_and_question_images_stay_in_their_course() {
     assert_eq!(pdf.json["error"]["details"]["fields"][0]["code"], "unknown", "a PDF isn't a question image");
     let ok = call(&h.app, "POST", &qs, Some(&t), Some(q("01IMAGEOFA0000000000000000")), &[]).await;
     assert_eq!(ok.status, StatusCode::CREATED, "{}", ok.json);
+    // The editor's "Crop from a PDF page": a crop for the course, used by a question being written.
+    let crop = |file: &str| json!({"fileId": file, "page": 2, "box": {"x": 10.0, "y": 20.0, "w": 200.0, "h": 100.0}});
+    let cropped =
+        call(&h.app, "POST", &format!("/courses/{a}/question-images/crop"), Some(&t), Some(crop("01FILENOCOURSE000000000000")), &[]).await;
+    let img = cropped.json["fileId"].as_str().expect("a crop").to_string();
+    assert_eq!(call(&h.app, "POST", &qs, Some(&t), Some(q(&img)), &[]).await.status, StatusCode::CREATED);
+    let foreign =
+        call(&h.app, "POST", &format!("/courses/{a}/question-images/crop"), Some(&t), Some(crop("01FILEOFCOURSEB00000000000")), &[]).await;
+    assert_eq!(foreign.json["error"]["details"]["fields"][0]["code"], "unknown", "only this course's PDFs");
 
     // ...and members can read it now (spec 6.1 step 7), strangers still can't.
     let (_, ou, _) = signup(&h.app, &h.t.ctx, "stranger").await;

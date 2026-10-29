@@ -100,6 +100,7 @@ pub const ROUTES: &[(&str, &str, Policy)] = &[
     ("POST", "/questions/{id}/approve", Policy::Edit),
     ("POST", "/questions/{id}/promote", Policy::Edit),
     ("POST", "/questions/{id}/image-crop", Policy::Edit),
+    ("POST", "/courses/{id}/question-images/crop", Policy::Edit),
     ("POST", "/courses/{id}/mocks", Policy::Subscribed),
     ("GET", "/courses/{id}/mocks", Policy::Subscribed),
     ("GET", "/mocks/{id}", Policy::Mine),

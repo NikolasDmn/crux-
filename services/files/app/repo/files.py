@@ -114,15 +114,16 @@ async def original_by_sha(session: AsyncSession, owner_ref: str, sha256: str) ->
     return (await session.execute(stmt)).first()
 
 
-async def insert_original(session: AsyncSession, **values: Any) -> int:
+async def insert_original(session: AsyncSession, purpose: str = "Original", **values: Any) -> int:
+    """An upload (an Original PDF, or a QuestionImage, which is never text-extracted)."""
     result = cast(
         CursorResult[Any],
         await session.execute(
             insert(stored_file).values(
-                Purpose="Original",
+                Purpose=purpose,
                 Status="Uploading",
                 ScanStatus="Pending",
-                ExtractStatus="Pending",
+                ExtractStatus="Pending" if purpose == "Original" else "NotNeeded",
                 RowVersion=0,
                 **values,
             )

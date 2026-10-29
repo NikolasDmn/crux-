@@ -115,8 +115,10 @@ async def _quota_owner(deps: Deps, user: Principal, course_ref: str | None) -> s
 
 
 async def start_upload(deps: Deps, user: Principal, inp: UploadInput) -> UploadStarted:
+    if inp.purpose == "QuestionImage":
+        return await _start_image(deps, user, inp)
     if inp.purpose != "Original":
-        raise _reject(Rejection("type", "Only originals can be uploaded."))
+        raise _reject(Rejection("type", "Only originals and question images can be uploaded."))
     checked = rules.check_start(
         inp.file_name, inp.size_bytes, inp.sha256, deps.settings.allowed_types, deps.settings.max_upload_bytes
     )
@@ -180,6 +182,48 @@ async def start_upload(deps: Deps, user: Principal, inp: UploadInput) -> UploadS
         )
 
 
+async def _start_image(deps: Deps, user: Principal, inp: UploadInput) -> UploadStarted:
+    """A question image for a course (the question editor's "Upload image"): scanned like any
+    upload, never text-extracted, and only usable in that course's questions."""
+    if inp.course_id is None:
+        raise _reject(Rejection("type", "A question image belongs to a course: give courseId."))
+    checked = rules.check_image_start(inp.file_name, inp.size_bytes, inp.sha256)
+    if isinstance(checked, Rejection):
+        raise _reject(checked)
+    await _rate_limit(deps, user.user_ref)
+    owner = await _quota_owner(deps, user, inp.course_id)
+    now = utcnow()
+    async with transaction(deps.sessions) as s:
+        await storage.ensure(s, owner, deps.settings.default_quota_bytes)
+        if not await storage.reserve(s, owner, inp.size_bytes):
+            q = await storage.get(s, owner)
+            raise QuotaExceeded(details={"usedBytes": q.UsedBytes if q else 0, "quotaBytes": q.QuotaBytes if q else 0})
+        public_id = new_id()
+        file_id = await repo.insert_original(
+            s,
+            purpose="QuestionImage",
+            PublicId=public_id,
+            OwnerUserRef=owner,
+            StorageKey=f"images/{owner}/{public_id}/{new_id()}",
+            Sha256=inp.sha256.lower(),
+            UploadedByUserRef=user.user_ref,
+            CourseRef=inp.course_id,
+            FileName=rules.safe_file_name(inp.file_name),
+            MimeType=checked,
+            SizeBytes=inp.size_bytes,
+            UploadedAt=now,
+        )
+        row = await repo.by_id(s, file_id)
+    assert row is not None
+    return UploadStarted(
+        file=view(row),
+        upload_url=deps.store.presign_put(row.StorageKey, row.MimeType, UPLOAD_URL_SECONDS),
+        upload_headers={"content-type": row.MimeType},
+        already_present=False,
+        expires_at=iso(now + timedelta(seconds=UPLOAD_URL_SECONDS)),
+    )
+
+
 async def _reject_upload(deps: Deps, s: Any, row: Any, rejection: Rejection, key: str | None = None) -> None:
     await deps.store.delete(key or row.StorageKey)
     await storage.release_reserved(s, row.OwnerUserRef, row.SizeBytes)
@@ -216,7 +260,7 @@ async def complete_upload(deps: Deps, user: Principal, file_ref: str) -> FileVie
             elif sha != row.Sha256:
                 rejection = Rejection("checksum", "The uploaded file doesn't match its sha256.")
             elif not rules.sniff_ok(row.MimeType, head):
-                rejection = Rejection("type", "That isn't a PDF.")
+                rejection = Rejection("type", "The file isn't what its name says.")
         if rejection is not None:
             await _reject_upload(deps, s, row, rejection, final)
         else:

@@ -22,6 +22,7 @@ import {
 import { check, emptyForm, formFrom, toContent, type Form, type QType } from "@/features/bank/lib/editor";
 import { useCourse } from "@/features/courses/api";
 import { QuestionImage } from "@/features/files/question-image";
+import { ImageField } from "./image-field";
 import { canEdit } from "@/features/courses/lib/roles";
 import { useLectures } from "@/features/lectures/api";
 import { conflictCurrent, fieldErrors, messageFor } from "@/lib/errors";
@@ -29,8 +30,8 @@ import { cn } from "@/lib/cn";
 
 // Question editor (frontend-spec 4): type (fixed once saved), prompt with live preview, MC options
 // with a correct toggle and distractor notes, numeric value/tolerance/unit, open model answer and
-// rubric, concepts, paper and number. Every save is a new version. Image upload and "crop from a
-// PDF page" join with the storage step's file picker.
+// rubric, concepts, paper and number; an image, uploaded or cropped from a page of the course's
+// PDFs. Every save is a new version.
 export function QuestionEditor({
   courseId,
   question,
@@ -224,6 +225,11 @@ export function QuestionEditor({
             </div>
           </div>
         </div>
+        <ImageField
+          courseId={courseId}
+          value={f.imageFileId ?? null}
+          onChange={(imageFileId) => set({ imageFileId })}
+        />
       </Card>
 
       {f.type === "MC" ? <OptionsCard f={f} set={set} error={errors.options ?? errors["content.options"]} /> : null}

@@ -1854,6 +1854,18 @@
         ],
         "type": "object"
       },
+      "CroppedImage": {
+        "properties": {
+          "fileId": {
+            "description": "Use as a question's `imageFileId` in this course.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fileId"
+        ],
+        "type": "object"
+      },
       "CustomInput": {
         "properties": {
           "componentIds": {
@@ -11699,6 +11711,72 @@
         "summary": "Set a lecture's status or steps. Finishing one updates the plan.",
         "tags": [
           "time"
+        ]
+      }
+    },
+    "/courses/{id}/question-images/crop": {
+      "post": {
+        "operationId": "postCoursesIdQuestionImagesCrop",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CropInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CroppedImage"
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A question image cut from a page of one of the course's PDFs, for a question being edited (save\nthe question with it as `imageFileId`).",
+        "tags": [
+          "bank"
         ]
       }
     },

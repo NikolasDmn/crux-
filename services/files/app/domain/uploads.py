@@ -5,6 +5,9 @@ from dataclasses import dataclass
 
 #: Extension → MIME. The allowlist itself is config (Settings.allowed_original_types).
 MIME_BY_EXTENSION = {".pdf": "application/pdf"}
+#: Question images uploaded directly (crops of a PDF page are made server-side).
+IMAGE_MIME_BY_EXTENSION = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -35,10 +38,29 @@ def check_start(file_name: str, size_bytes: int, sha256: str, allowed: set[str],
     return mime
 
 
+def check_image_start(file_name: str, size_bytes: int, sha256: str) -> Rejection | str:
+    """A question image: PNG, JPEG or WebP up to 5 MB. Returns the MIME type, or why not."""
+    name = file_name.lower().strip()
+    mime = next((m for ext, m in IMAGE_MIME_BY_EXTENSION.items() if name.endswith(ext)), None)
+    if mime is None:
+        return Rejection("type", "Use a PNG, JPEG or WebP image.")
+    if size_bytes <= 0 or size_bytes > MAX_IMAGE_BYTES:
+        return Rejection("size", f"Images must be under {MAX_IMAGE_BYTES // (1024 * 1024)} MB.")
+    if not _SHA256.match(sha256.lower()):
+        return Rejection("checksum", "sha256 must be 64 hex characters.")
+    return mime
+
+
 def sniff_ok(mime: str, head: bytes) -> bool:
-    """Magic bytes (spec 6.1): a PDF must start with %PDF-."""
+    """Magic bytes (spec 6.1): the content must be what the name says."""
     if mime == "application/pdf":
         return head.startswith(b"%PDF-")
+    if mime == "image/png":
+        return head.startswith(b"\x89PNG\r\n\x1a\n")
+    if mime == "image/jpeg":
+        return head.startswith(b"\xff\xd8\xff")
+    if mime == "image/webp":
+        return head[:4] == b"RIFF" and head[8:12] == b"WEBP"
     return False
 
 

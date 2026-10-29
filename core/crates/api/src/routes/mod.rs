@@ -80,6 +80,7 @@ pub fn router() -> OpenApiRouter<AppState> {
         .routes(routes!(bank::approve))
         .routes(routes!(bank::promote))
         .routes(routes!(bank::image_crop))
+        .routes(routes!(bank::crop_for_course))
         .routes(routes!(mocks::build, mocks::list))
         .routes(routes!(mocks::get))
         .routes(routes!(mocks::start))

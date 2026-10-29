@@ -1130,6 +1130,26 @@ export interface paths {
         patch: operations["patchCoursesIdProgress"];
         trace?: never;
     };
+    "/courses/{id}/question-images/crop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A question image cut from a page of one of the course's PDFs, for a question being edited (save
+         *     the question with it as `imageFileId`).
+         */
+        post: operations["postCoursesIdQuestionImagesCrop"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/courses/{id}/questions": {
         parameters: {
             query?: never;
@@ -3062,6 +3082,10 @@ export interface components {
              * @description 1-based page.
              */
             page: number;
+        };
+        CroppedImage: {
+            /** @description Use as a question's `imageFileId` in this course. */
+            fileId: string;
         };
         CustomInput: {
             componentIds?: string[];
@@ -7413,6 +7437,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LectureProgress"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    postCoursesIdQuestionImagesCrop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CropInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CroppedImage"];
                 };
             };
             404: {

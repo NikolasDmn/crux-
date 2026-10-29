@@ -271,3 +271,46 @@ async def test_crop_makes_an_independent_question_image() -> None:
         assert "file.crop_created" in await topics(deps)
         with pytest.raises(FileRejected):
             await svc.create_crop(deps, f.id, svc.CropInput(page=9, box=svc.CropBox(x=0, y=0, w=10, h=10)))
+
+
+PNG = bytes.fromhex("89504e470d0a1a0a") + b"\x00" * 64
+
+
+async def test_question_images_upload_scan_but_skip_extract() -> None:
+    """The question editor's "Upload image": a course's PNG/JPEG/WebP, scanned, never extracted."""
+    async with env() as (deps, store, _core):
+        img = await upload_image(deps, store, EDITOR, PNG, "diagram.png", COURSE)
+        assert (img.purpose, img.status, img.extract_status) == ("QuestionImage", "Active", "NotNeeded")
+        await drain(deps)
+        got = await svc.get(deps, OWNER, img.id)
+        assert (got.scan_status, got.extract_status) == ("Clean", "NotNeeded")
+        assert await topics(deps) == ["file.scanned"], "no extract"
+
+        with pytest.raises(FileRejected):  # no course
+            await upload_image(deps, store, EDITOR, PNG, "diagram.png", None)
+        with pytest.raises(FileRejected):  # a PDF named .png
+            await upload_image(deps, store, EDITOR, make_pdf(["x"]), "fake.png", COURSE)
+        with pytest.raises(FileRejected):  # not an image type
+            await upload_image(deps, store, EDITOR, PNG, "diagram.gif", COURSE)
+        with pytest.raises(NotFound):  # can't add to a course you don't edit
+            await upload_image(deps, store, STRANGER, PNG, "diagram.png", COURSE)
+
+
+async def upload_image(
+    deps: Deps, store: MemoryStore, user: Principal, data: bytes, name: str, course: str | None
+) -> svc.FileView:
+    started = await svc.start_upload(
+        deps,
+        user,
+        svc.UploadInput(
+            file_name=name,
+            size_bytes=len(data),
+            sha256=hashlib.sha256(data).hexdigest(),
+            course_id=course,
+            purpose="QuestionImage",
+        ),
+    )
+    async with deps.sessions() as s:
+        row = await repo.by_public_id(s, started.file.id)
+    store.put(row.StorageKey, data)
+    return await svc.complete_upload(deps, user, started.file.id)

@@ -6,7 +6,7 @@ import type { Material } from "@/features/lectures/api";
 import { quotaDetail } from "./lib/storage";
 import { openStream, type Stream } from "@/lib/sse";
 import { sseTicket } from "@/features/notify/api";
-import { failureText, precheck, sameOrigin, sha256, type UploadPhase } from "./lib/upload";
+import { failureText, imagePrecheck, precheck, sameOrigin, sha256, type UploadPhase } from "./lib/upload";
 
 export type FileView = Schemas["FileView"];
 
@@ -107,6 +107,38 @@ export function useFreeCourse(courseId: string) {
       void qc.invalidateQueries({ queryKey: storageKey });
     },
   });
+}
+
+/** A question image for a course (the editor's "Upload image"): returns its file id, to save as the
+ *  question's `imageFileId`. It's scanned like any upload; the question shows it meanwhile. */
+export async function uploadQuestionImage(courseId: string, file: File): Promise<string> {
+  const wrong = imagePrecheck(file);
+  if (wrong) throw new Error(wrong);
+  const started = await unwrap(
+    api.POST("/files/uploads", {
+      body: {
+        fileName: file.name,
+        sizeBytes: file.size,
+        sha256: await sha256(file),
+        courseId,
+        purpose: "QuestionImage",
+      },
+    }),
+  );
+  if (started.uploadUrl) {
+    await put(started.uploadUrl, started.uploadHeaders ?? {}, file, () => undefined, new AbortController().signal);
+  }
+  return (await unwrap(api.POST("/files/{file_id}/complete", { params: { path: { file_id: started.file.id } } }))).id;
+}
+
+/** A question image cut from a page of one of the course's PDFs (box in PDF points). */
+export async function cropQuestionImage(
+  courseId: string,
+  input: { fileId: string; page: number; box: { x: number; y: number; w: number; h: number } },
+): Promise<string> {
+  return (
+    await unwrap(api.POST("/courses/{id}/question-images/crop", { params: { path: { id: courseId } }, body: input }))
+  ).fileId;
 }
 
 /** PUT to the signed URL with progress (fetch can't report upload progress). */

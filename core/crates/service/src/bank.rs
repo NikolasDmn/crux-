@@ -648,6 +648,38 @@ pub struct CropInput {
     pub crop_box: CropBox,
 }
 
+#[derive(Debug, Clone, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CroppedImage {
+    /// Use as a question's `imageFileId` in this course.
+    pub file_id: String,
+}
+
+/// The question editor's "Crop from a PDF page": a question image cut from one of this course's
+/// PDFs, without touching any question (it can be a question that isn't saved yet). The question
+/// shows it once saved with it as its `imageFileId`.
+pub async fn crop_for_course(ctx: &Ctx, actor: &Actor, course_ref: &str, input: CropInput) -> AppResult<CroppedImage> {
+    // Access first: a stranger gets 404 whatever they send.
+    let mut conn = ctx.pool.acquire().await?;
+    let course = crate::courses::editable(&mut conn, actor, course_ref).await?;
+    drop(conn);
+    let b = &input.crop_box;
+    if input.page < 1 || !(b.w > 0.0 && b.h > 0.0 && b.x >= 0.0 && b.y >= 0.0) {
+        return Err(ValidationErrors::single("box", "invalid", "Give a page ≥ 1 and a box with positive size.").into());
+    }
+    let token = ctx.keys.sign_service("core", "files", ctx.clock.now().timestamp());
+    let source = ctx.files.get_file(&token, &actor.public_id, &input.file_id).await.map_err(|e| anyhow::anyhow!("files: {e}"))?;
+    if !source.as_ref().is_some_and(|f| f.usable_in(&course.public_id, &actor.public_id)) {
+        return Err(ValidationErrors::single("fileId", "unknown", "No such file in this course.").into());
+    }
+    let crop = ctx
+        .files
+        .crop(&token, &actor.public_id, &input.file_id, input.page, [b.x, b.y, b.w, b.h], &course.public_id)
+        .await
+        .map_err(|e| anyhow::anyhow!("files crop: {e}"))?;
+    Ok(CroppedImage { file_id: crop.id })
+}
+
 /// Spec 5.2: cut a question image from a page (files renders and stores it), then save a new
 /// version that shows it. The crop never goes away with its original (spec 6.2).
 pub async fn image_crop(ctx: &Ctx, actor: &Actor, question_ref: &str, input: CropInput) -> AppResult<QuestionView> {

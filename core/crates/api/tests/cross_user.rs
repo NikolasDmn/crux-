@@ -169,7 +169,7 @@ fn body_for_path(method: &str, path: &str) -> Option<Value> {
         ("POST", "/mocks/{id}/questions/{order}/ai-grade/accept")
         | ("POST", "/mocks/{id}/questions/{order}/ai-grade/reject")
         | ("POST", "/mocks/{id}/questions/{order}/ai-grade/override") => Some(json!({"gradeId": "01AAAAAAAAAAAAAAAAAAAAAAAA"})),
-        ("POST", "/questions/{id}/image-crop") => {
+        ("POST", "/questions/{id}/image-crop") | ("POST", "/courses/{id}/question-images/crop") => {
             Some(json!({"fileId": "01AAAAAAAAAAAAAAAAAAAAAAAA", "page": 1, "box": {"x": 0, "y": 0, "w": 1, "h": 1}}))
         }
         _ => body_for(method),

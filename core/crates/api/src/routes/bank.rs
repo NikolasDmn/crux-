@@ -3,7 +3,7 @@
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
-use crux_service::bank::{self, BankQuery, CropInput, QuestionInput, QuestionPatch, QuestionView, VersionView};
+use crux_service::bank::{self, BankQuery, CropInput, CroppedImage, QuestionInput, QuestionPatch, QuestionView, VersionView};
 use crux_service::views::Page;
 
 use crate::error::{ApiResult, ErrorBody};
@@ -78,6 +78,19 @@ pub async fn approve(State(s): State<AppState>, Auth(a): Auth, Path(id): Path<St
     responses((status = 200, body = QuestionView), (status = 404, body = ErrorBody)))]
 pub async fn promote(State(s): State<AppState>, Auth(a): Auth, Path(id): Path<String>) -> ApiResult<Json<QuestionView>> {
     Ok(Json(bank::promote(&s.ctx, &a, &id).await?))
+}
+
+/// A question image cut from a page of one of the course's PDFs, for a question being edited (save
+/// the question with it as `imageFileId`).
+#[utoipa::path(post, path = "/courses/{id}/question-images/crop", tag = "bank", security(("bearer" = [])), request_body = CropInput,
+    params(("id" = String, Path)), responses((status = 200, body = CroppedImage), (status = 404, body = ErrorBody), (status = 422, body = ErrorBody)))]
+pub async fn crop_for_course(
+    State(s): State<AppState>,
+    Auth(a): Auth,
+    Path(id): Path<String>,
+    JsonBody(i): JsonBody<CropInput>,
+) -> ApiResult<Json<CroppedImage>> {
+    Ok(Json(bank::crop_for_course(&s.ctx, &a, &id, i).await?))
 }
 
 /// Cut the question image from a page of a course PDF; saves a new version with it.

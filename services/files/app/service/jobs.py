@@ -124,7 +124,8 @@ async def scan(deps: Deps, file_id: int) -> None:
                 )
         else:
             await repo.set_fields(s, row.Id, ScanStatus="Clean")
-            await repo.enqueue(s, row.Id, "Extract", utcnow())
+            if row.Purpose == "Original":
+                await repo.enqueue(s, row.Id, "Extract", utcnow())
         await emit(s, deps.contracts, "file.scanned", row.PublicId, payload)
 
 

@@ -23,6 +23,17 @@ export function precheck(file: { name: string; size: number; type: string }): st
   return null;
 }
 
+/** Question images (the editor's "Upload image"): what the files service accepts. */
+export const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp";
+export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+export function imagePrecheck(file: { name: string; size: number; type: string }): string | null {
+  if (!/\.(png|jpe?g|webp)$/i.test(file.name)) return "Use a PNG, JPEG or WebP image.";
+  if (file.size <= 0) return "This file is empty.";
+  if (file.size > MAX_IMAGE_BYTES) return `Images must be under ${MAX_IMAGE_BYTES / (1024 * 1024)} MB.`;
+  return null;
+}
+
 /** Signed URLs are signed for the gateway's host; send them to this origin, path and query kept,
  *  so the request stays same-origin (CSP connect-src 'self', B2-1). */
 export function sameOrigin(url: string, origin: string): string {

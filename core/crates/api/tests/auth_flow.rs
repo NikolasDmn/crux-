@@ -157,6 +157,15 @@ async fn login_is_rate_limited_per_account() {
     let r = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "slow", "password": "correct horse battery"})), &[]).await;
     assert_eq!((r.status, r.code()), (StatusCode::TOO_MANY_REQUESTS, "rate_limited"));
     assert!(r.headers.contains_key("retry-after"));
+    // Audit L2: the lockout is per (account, IP), so it can't be used to lock the owner out...
+    let home = [("x-forwarded-for", "10.0.0.9")];
+    let ok = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "slow", "password": "correct horse battery"})), &home).await;
+    assert_eq!(ok.status, StatusCode::OK);
+    // ...and only failures count.
+    for _ in 0..6 {
+        let r = call(&h.app, "POST", "/auth/login", None, Some(json!({"login": "slow", "password": "correct horse battery"})), &home).await;
+        assert_eq!(r.status, StatusCode::OK);
+    }
     h.db.drop_db().await;
 }
 

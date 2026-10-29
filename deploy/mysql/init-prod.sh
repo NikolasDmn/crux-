@@ -5,7 +5,9 @@
 # To change a password later: ALTER USER by hand, then update .env and restart that service.
 set -euo pipefail
 
-q() { printf "%s" "$1" | sed "s/'/''/g"; }
+# A string literal for MySQL: backslashes are escapes there, so double them, then double quotes
+# (audit L7: a password with a backslash used to fail, or set a different password).
+q() { printf "%s" "$1" | sed -e 's/\\/\\\\/g' -e "s/'/''/g"; }
 sql="ALTER USER 'crux_core'@'%' IDENTIFIED BY '$(q "${CRUX_CORE_DB_PASSWORD:-crux-core}")';
 ALTER USER 'crux_files'@'%' IDENTIFIED BY '$(q "${CRUX_FILES_DB_PASSWORD:-crux-files}")';
 ALTER USER 'crux_ai'@'%' IDENTIFIED BY '$(q "${CRUX_AI_DB_PASSWORD:-crux-ai}")';

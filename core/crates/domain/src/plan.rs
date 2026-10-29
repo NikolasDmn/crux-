@@ -11,7 +11,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use chrono::{DateTime, Duration, NaiveDate, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveDate, NaiveTime, Utc};
 use chrono_tz::Tz;
 
 pub const DEFAULT_DAILY_HOURS: f64 = 4.0;
@@ -117,10 +117,7 @@ pub fn parse_hhmm(s: &str) -> Option<(u32, u32)> {
 
 fn local(tz: Tz, d: NaiveDate, (h, m): (u32, u32)) -> DateTime<Utc> {
     let t = NaiveTime::from_hms_opt(h, m, 0).expect("valid time");
-    tz.from_local_datetime(&d.and_time(t))
-        .earliest()
-        .map(|x| x.with_timezone(&Utc))
-        .unwrap_or_else(|| Utc.from_utc_datetime(&d.and_time(t)))
+    crate::localtime::to_utc(tz, d.and_time(t))
 }
 
 fn hours(d: Duration) -> f64 {
@@ -369,6 +366,7 @@ pub fn change_summary(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     const AMS: Tz = chrono_tz::Europe::Amsterdam;
 

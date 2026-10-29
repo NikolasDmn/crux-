@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, Utc};
 use chrono_tz::Tz;
 use crux_domain::study::{self, LectureTime};
 use crux_domain::ValidationErrors;
@@ -138,10 +138,7 @@ pub fn monday_of(iso_week: &str) -> Option<NaiveDate> {
 }
 
 fn local_midnight(tz: Tz, d: NaiveDate) -> DateTime<Utc> {
-    tz.from_local_datetime(&d.and_time(NaiveTime::MIN))
-        .earliest()
-        .map(|t| t.with_timezone(&Utc))
-        .unwrap_or_else(|| Utc.from_utc_datetime(&d.and_time(NaiveTime::MIN)))
+    crux_domain::localtime::to_utc(tz, d.and_time(NaiveTime::MIN))
 }
 
 async fn tz_of(conn: &mut MySqlConnection, user_id: i64) -> AppResult<Tz> {

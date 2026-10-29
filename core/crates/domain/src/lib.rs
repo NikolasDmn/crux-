@@ -9,6 +9,7 @@ pub mod catalog;
 pub mod fsrs;
 pub mod grading;
 pub mod ids;
+pub mod localtime;
 pub mod mock;
 pub mod page;
 pub mod plan;

@@ -2,7 +2,7 @@
 //! `flash.due` at 08:00 local (only with cards due). Part of deadlines.tick; notify decides whether
 //! the user wants them.
 
-use chrono::{DateTime, Duration, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveTime, Utc};
 use chrono_tz::Tz;
 use serde_json::json;
 
@@ -14,10 +14,7 @@ const LATEST_HOUR: u32 = 12;
 
 fn local(tz: Tz, now: DateTime<Utc>, h: u32, m: u32) -> DateTime<Utc> {
     let d = now.with_timezone(&tz).date_naive();
-    tz.from_local_datetime(&d.and_time(NaiveTime::from_hms_opt(h, m, 0).expect("time")))
-        .earliest()
-        .map(|t| t.with_timezone(&Utc))
-        .unwrap_or(now)
+    crux_domain::localtime::to_utc(tz, d.and_time(NaiveTime::from_hms_opt(h, m, 0).expect("time")))
 }
 
 /// Each (kind, user, local date) is requested once: a Redis marker, and notify's dedupe key as well.

@@ -200,7 +200,10 @@ pub async fn signup(ctx: &Ctx, input: SignupInput, client: &ClientInfo) -> AppRe
 pub async fn login(ctx: &Ctx, input: LoginInput, client: &ClientInfo) -> AppResult<Session> {
     let login = rules::normalize_email(&input.login);
     ratelimit::hit(ctx, &ratelimit::LOGIN_PER_IP, &client.ip).await?;
-    ratelimit::hit(ctx, &ratelimit::LOGIN_PER_ACCOUNT, &login).await?;
+    // Audit L2: the per-account lockout counts failed attempts only, per (account, IP), so nobody
+    // can keep someone else locked out from their own network.
+    let account = format!("{login}|{}", client.ip);
+    ratelimit::check(ctx, &ratelimit::LOGIN_PER_ACCOUNT, &account).await?;
 
     let mut conn = ctx.pool.acquire().await?;
     let user = users::by_login(&mut conn, &login).await?;
@@ -208,9 +211,12 @@ pub async fn login(ctx: &Ctx, input: LoginInput, client: &ClientInfo) -> AppResu
     let ok = password::verify_blocking(input.password, phc).await;
     let user = match user {
         Some(u) if ok && u.password_hash.is_some() && UserStatus::from_db(&u.status).may_log_in() => u,
-        _ => return Err(AppError::Unauthenticated),
+        _ => {
+            ratelimit::hit(ctx, &ratelimit::LOGIN_PER_ACCOUNT, &account).await.ok();
+            return Err(AppError::Unauthenticated);
+        }
     };
-    ratelimit::reset(ctx, &ratelimit::LOGIN_PER_ACCOUNT, &login).await?;
+    ratelimit::reset(ctx, &ratelimit::LOGIN_PER_ACCOUNT, &account).await?;
     open_session(&mut conn, ctx, &user, client).await
 }
 
@@ -303,8 +309,9 @@ pub async fn confirm_verify_email(ctx: &Ctx, token: &str) -> AppResult<UserView>
 /// `POST /auth/password/forgot {email}`: always succeeds, so it can't be used to probe accounts.
 pub async fn forgot_password(ctx: &Ctx, email: &str, client: &ClientInfo) -> AppResult<()> {
     let email = rules::normalize_email(email);
-    ratelimit::hit(ctx, &ratelimit::LOGIN_PER_IP, &client.ip).await?;
-    if ratelimit::hit(ctx, &ratelimit::ACCOUNT_EMAIL_PER_USER, &email).await.is_err() {
+    ratelimit::hit(ctx, &ratelimit::FORGOT_PER_IP, &client.ip).await?;
+    // Audit L2: per (address, IP), so a stranger can't use up someone's reset emails.
+    if ratelimit::hit(ctx, &ratelimit::ACCOUNT_EMAIL_PER_USER, &format!("{email}|{}", client.ip)).await.is_err() {
         return Ok(());
     }
     let now = ctx.clock.now();

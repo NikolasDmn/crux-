@@ -1,7 +1,7 @@
 //! Exams and deadlines (backend-spec 5.10): CRUD on the user's subscription, the exam layout
 //! (`DeadlineComponent`), recording a result, and the reminder tick.
 
-use chrono::{DateTime, Duration, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveTime, Utc};
 use chrono_tz::Tz;
 use crux_domain::study;
 use crux_domain::ValidationErrors;
@@ -454,10 +454,7 @@ pub async fn awaiting_result(conn: &mut MySqlConnection, user_id: i64, now: Date
 
 fn local_at(tz: Tz, t: DateTime<Utc>, day_offset: i64, h: u32) -> DateTime<Utc> {
     let d = t.with_timezone(&tz).date_naive() + Duration::days(day_offset);
-    tz.from_local_datetime(&d.and_time(NaiveTime::from_hms_opt(h, 0, 0).expect("hour")))
-        .earliest()
-        .map(|x| x.with_timezone(&Utc))
-        .unwrap_or(t)
+    crux_domain::localtime::to_utc(tz, d.and_time(NaiveTime::from_hms_opt(h, 0, 0).expect("hour")))
 }
 
 /// Eve reminder at 18:00 local the day before; check-in at 17:00 local on exam day (spec 5.10).
@@ -516,6 +513,7 @@ async fn notify(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     #[test]
     fn reminder_times_are_local() {

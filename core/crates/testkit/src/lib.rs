@@ -138,7 +138,11 @@ impl Resp {
 
 /// One request through the router, no network.
 pub async fn call(app: &Router, method: &str, path: &str, token: Option<&str>, body: Option<Value>, headers: &[(&str, &str)]) -> Resp {
-    let mut req = Request::builder().method(method).uri(path).header("x-forwarded-for", "203.0.113.7");
+    let mut req = Request::builder().method(method).uri(path);
+    // One client address for every call unless a test names its own.
+    if !headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("x-forwarded-for")) {
+        req = req.header("x-forwarded-for", "203.0.113.7");
+    }
     if let Some(t) = token {
         req = req.header("authorization", format!("Bearer {t}"));
     }

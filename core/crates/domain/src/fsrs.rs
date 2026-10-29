@@ -7,7 +7,7 @@
 
 use std::sync::OnceLock;
 
-use chrono::{DateTime, Duration, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, NaiveTime, Utc};
 use chrono_tz::Tz;
 
 /// Stored on every card the scheduler touches (`FlashcardProgress.FsrsParamsVersion`) so cards can
@@ -94,11 +94,7 @@ pub fn exam_cap(due: DateTime<Utc>, next_exam: Option<DateTime<Utc>>, tz: Tz, no
         return due;
     }
     let day_before = exam.with_timezone(&tz).date_naive() - Duration::days(1);
-    let evening = tz
-        .from_local_datetime(&day_before.and_time(NaiveTime::from_hms_opt(18, 0, 0).expect("18:00")))
-        .earliest()
-        .map(|t| t.with_timezone(&Utc))
-        .unwrap_or(exam - Duration::hours(24));
+    let evening = crate::localtime::to_utc(tz, day_before.and_time(NaiveTime::from_hms_opt(18, 0, 0).expect("18:00")));
     evening.max(now).min(exam)
 }
 
@@ -175,12 +171,13 @@ pub fn new_cards_left(new_per_day: i32, new_seen_today: i64) -> i64 {
 /// Start of "today" in the user's time zone, in UTC.
 pub fn local_day_start(now: DateTime<Utc>, tz: Tz) -> DateTime<Utc> {
     let date = now.with_timezone(&tz).date_naive();
-    tz.from_local_datetime(&date.and_time(NaiveTime::MIN)).earliest().map(|t| t.with_timezone(&Utc)).unwrap_or(now)
+    crate::localtime::to_utc(tz, date.and_time(NaiveTime::MIN))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     const AMS: Tz = chrono_tz::Europe::Amsterdam;
 

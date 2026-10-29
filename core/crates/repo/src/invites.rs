@@ -59,6 +59,17 @@ pub async fn insert(conn: &mut MySqlConnection, i: &NewInvite<'_>) -> RepoResult
     Ok(res.last_insert_id() as i64)
 }
 
+/// Invites of this user that can still be used (audit M5: capped per user).
+pub async fn count_open(conn: &mut MySqlConnection, inviter: i64, now: DateTime<Utc>) -> RepoResult<i64> {
+    Ok(sqlx::query_scalar(
+        "SELECT COUNT(*) FROM Invite WHERE InvitedBy = ? AND RevokedAt IS NULL AND Uses < MaxUses AND (ExpiresAt IS NULL OR ExpiresAt > ?)",
+    )
+    .bind(inviter)
+    .bind(now)
+    .fetch_one(conn)
+    .await?)
+}
+
 /// `inviter = None` lists every invite (admin).
 pub async fn list(conn: &mut MySqlConnection, inviter: Option<i64>, before_id: Option<i64>, limit: u32) -> RepoResult<Vec<InviteRow>> {
     Ok(sqlx::query_as(&format!("{SELECT} WHERE (? IS NULL OR i.InvitedBy = ?) AND (? IS NULL OR i.Id < ?) ORDER BY i.Id DESC LIMIT ?"))

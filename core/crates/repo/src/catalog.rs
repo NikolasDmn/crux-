@@ -298,8 +298,9 @@ pub async fn next_material_sort(conn: &mut MySqlConnection, component_id: i64) -
         .map(|v: i64| v as i32)?)
 }
 
-/// Is this file referenced by a live material or paper of a course the user can read? (spec 6.1
-/// step 7: members of a course whose material or paper references the file may download it.)
+/// Is this file referenced by a live material, paper or question of a course the user can read?
+/// (spec 6.1 step 7; question images since audit M2: any version, so old mocks keep theirs, of a
+/// bank question or the user's own private one.)
 pub async fn user_can_read_file_ref(conn: &mut MySqlConnection, user_id: i64, file_ref: &str) -> RepoResult<bool> {
     let n: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM Course c \
@@ -307,12 +308,16 @@ pub async fn user_can_read_file_ref(conn: &mut MySqlConnection, user_id: i64, fi
          WHERE c.ArchivedAt IS NULL AND (c.OwnerUserId = ? OR cm.UserId IS NOT NULL) AND ( \
            EXISTS (SELECT 1 FROM ComponentMaterial m JOIN CourseComponent k ON k.Id = m.CourseComponentId \
                    WHERE k.CourseId = c.Id AND m.FileRef = ? AND m.ArchivedAt IS NULL) \
-           OR EXISTS (SELECT 1 FROM Paper p WHERE p.CourseId = c.Id AND p.FileRef = ?))",
+           OR EXISTS (SELECT 1 FROM Paper p WHERE p.CourseId = c.Id AND p.FileRef = ?) \
+           OR EXISTS (SELECT 1 FROM QuestionVersion v JOIN Question q ON q.Id = v.QuestionId \
+                      WHERE q.CourseId = c.Id AND v.ImageFileRef = ? AND (q.OwnerUserId IS NULL OR q.OwnerUserId = ?)))",
     )
     .bind(user_id)
     .bind(user_id)
     .bind(file_ref)
     .bind(file_ref)
+    .bind(file_ref)
+    .bind(user_id)
     .fetch_one(conn)
     .await?;
     Ok(n > 0)

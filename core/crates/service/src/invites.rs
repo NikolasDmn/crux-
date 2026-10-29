@@ -48,6 +48,9 @@ fn validate(input: &CreateInviteInput, as_admin: bool) -> ValidationErrors {
     e
 }
 
+/// Open (usable) invites one user may have at a time (audit M5).
+pub const MAX_OPEN: i64 = 25;
+
 pub async fn create(ctx: &Ctx, actor: &Actor, input: CreateInviteInput, as_admin: bool) -> AppResult<CreatedInvite> {
     if as_admin && !actor.is_admin() {
         return Err(AppError::NotFound);
@@ -59,6 +62,20 @@ pub async fn create(ctx: &Ctx, actor: &Actor, input: CreateInviteInput, as_admin
 
     let now = ctx.clock.now();
     let mut tx = crux_repo::begin(&ctx.pool).await?;
+    // Audit M5: a cap on open invites, and on invite emails a day (admins are exempt).
+    if !as_admin {
+        if invites::count_open(&mut tx, actor.user_id, now).await? >= MAX_OPEN {
+            return Err(ValidationErrors::single(
+                "invite",
+                "too_many",
+                &format!("You have {MAX_OPEN} open invites. Revoke one, or wait for one to be used or expire."),
+            )
+            .into());
+        }
+        if input.email.is_some() {
+            crate::ratelimit::hit(ctx, &crate::ratelimit::INVITE_EMAIL_PER_USER, &actor.public_id).await?;
+        }
+    }
     let tier_id = match &input.tier_code {
         Some(code) => Some(
             tiers::by_code(&mut tx, code)

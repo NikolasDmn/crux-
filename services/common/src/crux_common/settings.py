@@ -2,7 +2,10 @@
 
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from crux_common import prod_guard
 
 # Longer than the 5 s blocking XREADGROUP in the consumers (redis-py 8 defaults to 5 s, which
 # turns every idle read into a timeout error).
@@ -30,6 +33,13 @@ class CommonSettings(BaseSettings):
     service_secret: str = ""
     contracts_dir: Path = _default_contracts_dir()
     listen_port: int = 8080
+
+    @model_validator(mode="after")
+    def _no_dev_secrets_in_prod(self) -> "CommonSettings":
+        # Audit M6: every service checks its environment once, when its settings load.
+        if self.env == "prod":
+            prod_guard.check()
+        return self
 
     @property
     def sync_database_url(self) -> str:

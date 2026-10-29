@@ -33,6 +33,16 @@ impl FileInfo {
     pub fn usable_original(&self) -> bool {
         self.purpose == "Original" && self.status == "Active" && self.scan_status == "Clean"
     }
+
+    /// May be used in this course (audit M1): a file of the course itself, or one the actor uploaded
+    /// without a course (it's attached when used). Having the same owner is not enough: the owner's
+    /// other courses and personal files stay out.
+    pub fn usable_in(&self, course_ref: &str, actor_ref: &str) -> bool {
+        match self.course_ref.as_deref() {
+            Some(c) => c == course_ref,
+            None => self.uploaded_by_ref.as_deref() == Some(actor_ref),
+        }
+    }
 }
 
 #[async_trait]

@@ -18,6 +18,8 @@ pub const LOGIN_PER_IP: Limit = Limit { name: "login.ip", max: 20, window: Durat
 pub const SIGNUP_PER_IP: Limit = Limit { name: "signup.ip", max: 5, window: Duration::from_secs(60 * 60) };
 /// Not in the spec; stops a signed-in user from mail-bombing themselves or someone else.
 pub const ACCOUNT_EMAIL_PER_USER: Limit = Limit { name: "account_email", max: 5, window: Duration::from_secs(60 * 60) };
+/// Audit M5: invites and course shares emailed to an address the sender picks, per sender per day.
+pub const INVITE_EMAIL_PER_USER: Limit = Limit { name: "invite_email", max: 10, window: Duration::from_secs(24 * 60 * 60) };
 
 fn key(limit: &Limit, subject: &str) -> String {
     format!("crux:rl:{}:{}", limit.name, &token_hash(subject)[..32])

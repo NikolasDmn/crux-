@@ -306,6 +306,7 @@ async fn apply_one(
             let qtype: QuestionType = serde_json::from_value(v.get("type").cloned().unwrap_or(Value::Null)).map_err(|_| "type: invalid")?;
             let mut content: VersionInput =
                 serde_json::from_value(v.get("content").cloned().unwrap_or(Value::Null)).map_err(|_| "content: invalid")?;
+            content.image_file_id = None; // model output never names a file (audit M2)
             let mut paper = v
                 .get("paperTempKey")
                 .and_then(Value::as_str)

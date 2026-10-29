@@ -368,3 +368,24 @@ async fn breached_password_warns_until_the_user_accepts() {
     assert_eq!(ok.status, StatusCode::OK, "{}", ok.json);
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn invite_emails_and_open_invites_are_limited() {
+    let Some(h) = common::harness().await else { return };
+    let (token, user, _) = signup(&h.app, &h.t.ctx, "sender").await;
+    crux_testkit::verify_email(&h.t.ctx, user["id"].as_str().unwrap()).await;
+    // Audit M5: 10 emailed invites a day.
+    for i in 0..10 {
+        let r = call(&h.app, "POST", "/invites", Some(&token), Some(json!({"email": format!("friend{i}@example.com")})), &[]).await;
+        assert_eq!(r.status, StatusCode::CREATED, "{}", r.json);
+    }
+    let r = call(&h.app, "POST", "/invites", Some(&token), Some(json!({"email": "one-more@example.com"})), &[]).await;
+    assert_eq!(r.status, StatusCode::TOO_MANY_REQUESTS, "{}", r.json);
+    // ...and 25 open invites at a time, emailed or not.
+    for _ in 10..25 {
+        assert_eq!(call(&h.app, "POST", "/invites", Some(&token), Some(json!({})), &[]).await.status, StatusCode::CREATED);
+    }
+    let r = call(&h.app, "POST", "/invites", Some(&token), Some(json!({})), &[]).await;
+    assert_eq!(r.json["error"]["details"]["fields"][0]["code"], "too_many", "{}", r.json);
+    h.db.drop_db().await;
+}

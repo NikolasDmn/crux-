@@ -140,7 +140,9 @@ with dev defaults. The important ones:
    (Caddy gets the TLS certificate), `CRUX_APP_BASE_URL=https://<your domain>`,
    `CRUX_COOKIE_SECURE=true`, Postmark in `CRUX_SMTP_URL` and its webhook secret,
    `CRUX_SCANNER=clamd` (ClamAV), the `BACKUP_S3_*` bucket and `BACKUP_AGE_RECIPIENT`
-   (`apt install age`; make the key pair on your own machine).
+   (`apt install age`; make the key pair on your own machine). With `CRUX_ENV=prod` every service
+   refuses to start on a development secret or password, a secret under 32 characters
+   (`openssl rand -base64 33`), or `CRUX_COOKIE_SECURE=false`.
 3. A JWT key: `openssl genpkey -algorithm ed25519 -out deploy/secrets/jwt_ed25519.pem`.
 4. `docker compose -f deploy/compose.yaml --env-file .env --profile ai --profile full up -d --build`
    (`full` adds ClamAV). On an empty volume MySQL creates the service users with the `.env` passwords and drops the test user.

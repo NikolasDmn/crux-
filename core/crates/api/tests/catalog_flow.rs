@@ -396,3 +396,54 @@ async fn trash_restore_and_purge() {
     assert_eq!(outbox_payloads(&h, "course.deleted").await[0]["courseRef"], id.as_str());
     h.db.drop_db().await;
 }
+
+#[tokio::test]
+async fn files_and_question_images_stay_in_their_course() {
+    let Some(h) = common::harness().await else { return };
+    let (t, u, _) = signup(&h.app, &h.t.ctx, "owner").await;
+    let me = u["id"].as_str().unwrap();
+    let a = course(&h, &t, "AAA").await["id"].as_str().unwrap().to_string();
+    let b = course(&h, &t, "BBB").await["id"].as_str().unwrap().to_string();
+    let l1 = call(&h.app, "POST", &format!("/courses/{a}/components"), Some(&t), Some(json!({"code": "L1", "name": "Intro"})), &[])
+        .await
+        .json["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mats = format!("/components/{l1}/materials");
+    let attach = |id: &str| json!({"kind": "Slides", "title": "x", "fileId": id});
+
+    // Audit M1: the same owner isn't enough; the file must be this course's, or the actor's own
+    // upload without a course.
+    h.t.files.put(file("01FILEOFCOURSEB00000000000", me, Some(&b), "Clean"));
+    h.t.files.put(file("01FILENOCOURSE000000000000", me, None, "Clean"));
+    let other = call(&h.app, "POST", &mats, Some(&t), Some(attach("01FILEOFCOURSEB00000000000")), &[]).await;
+    assert_eq!(other.json["error"]["details"]["fields"][0]["code"], "unknown", "a file of another course");
+    let loose = call(&h.app, "POST", &mats, Some(&t), Some(attach("01FILENOCOURSE000000000000")), &[]).await;
+    assert_eq!(loose.status, StatusCode::CREATED, "{}", loose.json);
+
+    // Audit M2: a question image must be one of this course's question images.
+    let image = |id: &str, course: &str| FileInfo { purpose: "QuestionImage".into(), ..file(id, me, Some(course), "Clean") };
+    h.t.files.put(image("01IMAGEOFA0000000000000000", &a));
+    h.t.files.put(image("01IMAGEOFB0000000000000000", &b));
+    let q = |img: &str| {
+        json!({"componentId": l1, "type": "MC", "content": {"prompt": "Mean?", "keyReliability": "Official", "imageFileId": img,
+            "options": [{"text": "a", "isCorrect": true}, {"text": "b", "isCorrect": false}]}})
+    };
+    let qs = format!("/courses/{a}/questions");
+    let wrong = call(&h.app, "POST", &qs, Some(&t), Some(q("01IMAGEOFB0000000000000000")), &[]).await;
+    assert_eq!(wrong.json["error"]["details"]["fields"][0]["field"], "content.imageFileId", "{}", wrong.json);
+    let pdf = call(&h.app, "POST", &qs, Some(&t), Some(q("01FILENOCOURSE000000000000")), &[]).await;
+    assert_eq!(pdf.json["error"]["details"]["fields"][0]["code"], "unknown", "a PDF isn't a question image");
+    let ok = call(&h.app, "POST", &qs, Some(&t), Some(q("01IMAGEOFA0000000000000000")), &[]).await;
+    assert_eq!(ok.status, StatusCode::CREATED, "{}", ok.json);
+
+    // ...and members can read it now (spec 6.1 step 7), strangers still can't.
+    let (_, ou, _) = signup(&h.app, &h.t.ctx, "stranger").await;
+    let svc = h.t.ctx.keys.sign_service("files", "core", h.t.ctx.clock.now().timestamp());
+    let ask = |user: &str| format!("/internal/v1/access/file-ref?user={user}&ref=01IMAGEOFA0000000000000000");
+    let yes = call(&h.app, "GET", &ask(me), Some(&svc), None, &[]).await;
+    let no = call(&h.app, "GET", &ask(ou["id"].as_str().unwrap()), Some(&svc), None, &[]).await;
+    assert_eq!((yes.json["allowed"].as_bool(), no.json["allowed"].as_bool()), (Some(true), Some(false)));
+    h.db.drop_db().await;
+}

@@ -270,8 +270,7 @@ pub(crate) async fn usable_file(ctx: &Ctx, actor: &Actor, course: &CourseRow, fi
     let info = ctx.files.get_file(&token, &actor.public_id, file_ref).await.map_err(|e| anyhow::anyhow!("files service: {e}"))?;
     let unknown = || AppError::from(ValidationErrors::single(field, "unknown", "No such file."));
     let info = info.ok_or_else(unknown)?;
-    let belongs = info.course_ref.as_deref() == Some(course.public_id.as_str()) || info.owner_ref == course.owner_ref;
-    if !belongs {
+    if !info.usable_in(&course.public_id, &actor.public_id) {
         return Err(unknown());
     }
     if !info.usable_original() {

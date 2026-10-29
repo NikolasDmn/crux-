@@ -511,6 +511,8 @@ async fn share_by_email(
     email: &str,
     role: &str,
 ) -> AppResult<()> {
+    // Audit M5: shares by email count against the same daily limit as invite emails.
+    crate::ratelimit::hit(ctx, &crate::ratelimit::INVITE_EMAIL_PER_USER, &actor.public_id).await?;
     let code = ctx.ids.invite_code();
     let invite_ref = ctx.ids.ulid();
     let invite_id = invites::insert(

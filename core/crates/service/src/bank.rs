@@ -461,6 +461,21 @@ async fn resolve_family(conn: &mut MySqlConnection, course_id: i64, r: Option<&s
     }
 }
 
+/// Audit M2: a question's image must be a question image of this course (a crop of one of its
+/// files). `current` is the image the question has now: keeping it needs no check.
+async fn check_image(ctx: &Ctx, actor: &Actor, course_ref: &str, image: Option<&str>, current: Option<&str>) -> AppResult<()> {
+    let Some(id) = image else { return Ok(()) };
+    if current == Some(id) {
+        return Ok(());
+    }
+    let token = ctx.keys.sign_service("core", "files", ctx.clock.now().timestamp());
+    let info = ctx.files.get_file(&token, &actor.public_id, id).await.map_err(|e| anyhow::anyhow!("files service: {e}"))?;
+    if !info.is_some_and(|f| f.purpose == "QuestionImage" && f.status == "Active" && f.course_ref.as_deref() == Some(course_ref)) {
+        return Err(ValidationErrors::single("content.imageFileId", "unknown", "No such image in this course.").into());
+    }
+    Ok(())
+}
+
 pub async fn create(ctx: &Ctx, actor: &Actor, course_ref: &str, input: QuestionInput) -> AppResult<QuestionView> {
     let mut tx = crux_repo::begin(&ctx.pool).await?;
     let course = readable(&mut tx, actor, course_ref).await?;
@@ -476,6 +491,7 @@ pub async fn create(ctx: &Ctx, actor: &Actor, course_ref: &str, input: QuestionI
     e.merge(question::validate_version(input.qtype, &input.content, &source));
     e.merge(question::validate_paper_link(input.paper_id.as_deref(), input.paper_question_no.as_deref()));
     e.into_result()?;
+    check_image(ctx, actor, &course.public_id, input.content.image_file_id.as_deref(), None).await?;
     let component_id = resolve_component(&mut tx, course.id, &input.component_id).await?;
     let paper_id = resolve_paper(&mut tx, course.id, input.paper_id.as_deref()).await?;
     let family_id = resolve_family(&mut tx, course.id, input.family_of_id.as_deref()).await?;
@@ -537,6 +553,13 @@ pub async fn patch(ctx: &Ctx, actor: &Actor, question_ref: &str, version: i32, p
         Some(r) => resolve_family(&mut tx, course.id, Some(r)).await?,
         None => q.family_id,
     };
+    if let Some(c) = &p.content {
+        let now = match q.current_version_id {
+            Some(v) => repo::version(&mut tx, v).await?.and_then(|r| r.image_file_ref),
+            None => None,
+        };
+        check_image(ctx, actor, &course.public_id, c.image_file_id.as_deref(), now.as_deref()).await?;
+    }
     let current_version = match &p.content {
         Some(c) => write_version(&mut tx, ctx, actor, q.id, qt, c).await?,
         None => q.current_version_id.ok_or(AppError::NotFound)?,
@@ -636,9 +659,7 @@ pub async fn image_crop(ctx: &Ctx, actor: &Actor, question_ref: &str, input: Cro
     let (q, course) = writable(&mut tx, actor, question_ref).await?;
     let token = ctx.keys.sign_service("core", "files", ctx.clock.now().timestamp());
     let source = ctx.files.get_file(&token, &actor.public_id, &input.file_id).await.map_err(|e| anyhow::anyhow!("files: {e}"))?;
-    let belongs =
-        source.as_ref().is_some_and(|f| f.course_ref.as_deref() == Some(course.public_id.as_str()) || f.owner_ref == course.owner_ref);
-    if !belongs {
+    if !source.as_ref().is_some_and(|f| f.usable_in(&course.public_id, &actor.public_id)) {
         return Err(ValidationErrors::single("fileId", "unknown", "No such file in this course.").into());
     }
     let crop = ctx
@@ -760,6 +781,7 @@ pub async fn create_generated(ctx: &Ctx, input: GeneratedInput) -> AppResult<Gen
     for (i, g) in input.questions.into_iter().enumerate().take(50) {
         let mut content = g.content;
         content.key_reliability = Some("Derived".into());
+        content.image_file_id = None; // model output never names a file (audit M2)
         let errors = question::validate_version(g.qtype, &content, "Generated");
         if !errors.is_empty() {
             out.rejected.push((i, errors.0.first().map(|e| e.code.clone()).unwrap_or_default()));

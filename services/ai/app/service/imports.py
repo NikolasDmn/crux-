@@ -117,6 +117,7 @@ payloadJson is a JSON object as a string. Shapes:
   parent: a Component
 - Paper (a past exam) {"paperKey":"2024-1","label","examDate":"YYYY-MM-DD","fileRef"}
 - Question {"type":"MC|Numeric|Open","content":{"prompt","explanation","keyReliability":"Official|Derived",
+  "multiSelect"(true only for "choose/select all that apply"; then any number may be correct),
   "options":[{"text","isCorrect"}],
   "numeric":{"value","tolerance","toleranceKind":"Absolute","unit","unitRequired"},"open":{"modelAnswer"}},
   "paperTempKey" or "paperId","paperQuestionNo","conceptTempKeys":[],"componentTempKey"}  parent: a Component.

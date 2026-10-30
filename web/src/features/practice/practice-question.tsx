@@ -78,10 +78,12 @@ export function PracticeQuestionCard({
   const key = result?.key;
   const rightIds = (key?.options ?? []).filter((o) => o.isCorrect).map((o) => o.id);
   const picked = (id: string) => (multi ? choices.includes(id) : choice === id);
-  const tempting =
-    result && !multi && choice && !rightIds.includes(choice)
-      ? key?.options?.find((o) => o.id === choice)?.distractorNote
-      : null;
+  // Why each wrong pick was tempting (several for "choose all that apply").
+  const tempting = result
+    ? (key?.options ?? [])
+        .filter((o) => picked(o.id) && !rightIds.includes(o.id) && o.distractorNote)
+        .map((o) => o.distractorNote!)
+    : [];
   return (
     <Card className={cn("flex flex-col gap-4", compact && "gap-3 p-4")}>
       <Markdown className={compact ? undefined : "text-md"}>{q.prompt}</Markdown>
@@ -157,7 +159,11 @@ export function PracticeQuestionCard({
           >
             {result.outcome === "Right" ? "Right" : result.outcome === "Partial" ? "Partly right" : "Not quite"}
           </span>
-          {tempting ? <p className="m-0 text-sm">{tempting}</p> : null}
+          {tempting.map((t) => (
+            <p key={t} className="m-0 text-sm">
+              {t}
+            </p>
+          ))}
           {key?.numeric ? (
             <p className="m-0">
               Answer: <span className="font-mono tnum">{key.numeric.value}</span> {key.numeric.unit ?? ""}

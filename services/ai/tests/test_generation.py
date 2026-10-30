@@ -34,6 +34,12 @@ def test_rules() -> None:
     assert rules.check(mc("What is Var(3X) in terms of Var(X)?"), existing) is None
     assert rules.check(mc("What is Var(2X) when Var(X) = 1 ?"), existing) == "duplicate"
     assert rules.check(mc("Which of these is Var(3X)?", correct=2), []) == "not_one_correct"
+    # "Choose all that apply": several correct is fine, none is not.
+    assert rules.check({**mc("Which of these equal Var(3X)?", correct=2), "multiSelect": True}, []) is None
+    assert rules.check({**mc("Which of these equal Var(3X)?", correct=0), "multiSelect": True}, []) == "not_one_correct"
+    assert (
+        rules.to_content({**mc("Which of these equal Var(3X)?", correct=2), "multiSelect": True})["multiSelect"] is True
+    )
     assert rules.check(mc("Which of these is Var(3X)?", options=["a", "A "]), []) == "duplicate_options"
     assert (
         rules.check(

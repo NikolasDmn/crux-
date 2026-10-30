@@ -197,22 +197,30 @@ export function readOptions(payload: Record<string, unknown>): OptionEdit[] {
   });
 }
 
+/** Whether an MC question proposal is "choose all that apply". */
+export function readMulti(payload: Record<string, unknown>): boolean {
+  return ((payload.content ?? {}) as { multiSelect?: unknown }).multiSelect === true;
+}
+
 /** Why these options can't be saved, or null. */
-export function optionsProblem(options: OptionEdit[]): string | null {
+export function optionsProblem(options: OptionEdit[], multi = false): string | null {
   if (!options.length) return null;
   if (options.length < 2) return "Give at least two options.";
   if (options.some((o) => !o.text.trim())) return "Fill in every option, or remove the empty one.";
-  if (options.filter((o) => o.isCorrect).length !== 1) return "Mark exactly one option correct.";
+  const right = options.filter((o) => o.isCorrect).length;
+  if (multi && !right) return "Mark at least one option correct.";
+  if (!multi && right !== 1) return "Mark exactly one option correct.";
   return null;
 }
 
 /** The `edits` object for changed fields; a question's content is sent whole (edits merge shallowly).
- *  `options` (an MC question's) are included when they changed. */
+ *  `options` and `multi` (an MC question's) are included when either changed. */
 export function editsFor(
   kind: string,
   payload: Record<string, unknown>,
   values: Record<string, string>,
   options?: OptionEdit[],
+  multi?: boolean,
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const f of EDIT_FIELDS[kind] ?? []) {
@@ -223,9 +231,14 @@ export function editsFor(
     if (b) out[a!] = { ...((out[a!] ?? payload[a!] ?? {}) as Record<string, unknown>), [b]: v };
     else out[a!] = v;
   }
-  if (options && JSON.stringify(options) !== JSON.stringify(readOptions(payload))) {
+  const multiChanged = multi !== undefined && multi !== readMulti(payload);
+  if (options && (multiChanged || JSON.stringify(options) !== JSON.stringify(readOptions(payload)))) {
     const content = (out.content ?? payload.content ?? {}) as Record<string, unknown>;
-    out.content = { ...content, options: options.map((o) => ({ text: o.text.trim(), isCorrect: o.isCorrect })) };
+    out.content = {
+      ...content,
+      options: options.map((o) => ({ text: o.text.trim(), isCorrect: o.isCorrect })),
+      ...(multi !== undefined ? { multiSelect: multi } : {}),
+    };
   }
   return out;
 }

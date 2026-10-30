@@ -29,6 +29,7 @@ import {
   KIND_TITLE,
   optionsProblem,
   readField,
+  readMulti,
   readOptions,
   selected,
   type OptionEdit,
@@ -312,7 +313,10 @@ function ProposalCard({
             ? `/c/${courseId}/papers`
             : null
       : null;
-  const content = (payload.content ?? {}) as { options?: { text?: string; isCorrect?: boolean }[] };
+  const content = (payload.content ?? {}) as {
+    options?: { text?: string; isCorrect?: boolean }[];
+    multiSelect?: boolean;
+  };
 
   return (
     <li
@@ -356,6 +360,9 @@ function ProposalCard({
         {p.kind === "Question" ? (
           <>
             <Markdown>{s.title}</Markdown>
+            {content.options?.length && content.multiSelect ? (
+              <span className="text-sm text-muted">Choose all that apply</span>
+            ) : null}
             {content.options?.length ? (
               <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm">
                 {content.options.map((o, i) => (
@@ -400,13 +407,31 @@ function EditDialog({ importId, p, onClose }: { importId: string; p: ProposalVie
   const [values, setValues] = useState(() => Object.fromEntries(fields.map((f) => [f.key, readField(payload, f.key)])));
   // An MC question's options: text, which one is right, add and remove.
   const [options, setOptions] = useState<OptionEdit[]>(() => (p.kind === "Question" ? readOptions(payload) : []));
-  const problem = optionsProblem(options);
+  const [multi, setMulti] = useState(() => readMulti(payload));
+  const problem = optionsProblem(options, multi);
   const errors = fieldErrors(patch.error);
+  // One correct option clears the others, unless it's "choose all that apply".
   const setOption = (i: number, o: Partial<OptionEdit>) =>
-    setOptions(options.map((x, n) => (n === i ? { ...x, ...o } : o.isCorrect ? { ...x, isCorrect: false } : x)));
+    setOptions(
+      options.map((x, n) => (n === i ? { ...x, ...o } : o.isCorrect && !multi ? { ...x, isCorrect: false } : x)),
+    );
+  const toggleMulti = (on: boolean) => {
+    setMulti(on);
+    // Back to one answer: keep only the first correct option.
+    if (!on) {
+      const first = options.findIndex((o) => o.isCorrect);
+      setOptions(options.map((o, n) => ({ ...o, isCorrect: n === first })));
+    }
+  };
   const save = () => {
     if (problem) return;
-    const edits = editsFor(p.kind, payload, values, options.length ? options : undefined);
+    const edits = editsFor(
+      p.kind,
+      payload,
+      values,
+      options.length ? options : undefined,
+      options.length ? multi : undefined,
+    );
     if (!Object.keys(edits).length) return onClose();
     patch.mutate({ proposalId: p.id, body: { edits, status: "Accepted" } }, { onSuccess: onClose });
   };
@@ -450,18 +475,31 @@ function EditDialog({ importId, p, onClose }: { importId: string; p: ProposalVie
       {options.length ? (
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
           <legend className="mb-1.5 text-sm font-medium">Options</legend>
-          <div role="radiogroup" aria-label="Correct option" className="flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 accent-[var(--primary)]"
+              checked={multi}
+              onChange={(e) => toggleMulti(e.currentTarget.checked)}
+            />
+            Choose all that apply
+          </label>
+          <div
+            role={multi ? "group" : "radiogroup"}
+            aria-label={multi ? "Correct options" : "Correct option"}
+            className="flex flex-col gap-2"
+          >
             {options.map((o, i) => {
               const letter = String.fromCharCode(65 + i);
               return (
                 <div key={i} className="flex items-center gap-2">
                   <input
-                    type="radio"
+                    type={multi ? "checkbox" : "radio"}
                     name="correct"
                     className="size-4 accent-[var(--primary)]"
                     aria-label={`Option ${letter} is correct`}
                     checked={o.isCorrect}
-                    onChange={() => setOption(i, { isCorrect: true })}
+                    onChange={() => setOption(i, { isCorrect: multi ? !o.isCorrect : true })}
                   />
                   <Input
                     aria-label={`Option ${letter}`}

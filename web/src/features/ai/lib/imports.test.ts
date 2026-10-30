@@ -5,6 +5,7 @@ import {
   editsFor,
   optionsProblem,
   readField,
+  readMulti,
   readOptions,
   selected,
   summary,
@@ -106,5 +107,21 @@ describe("question options in an edit", () => {
       ]),
     ).toMatch(/exactly one/);
     expect(optionsProblem([])).toBeNull();
+  });
+  it("allows several correct options when it's choose all that apply", () => {
+    const two = [
+      { text: "a", isCorrect: true },
+      { text: "b", isCorrect: true },
+    ];
+    expect(optionsProblem(two, true)).toBeNull();
+    expect(
+      optionsProblem(
+        two.map((o) => ({ ...o, isCorrect: false })),
+        true,
+      ),
+    ).toMatch(/at least one/);
+    expect(readMulti(payload)).toBe(false);
+    const edits = editsFor("Question", payload, { "content.prompt": "P", "content.explanation": "" }, two, true);
+    expect(edits.content).toMatchObject({ multiSelect: true, options: two });
   });
 });

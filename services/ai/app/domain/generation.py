@@ -1,6 +1,6 @@
 """Question generation rules (spec 7.5). Pure.
 
-- MC: at least 2 options, exactly 1 correct, no duplicate options.
+- MC: at least 2 options, exactly 1 correct (at least 1 for "choose all that apply"), no duplicate options.
 - No near-duplicates: trigram similarity > 0.9 with an existing prompt (or another in the batch).
 - Nightly top-up target per lecture = max(2, round(k * X)), X = the exam's question count for
   that lecture; k by days to the exam: >= 7 -> 3, 3-6 -> 2, 0-2 -> 3. At most 50 per run.
@@ -40,7 +40,8 @@ def check(q: dict[str, Any], existing: list[str]) -> str | None:
         opts = q.get("options") or []
         if len(opts) < 2:
             return "too_few_options"
-        if sum(1 for o in opts if o.get("isCorrect")) != 1:
+        right = sum(1 for o in opts if o.get("isCorrect"))
+        if right != 1 and not (q.get("multiSelect") and right >= 1):
             return "not_one_correct"
         texts = [_norm(o.get("text") or "") for o in opts]
         if len(set(texts)) != len(texts) or any(not t for t in texts):
@@ -58,6 +59,7 @@ def to_content(q: dict[str, Any]) -> dict[str, Any]:
     """The model's question as core's VersionInput (KeyReliability is forced to Derived in core)."""
     content: dict[str, Any] = {"prompt": q["prompt"].strip(), "explanation": q.get("explanation")}
     if q["type"] == "MC":
+        content["multiSelect"] = bool(q.get("multiSelect"))
         content["options"] = [
             {"text": o["text"], "isCorrect": bool(o.get("isCorrect")), "distractorNote": o.get("distractorNote")}
             for o in q["options"]
@@ -115,6 +117,7 @@ SCHEMA: dict[str, Any] = {
                     "type": {"type": "string", "enum": ["MC", "Numeric", "Open"]},
                     "prompt": {"type": "string"},
                     "explanation": {"type": "string"},
+                    "multiSelect": {"type": "boolean"},
                     "options": {
                         "type": "array",
                         "items": {
@@ -140,7 +143,7 @@ SCHEMA: dict[str, Any] = {
                     },
                     "modelAnswer": {"type": "string"},
                 },
-                "required": ["type", "prompt", "explanation", "options", "numeric", "modelAnswer"],
+                "required": ["type", "prompt", "explanation", "multiSelect", "options", "numeric", "modelAnswer"],
                 "additionalProperties": False,
             },
         }
@@ -151,7 +154,9 @@ SCHEMA: dict[str, Any] = {
 
 SYSTEM = """You write practice exam questions for one lecture of a university course.
 - Seeded from the given question when there is one: test the adjacent idea, in the real exam's style.
-- MC: exactly one correct option; distractors from realistic slips (a one-word swap, a factor of 2,
+- MC: usually exactly one correct option. Now and then (when the seed is one, or the idea has several
+  true statements) write "choose all that apply": multiSelect true and two or more correct options.
+  multiSelect is false for every other question. Distractors from realistic slips (a one-word swap, a factor of 2,
   a wrong unit, off-by-one, inverse vs transpose), each with a short distractorNote naming the slip.
 - Use $...$ for maths. Don't repeat any of the existing prompts.
 - Fill unused fields with empty values: options [] for non-MC questions,

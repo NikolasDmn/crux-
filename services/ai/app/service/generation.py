@@ -28,7 +28,10 @@ from crux_common.messaging.outbox import emit
 from crux_common.timeutil import iso, utcnow
 
 log = logging.getLogger("crux.ai.generation")
-PROMPT_VERSION = "gen-1"
+PROMPT_VERSION = "gen-2"
+SOLVE_PROMPT_VERSION = "solve-1"
+#: The solve thinks before answering; thinking shares this budget.
+SOLVE_MAX_TOKENS = 8000
 NIGHTLY_HOUR = 3
 
 
@@ -187,20 +190,24 @@ async def run_one(deps: Deps) -> bool:
             [{"role": "user", "content": user_msg}],
             rules.SCHEMA,
             min(16000, 600 * req["n"] + 500),
+            effort=g.effort,
         )
     except LlmError as e:
         await runtime.finish_run(deps, run_id, None, error=str(e))
         await _finish(deps, j.Id, "Failed", run_id=run_id)
         return True
     await runtime.finish_run(deps, run_id, used)
-    accepted: list[dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
     rejected = 0
     for q in (raw.get("questions") or [])[: req["n"]]:
         if rules.check(q, existing) is None:
-            accepted.append({"type": q["type"], "content": rules.to_content(q)})
+            passed.append(q)
             existing.append(q["prompt"])
         else:
             rejected += 1
+    disputed = await second_opinion(deps, g, passed)
+    rejected += len(disputed)
+    accepted = [{"type": q["type"], "content": rules.to_content(q)} for i, q in enumerate(passed) if i not in disputed]
     created = 0
     if accepted:
         try:
@@ -241,6 +248,45 @@ async def run_one(deps: Deps) -> bool:
                 },
             )
     return True
+
+
+async def second_opinion(deps: Deps, g: runtime.Gate, qs: list[dict[str, Any]]) -> set[int]:
+    """Indexes into `qs` whose key a second, independent solve disputes. A failed or blocked check
+    disputes nothing: the questions keep their (Derived) keys."""
+    idx = [i for i, q in enumerate(qs) if rules.checkable(q)]
+    if not idx:
+        return set()
+    msg = rules.solve_message([qs[i] for i in idx])
+    try:
+        run_id = await runtime.start_run(
+            deps,
+            g,
+            prompt_version=SOLVE_PROMPT_VERSION,
+            estimate_input_tokens=len(msg) // 4 + 200,
+            max_output_tokens=SOLVE_MAX_TOKENS,
+        )
+    except AiBudgetExceeded:
+        return set()
+    provider, key = runtime.provider(deps, g)
+    try:
+        raw, used = await provider.complete_json(
+            key,
+            g.model.id,
+            rules.SOLVE_SYSTEM,
+            [{"role": "user", "content": msg}],
+            rules.SOLVE_SCHEMA,
+            SOLVE_MAX_TOKENS,
+            effort=g.effort,
+        )
+    except LlmError as e:
+        await runtime.finish_run(deps, run_id, None, error=str(e))
+        return set()
+    await runtime.finish_run(deps, run_id, used)
+    answers = {a.get("index"): a for a in raw.get("answers") or [] if isinstance(a, dict)}
+    disputed = {i for n, i in enumerate(idx) if not rules.agrees(qs[i], answers.get(n))}
+    if disputed:
+        log.info("second opinion disputed generated keys", extra={"count": len(disputed)})
+    return disputed
 
 
 async def nightly(deps: Deps) -> int:

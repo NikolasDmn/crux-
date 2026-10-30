@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.llm import Provider, Usage
 from app.domain import gate as rules
-from app.domain import models
+from app.domain import levels, models
 from app.repo.tables import course_setting, provider_key, run, run_context, settings, usage_monthly
 from app.service.account import plaintext
 from app.service.deps import Deps
@@ -29,6 +29,9 @@ class Gate:
     key: Any
     model: models.Model
     settings: Any
+    #: The feature's smartness level, and the effort it runs at (None: the model's default).
+    level: str = "Standard"
+    effort: str | None = None
 
     @property
     def provider_name(self) -> str:
@@ -80,12 +83,13 @@ async def decide(
     if reason is not None:
         return reason, None
     assert st is not None and key is not None
-    model = (models.find(key.Provider, st.DefaultModel) if st.DefaultModel else None) or models.default_for(
-        key.Provider
-    )
+    # The feature's level picks the model and effort for the key's provider.
+    level = levels.chosen(st.Levels, feature)
+    to = levels.route(key.Provider, level)
+    model = (models.find(key.Provider, to.model) if to else None) or models.default_for(key.Provider)
     if model is None:
         return "no_key", None
-    return None, Gate(user_ref, feature, course_ref, key, model, st)
+    return None, Gate(user_ref, feature, course_ref, key, model, st, level, to.effort if to else None)
 
 
 async def check(

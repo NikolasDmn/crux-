@@ -143,11 +143,17 @@ async def test_past_paper_extraction() -> None:
                     prop("Question", "q1", q_linked, "l1"),
                     prop("Question", "q2", mc(prompt="E[X + Y]?"), "l1"),  # Official without a paper link -> Derived
                 ],
-            }
+            },
+            # The second opinion only sees the Derived key, and disagrees with it (B, not A).
+            {"answers": [{"index": 0, "letters": ["B"], "value": 0}]},
         ]
         assert await imports.run_one(deps)
         qs = (await imports.proposals(deps, USER, imp.id))["Question"]
         assert [q.payload["content"]["keyReliability"] for q in qs] == ["Official", "Derived"]
+        solve = fake.calls[-1]["messages"][0]["content"]
+        assert "E[X + Y]?" in solve and "isCorrect" not in solve and "Var(2X)" not in solve
+        assert (qs[0].confidence, qs[1].confidence) == ("High", "Low")
+        assert qs[1].rationale and "second check" in qs[1].rationale
 
 
 async def test_large_import_reads_in_parts_and_flags_duplicates(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -186,7 +192,7 @@ async def test_large_import_reads_in_parts_and_flags_duplicates(monkeypatch: pyt
             deps, USER, imports.ImportInput(course_id=COURSE, file_ids=[FILE], import_past_exams=True), status="Queued"
         )
         assert await imports.run_one(deps)
-        calls = [c for c in fake.calls if c["kind"] == "json"]
+        calls = [c for c in fake.calls if c["kind"] == "json" and c["schema"] is imports.SCHEMA]
         assert len(calls) == 2, "three pages of ~80 characters, 100 per part, 2 parts at most"
         second = calls[1]["messages"][0]["content"]
         assert "<proposed>" in second and '"tempKey": "l1"' in second and '"part": 2' in second

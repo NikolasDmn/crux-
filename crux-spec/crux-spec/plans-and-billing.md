@@ -36,12 +36,15 @@ Default level per feature:
 
 Every Derived answer key gets a **second opinion**: it's worked out twice, and when the two answers disagree, the key is flagged "unconfirmed" instead of being shown as certain. In the test, Haiku made one wrong key in 16, so this is needed whichever model is used.
 
-## Stage 1: model routing
+## Stage 1: model routing (done)
 
-- A server-side table maps (feature, level) to model, effort and max tokens. It lives in config, not code, so prices or models can change without a release.
-- Users get a per-feature level preference, stored in settings `extra`. The plan decides which levels a user may pick.
-- Add the second-opinion check for Derived keys in generation and imports.
-- Done when every AI call goes through the router and the tests cover tier gating.
+- `services/ai/app/domain/levels.py` maps (provider, level) to a model and effort, with each feature's default level. The models are priced in `models.py`.
+- Users pick a level per feature in AI settings, stored as `UserAiSettings.Levels` (ai migration 0004). The level replaces the old single model picker.
+- Every model call passes the level's effort (Anthropic `output_config.effort`). Token limits were raised where thinking shares the budget.
+- Second opinion on Derived keys:
+  - **Generation:** a disputed question isn't saved.
+  - **Imports:** a disputed question is flagged Low confidence with the reason, for the user to review.
+- The free-plan cap (`levels.capped`) is written but not applied. While users pay with their own key every level is open, and it switches on in stage 2, when Crux pays.
 
 ## Stage 2: credit ledger
 

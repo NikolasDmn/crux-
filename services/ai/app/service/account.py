@@ -12,7 +12,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clients.llm import LlmError
-from app.domain import crypto, models
+from app.domain import crypto, levels, models
 from app.repo.tables import consent_log, course_setting, provider_key, run, settings, tutor, usage_monthly
 from app.service.deps import Deps
 from crux_common.auth import Principal
@@ -87,7 +87,8 @@ class SettingsView(Camel):
     share_answers: bool
     auto_approve_generated: bool
     default_key_id: str | None
-    default_model: str | None
+    #: Each feature's smartness level (Quick, Standard, Smart, Genius), defaults filled in.
+    levels: dict[str, str]
     default_tutor_id: str | None
     monthly_cap_micro_usd: int | None
     #: The policy version you accepted, and the one in force now (enable again if they differ).
@@ -104,7 +105,7 @@ async def _view(deps: Deps, s: AsyncSession, user_ref: str) -> SettingsView:
     return SettingsView(
         **values,
         default_key_id=await _ref_of(s, provider_key, row.DefaultProviderKeyId) if row else None,
-        default_model=row.DefaultModel if row else None,
+        levels={f: levels.chosen(row.Levels if row else None, f) for f in levels.FEATURES},
         default_tutor_id=await _ref_of(s, tutor, row.DefaultTutorTemplateId) if row else None,
         monthly_cap_micro_usd=row.MonthlyCapMicroUsd if row else None,
         consent_policy_version=row.ConsentPolicyVersion if row else None,
@@ -132,7 +133,8 @@ class SettingsPatch(Camel):
     share_answers: bool | None = None
     auto_approve_generated: bool | None = None
     default_key_id: str | None = None
-    default_model: str | None = None
+    #: Features to change, e.g. {"Grading": "Smart"}; the others keep their level.
+    levels: dict[str, str] | None = None
     default_tutor_id: str | None = None
     #: null or 0 removes the cap.
     monthly_cap_micro_usd: int | None = Field(default=None, ge=0)
@@ -165,14 +167,12 @@ async def patch_settings(deps: Deps, user: Principal, p: SettingsPatch) -> Setti
             if k is None or k.Status == "Revoked":
                 raise ValidationFailed.field("defaultKeyId", "unknown", "Pick one of your keys.")
             values["DefaultProviderKeyId"] = k.Id
-            if p.default_model is None and row.DefaultModel and not models.find(k.Provider, row.DefaultModel):
-                values["DefaultModel"] = None
-        if p.default_model is not None:
-            key_id = values.get("DefaultProviderKeyId", row.DefaultProviderKeyId)
-            k = (await s.execute(select(provider_key).where(provider_key.c.Id == key_id))).first() if key_id else None
-            if p.default_model and (k is None or not models.find(k.Provider, p.default_model)):
-                raise ValidationFailed.field("defaultModel", "unknown", "Pick a model of your key's provider.")
-            values["DefaultModel"] = p.default_model or None
+        if p.levels:
+            if bad := levels.problems(p.levels):
+                raise ValidationFailed.field("levels", "unknown", f"Unknown feature or level: {', '.join(bad)}.")
+            merged = {**(row.Levels or {}), **p.levels}
+            values["Levels"] = {f: lv for f, lv in merged.items() if lv != levels.DEFAULTS[f]} or None
+            delta["levels"] = p.levels
         if p.default_tutor_id is not None:
             t = await visible_tutor(s, user.user_ref, p.default_tutor_id)
             if t is None:

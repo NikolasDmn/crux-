@@ -259,17 +259,6 @@
             ],
             "title": "Defaultkeyid"
           },
-          "defaultModel": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Defaultmodel"
-          },
           "defaultTutorId": {
             "anyOf": [
               {
@@ -291,6 +280,20 @@
               }
             ],
             "title": "Enabled"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Levels"
           },
           "monthlyCapMicroUsd": {
             "anyOf": [
@@ -415,17 +418,6 @@
             ],
             "title": "Defaultkeyid"
           },
-          "defaultModel": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Defaultmodel"
-          },
           "defaultTutorId": {
             "anyOf": [
               {
@@ -440,6 +432,13 @@
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
+          },
+          "levels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Levels",
+            "type": "object"
           },
           "monthlyCapMicroUsd": {
             "anyOf": [
@@ -489,7 +488,7 @@
           "shareAnswers",
           "autoApproveGenerated",
           "defaultKeyId",
-          "defaultModel",
+          "levels",
           "defaultTutorId",
           "monthlyCapMicroUsd",
           "consentPolicyVersion",

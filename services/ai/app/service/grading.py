@@ -129,7 +129,7 @@ async def grade_mock(deps: Deps, p: dict[str, Any]) -> int:
                     g,
                     prompt_version=PROMPT_VERSION,
                     estimate_input_tokens=len(text) // 4 + 300,
-                    max_output_tokens=800,
+                    max_output_tokens=4000,
                 )
             except AiBudgetExceeded:
                 log.info("AI grading stopped: over the monthly cap", extra={"mock": mock_ref})
@@ -137,7 +137,14 @@ async def grade_mock(deps: Deps, p: dict[str, Any]) -> int:
             provider, key = runtime.provider(deps, g)
             try:
                 raw, used = await provider.complete_json(
-                    key, g.model.id, SYSTEM, [{"role": "user", "content": text}], SCHEMA, 800
+                    # Thinking shares the output budget, hence more than the answer needs.
+                    key,
+                    g.model.id,
+                    SYSTEM,
+                    [{"role": "user", "content": text}],
+                    SCHEMA,
+                    4000,
+                    effort=g.effort,
                 )
             except LlmError as e:
                 await runtime.finish_run(deps, run_id, None, error=str(e))

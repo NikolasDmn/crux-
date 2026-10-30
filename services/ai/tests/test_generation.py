@@ -102,7 +102,12 @@ async def test_generate_job_validates_and_creates_through_core() -> None:
         done = await generation.get(deps, USER, job.id)
         assert (done.status, done.created_count, done.rejected_count) == ("Done", 1, 2)
         assert sent[0]["autoApprove"] is False and len(sent[0]["questions"]) == 1
-        assert "<existing>" in fake.calls[-1]["messages"][0]["content"]
+        assert "<existing>" in fake.calls[-2]["messages"][0]["content"]
+        # Then a second opinion: the question again, without its key.
+        assert (
+            fake.calls[-1]["schema"] is rules.SOLVE_SCHEMA
+            and "isCorrect" not in fake.calls[-1]["messages"][0]["content"]
+        )
         assert not await generation.run_one(deps), "the queue is empty"
         with pytest.raises(NotFound):
             await generation.get(deps, OTHER, job.id)
@@ -134,3 +139,41 @@ async def test_nightly_topup_at_three_local() -> None:
             gen_module.utcnow = real
         async with deps.sessions() as s, s.begin():
             await s.execute(update(generation_job).values(Status="Done"))
+
+
+def test_second_opinion_rules() -> None:
+    q = mc("What is Var(3X) in terms of Var(X)?")  # A is correct
+    assert rules.agrees(q, {"letters": ["A"], "value": 0})
+    assert not rules.agrees(q, {"letters": ["B"], "value": 0})
+    assert rules.agrees(q, None), "no answer disputes nothing"
+    multi = {**mc("Which equal Var(3X)?", correct=2), "multiSelect": True}
+    assert rules.agrees(multi, {"letters": ["b", "A"], "value": 0}) and not rules.agrees(multi, {"letters": ["A"]})
+    num = {"type": "Numeric", "prompt": "Cournot output?", "numeric": {"value": 30, "tolerance": 0, "unit": ""}}
+    assert rules.agrees(num, {"letters": [], "value": 30.1}), "within rounding"
+    assert not rules.agrees(num, {"letters": [], "value": 15})
+    assert "isCorrect" not in rules.solve_message([q, num]) and '"C": "Var(X)"' in rules.solve_message([q])
+
+
+async def test_disputed_key_is_not_saved() -> None:
+    async with env() as (deps, fake, core, _files):
+        await turn_on(deps)
+        job = await generation.start(deps, USER, generation.GenerateInput(course_id=COURSE, component_id=LECTURE, n=2))
+        core.replies[
+            ("GET", f"/internal/v1/ai/generation-context?user={USER.user_ref}&course={COURSE}&component={LECTURE}")
+        ] = {"existingPrompts": []}
+        sent: list[dict[str, Any]] = []
+
+        def created(body: dict[str, Any]) -> dict[str, Any]:
+            sent.append(body)
+            return {"created": [f"01GENQ{i:020d}" for i in range(len(body["questions"]))], "rejected": []}
+
+        core.replies[("POST", "/internal/v1/questions/generated")] = created
+        fake.json_replies = [
+            {"questions": [mc("What is Var(3X) in terms of Var(X)?"), mc("Which expression equals Var(-X)?")]},
+            # The solve agrees with the first key (A) and not with the second.
+            {"answers": [{"index": 0, "letters": ["A"], "value": 0}, {"index": 1, "letters": ["C"], "value": 0}]},
+        ]
+        assert await generation.run_one(deps)
+        done = await generation.get(deps, USER, job.id)
+        assert (done.created_count, done.rejected_count) == (1, 1)
+        assert sent[0]["questions"][0]["content"]["prompt"].startswith("What is Var(3X)")

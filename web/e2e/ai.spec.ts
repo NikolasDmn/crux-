@@ -59,8 +59,14 @@ test("15a. turn AI on and add a key", async () => {
   await expect(spending.getByLabel("Monthly cap (EUR)")).toBeVisible();
   await spending.getByLabel("Monthly cap (EUR)").fill("5");
   await spending.getByRole("button", { name: "Save", exact: true }).click();
+  // Each feature has a smartness level; changing one keeps the others.
+  const smart = page.locator("section").filter({ has: page.getByText("How smart", { exact: true }) });
+  await expect(smart.getByLabel("Ask AI", { exact: true })).toHaveValue("Quick");
+  await smart.getByLabel("Grading open answers", { exact: true }).selectOption("Smart");
   await page.reload();
   await expect(spending.getByLabel("Monthly cap (EUR)")).toHaveValue("5");
+  await expect(smart.getByLabel("Grading open answers", { exact: true })).toHaveValue("Smart");
+  await expect(smart.getByLabel("Ask AI", { exact: true })).toHaveValue("Quick");
   await expectAccessible(page, "AI settings, on");
 });
 

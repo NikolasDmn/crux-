@@ -356,7 +356,7 @@ async def prepare(deps: Deps, user: Principal, conv_ref: str, inp: SendInput) ->
 async def _complete(deps: Deps, g: runtime.Gate, system: str, messages: list[dict[str, str]]) -> tuple[str, Usage]:
     provider, key = runtime.provider(deps, g)
     text, used = "", Usage()
-    async for chunk in provider.stream_chat(key, g.model.id, system, messages, MAX_OUTPUT_TOKENS):
+    async for chunk in provider.stream_chat(key, g.model.id, system, messages, MAX_OUTPUT_TOKENS, effort=g.effort):
         if isinstance(chunk, Usage):
             used = chunk
         else:
@@ -405,7 +405,9 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
                 prompt.JUDGE_SYSTEM,
                 [{"role": "user", "content": f"Student: {inp.content}\n\nTutor reply: {reply}"}],
                 prompt.JUDGE_SCHEMA,
-                200,
+                # A yes/no check: little thinking, but room for it.
+                1000,
+                effort="low" if g.effort else None,
             )
             total = total + used
             if verdict.get("fullSolution"):
@@ -423,7 +425,7 @@ async def stream_reply(deps: Deps, user: Principal, inp: SendInput, prep: dict[s
             sent_words = 0
             stopped = False
             async for chunk in provider.stream_chat(
-                key, g.model.id, prep["system"], prep["messages"], MAX_OUTPUT_TOKENS
+                key, g.model.id, prep["system"], prep["messages"], MAX_OUTPUT_TOKENS, effort=g.effort
             ):
                 if isinstance(chunk, Usage):
                     total = chunk

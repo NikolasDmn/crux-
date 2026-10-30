@@ -31,6 +31,17 @@ export const FEATURE_LABEL: Record<AiFeature, string> = {
   Generation: "Generating practice questions",
 };
 
+/** Smartness levels, cheapest first: each picks a model and how hard it thinks. */
+export const LEVELS = ["Quick", "Standard", "Smart", "Genius"] as const;
+export type Level = (typeof LEVELS)[number];
+
+export const LEVEL_LABEL: Record<Level, string> = {
+  Quick: "Quick: fast, the cheapest",
+  Standard: "Standard: thinks it through, about 2× Quick",
+  Smart: "Smart: a stronger model, about 20× Quick",
+  Genius: "Genius: the strongest model, about 40× Quick",
+};
+
 export const PROVIDER_LABEL: Record<string, string> = {
   anthropic: "Anthropic",
   openai: "OpenAI",

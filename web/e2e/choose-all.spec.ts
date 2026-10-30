@@ -50,5 +50,7 @@ test("choose all that apply", async ({ page }) => {
   await page.keyboard.press("Space");
   await page.getByRole("button", { name: "Hand in" }).click();
   await expect(page).toHaveURL(/\/result/);
-  await expect(page.getByRole("region", { name: "Question 1" }).getByText("Right", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Question 1" }).getByText("Right", { exact: true }).first(),
+  ).toBeVisible();
 });

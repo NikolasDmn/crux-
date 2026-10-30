@@ -45,12 +45,30 @@ Chunk = str | Usage  # text deltas, then one Usage at the end
 
 
 class Provider(Protocol):
+    """`effort` is the level's thinking effort (Anthropic `output_config.effort`); providers
+    without one ignore it."""
+
     async def verify(self, api_key: str) -> bool: ...
     def stream_chat(
-        self, api_key: str, model: str, system: str, messages: list[Message], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> AsyncIterator[Chunk]: ...
     async def complete_json(
-        self, api_key: str, model: str, system: str, messages: list[Message], schema: dict[str, Any], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        schema: dict[str, Any],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> tuple[dict[str, Any], Usage]: ...
 
 
@@ -102,11 +120,21 @@ class AnthropicProvider:
         return client.messages.stream(**kw)
 
     async def stream_chat(
-        self, api_key: str, model: str, system: str, messages: list[Message], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> AsyncIterator[Chunk]:
         client = self._client(api_key)
         try:
-            async with self._stream(client, model=model, max_tokens=max_tokens, system=system, messages=messages) as s:
+            extra = {"output_config": {"effort": effort}} if effort else {}
+            async with self._stream(
+                client, model=model, max_tokens=max_tokens, system=system, messages=messages, **extra
+            ) as s:
                 async for text in s.text_stream:
                     yield text
                 final = await s.get_final_message()
@@ -117,7 +145,15 @@ class AnthropicProvider:
         yield Usage(final.usage.input_tokens, final.usage.output_tokens, _served_by(final))
 
     async def complete_json(
-        self, api_key: str, model: str, system: str, messages: list[Message], schema: dict[str, Any], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        schema: dict[str, Any],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> tuple[dict[str, Any], Usage]:
         client = self._client(api_key)
         try:
@@ -127,7 +163,10 @@ class AnthropicProvider:
                 max_tokens=max_tokens,
                 system=system,
                 messages=messages,
-                output_config={"format": {"type": "json_schema", "schema": schema}},
+                output_config={
+                    "format": {"type": "json_schema", "schema": schema},
+                    **({"effort": effort} if effort else {}),
+                },
             ) as s:
                 final = await s.get_final_message()
         except Exception as e:
@@ -169,7 +208,14 @@ class ChatCompletionsProvider:
         return True
 
     async def stream_chat(
-        self, api_key: str, model: str, system: str, messages: list[Message], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> AsyncIterator[Chunk]:
         body = {
             "model": model,
@@ -201,7 +247,15 @@ class ChatCompletionsProvider:
         yield usage
 
     async def complete_json(
-        self, api_key: str, model: str, system: str, messages: list[Message], schema: dict[str, Any], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        schema: dict[str, Any],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> tuple[dict[str, Any], Usage]:
         fmt: dict[str, Any] = (
             {"type": "json_schema", "json_schema": {"name": "result", "schema": schema, "strict": True}}
@@ -268,7 +322,14 @@ class GoogleProvider:
         )
 
     async def stream_chat(
-        self, api_key: str, model: str, system: str, messages: list[Message], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> AsyncIterator[Chunk]:
         # One response, yielded as one delta: the endpoint streams in large pieces anyway.
         body = {
@@ -282,7 +343,15 @@ class GoogleProvider:
         yield usage
 
     async def complete_json(
-        self, api_key: str, model: str, system: str, messages: list[Message], schema: dict[str, Any], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        schema: dict[str, Any],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> tuple[dict[str, Any], Usage]:
         body = {
             "systemInstruction": {"parts": [{"text": system}]},
@@ -316,9 +385,16 @@ class FakeProvider:
         return api_key.startswith("fake-valid")
 
     async def stream_chat(
-        self, api_key: str, model: str, system: str, messages: list[Message], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> AsyncIterator[Chunk]:
-        self.calls.append({"kind": "chat", "system": system, "messages": messages, "model": model})
+        self.calls.append({"kind": "chat", "system": system, "messages": messages, "model": model, "effort": effort})
         if self.fail_with:
             raise self.fail_with
         last = messages[-1]["content"] if messages else ""
@@ -328,9 +404,19 @@ class FakeProvider:
         yield Usage(len(system + last) // 4, len(reply) // 4, self.served_by)
 
     async def complete_json(
-        self, api_key: str, model: str, system: str, messages: list[Message], schema: dict[str, Any], max_tokens: int
+        self,
+        api_key: str,
+        model: str,
+        system: str,
+        messages: list[Message],
+        schema: dict[str, Any],
+        max_tokens: int,
+        *,
+        effort: str | None = None,
     ) -> tuple[dict[str, Any], Usage]:
-        self.calls.append({"kind": "json", "system": system, "messages": messages, "schema": schema})
+        self.calls.append(
+            {"kind": "json", "system": system, "messages": messages, "schema": schema, "model": model, "effort": effort}
+        )
         if self.fail_with:
             raise self.fail_with
         if self.json_fn is not None:

@@ -25,9 +25,10 @@ import {
 } from "@/features/ai/api";
 import {
   FEATURE_LABEL,
+  LEVEL_LABEL,
+  LEVELS,
   MAX_TUTOR_TEXT,
   PERSONALITIES,
-  priceLine,
   PROVIDER_LABEL,
   readRules,
   STYLE_LABEL,
@@ -153,6 +154,37 @@ function Features({ s }: { s: AiSettings }) {
   );
 }
 
+function Smartness({ s }: { s: AiSettings }) {
+  const patch = usePatch();
+  const features = Object.keys(FEATURE_LABEL) as (keyof typeof FEATURE_LABEL)[];
+  return (
+    <Card className="flex flex-col gap-4">
+      <SectionLabel>How smart</SectionLabel>
+      <p className="m-0 text-sm text-muted">
+        Smarter levels use a stronger model or think longer, and cost more per use.
+      </p>
+      {features.map((f) => (
+        <Field key={f} label={FEATURE_LABEL[f]}>
+          {(ids) => (
+            <Select
+              {...ids}
+              className="sm:max-w-96"
+              value={s.levels[f] ?? "Standard"}
+              onChange={(e) => patch({ levels: { [f]: e.currentTarget.value } })}
+            >
+              {LEVELS.map((l) => (
+                <option key={l} value={l}>
+                  {LEVEL_LABEL[l]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      ))}
+    </Card>
+  );
+}
+
 function Sharing({ s }: { s: AiSettings }) {
   const patch = usePatch();
   return (
@@ -256,7 +288,6 @@ function Keys({ s }: { s: AiSettings }) {
   const [revoking, setRevoking] = useState<string | null>(null);
   const onError = (e: unknown) => toast({ message: messageFor(e), tone: "danger" });
   const list = keys.data ?? [];
-  const def = list.find((k) => k.isDefault);
   return (
     <Card className="flex flex-col gap-4">
       <SectionLabel>API keys</SectionLabel>
@@ -306,32 +337,6 @@ function Keys({ s }: { s: AiSettings }) {
         <p className="m-0 text-muted">No keys yet. AI needs one from a provider you have an account with.</p>
       )}
       <AddKey providers={s.providers} />
-      {def ? (
-        <Field
-          label="Model"
-          hint={(() => {
-            const p = def.prices.find((x) => x.id === s.defaultModel);
-            return p ? `${priceLine(p)} (estimate; your provider bills you)` : undefined;
-          })()}
-        >
-          {(ids) => (
-            <Select
-              {...ids}
-              className="sm:max-w-80"
-              value={s.defaultModel ?? ""}
-              onChange={(e) => patch({ defaultModel: e.currentTarget.value })}
-            >
-              {s.defaultModel ? null : <option value="">Pick a model</option>}
-              {def.prices.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.id}
-                  {p.default ? " (recommended)" : ""}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-      ) : null}
       <Dialog
         open={revoking !== null}
         onOpenChange={(o) => !o && setRevoking(null)}
@@ -655,6 +660,7 @@ function Ai() {
         <>
           <Keys s={s} />
           <Features s={s} />
+          <Smartness s={s} />
           <Sharing s={s} />
           <Tutors s={s} />
           <Spending s={s} />

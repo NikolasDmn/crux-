@@ -2656,12 +2656,14 @@ export interface components {
             consentPolicyVersion?: string | null;
             /** Defaultkeyid */
             defaultKeyId?: string | null;
-            /** Defaultmodel */
-            defaultModel?: string | null;
             /** Defaulttutorid */
             defaultTutorId?: string | null;
             /** Enabled */
             enabled?: boolean | null;
+            /** Levels */
+            levels?: {
+                [key: string]: string;
+            } | null;
             /** Monthlycapmicrousd */
             monthlyCapMicroUsd?: number | null;
             /** Nightlygeneration */
@@ -2695,12 +2697,14 @@ export interface components {
             currentPolicyVersion: string;
             /** Defaultkeyid */
             defaultKeyId: string | null;
-            /** Defaultmodel */
-            defaultModel: string | null;
             /** Defaulttutorid */
             defaultTutorId: string | null;
             /** Enabled */
             enabled: boolean;
+            /** Levels */
+            levels: {
+                [key: string]: string;
+            };
             /** Monthlycapmicrousd */
             monthlyCapMicroUsd: number | null;
             /** Nightlygeneration */

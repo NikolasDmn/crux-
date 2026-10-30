@@ -101,3 +101,23 @@ def same_as(kind: str, payload: dict[str, Any], earlier: dict[str, Any]) -> bool
             bool(payload.get("front")) and similarity(str(payload["front"]), str(earlier.get("front") or "")) > SIMILAR
         )
     return False
+
+
+def as_solvable(payload: dict[str, Any]) -> dict[str, Any] | None:
+    """A Question proposal in the generator's shape, for a second opinion on its key; None when
+    there's nothing to check (not MC/Numeric, or the key is printed in the paper's answers)."""
+    c = payload.get("content") or {}
+    if payload.get("type") not in ("MC", "Numeric") or c.get("keyReliability") == "Official":
+        return None
+    n = c.get("numeric") or {}
+    return {
+        "type": payload["type"],
+        "prompt": c.get("prompt") or "",
+        "options": c.get("options") or [],
+        "multiSelect": bool(c.get("multiSelect")),
+        "numeric": {
+            "value": n.get("value") or 0,
+            "tolerance": n.get("tolerance") or 0,
+            "relative": n.get("toleranceKind") == "Relative",
+        },
+    }

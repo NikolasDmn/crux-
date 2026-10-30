@@ -15,7 +15,7 @@ from app.clients.core import CoreError
 from app.clients.llm import LlmError
 from app.domain import importing
 from app.repo.tables import course_import, import_file, proposal
-from app.service import runtime
+from app.service import generation, runtime
 from app.service.account import Camel
 from app.service.deps import Deps
 from crux_common.auth import Principal
@@ -430,7 +430,7 @@ async def run_one(deps: Deps) -> bool:
         provider, key = runtime.provider(deps, g)
         try:
             raw, used = await provider.complete_json(
-                key, g.model.id, SYSTEM, [{"role": "user", "content": msg}], SCHEMA, 16000
+                key, g.model.id, SYSTEM, [{"role": "user", "content": msg}], SCHEMA, 16000, effort=g.effort
             )
         except LlmError as e:
             await runtime.finish_run(deps, run_id, None, error=str(e))
@@ -443,6 +443,15 @@ async def run_one(deps: Deps) -> bool:
         _collect(raw, n, kept, refs, bool(r.CourseRef), bool(r.ImportPastExams))
     if truncated:
         log.info("import text truncated", extra={"import": r.PublicId, "parts": len(parts)})
+    # A second, independent solve of each worked-out key; a disputed one is flagged for review.
+    checks = [
+        (p, q) for p in kept if p["kind"] == "Question" and (q := importing.as_solvable(p["payload"])) is not None
+    ]
+    for i in await generation.second_opinion(deps, g, [q for _, q in checks]):
+        p = checks[i][0]
+        p["confidence"] = "Low"
+        note = "A second check got a different answer: verify the key before accepting."
+        p["rationale"] = (f"{p['rationale']} {note}" if p.get("rationale") else note)[:500]
     async with transaction(deps.sessions) as s:
         for p in kept:
             await s.execute(

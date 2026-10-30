@@ -10,8 +10,6 @@ ai_allowed(user, feature, course?, materials?) =
 from dataclasses import dataclass
 from datetime import datetime
 
-FEATURES = ("MaterialChat", "Grading", "CourseImport", "PastExamImport", "Generation")
-
 #: settings column per feature
 ALLOW_COLUMN = {
     "MaterialChat": "AllowMaterialChat",

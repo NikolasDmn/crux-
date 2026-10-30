@@ -34,6 +34,7 @@ settings = Table(
     Column("AutoApproveGenerated", Boolean, nullable=False),
     Column("DefaultProviderKeyId", BigInteger),
     Column("DefaultModel", String(64)),
+    Column("Levels", JSON),
     Column("DefaultTutorTemplateId", BigInteger),
     Column("MonthlyCapMicroUsd", BigInteger),
     Column("ConsentPolicyVersion", String(16)),

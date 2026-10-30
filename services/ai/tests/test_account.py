@@ -83,12 +83,18 @@ async def test_settings_keys_tutors_gate_budget() -> None:
             b"fake-valid" not in base64.b64decode(row.Ciphertext)
             and account.plaintext(deps, row) == "fake-valid-abcd1234"
         )
-        assert (await account.get_settings(deps, USER)).default_model == "fake-1"
+        st = await account.get_settings(deps, USER)
+        assert st.levels["MaterialChat"] == "Quick" and st.levels["Grading"] == "Standard"
+        st = await account.patch_settings(deps, USER, account.SettingsPatch(levels={"Grading": "Smart"}))
+        assert st.levels["Grading"] == "Smart" and st.levels["Generation"] == "Standard"
+        with pytest.raises(ValidationFailed):
+            await account.patch_settings(deps, USER, account.SettingsPatch(levels={"Grading": "Huge"}))
         with pytest.raises(NotFound):
             await account.verify_key(deps, OTHER, k.id)
 
         g = await runtime.check(deps, USER.user_ref, "MaterialChat", COURSE)
         assert (g.model.id, g.provider_name) == ("fake-1", "fake")
+        assert (await runtime.check(deps, USER.user_ref, "Grading", COURSE)).level == "Smart"
 
         # Per-course: off in one course; a blocked material blocks the call.
         await account.put_course_settings(deps, USER, COURSE, account.CourseSettingsInput(ai_enabled=False))
